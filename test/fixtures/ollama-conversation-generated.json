@@ -1,0 +1,346 @@
+[
+    {
+        "prompt": "how's the weather in london?",
+        "request": {
+            "messages": [
+                {
+                    "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+                    "role": "system"
+                },
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                }
+            ],
+            "model": "llama3.2:latest",
+            "num_predict": 1024,
+            "tools": [
+                {
+                    "function": {
+                        "description": "Get the current weather for a given location",
+                        "name": "get_weather",
+                        "parameters": {
+                            "$comment": "WeatherToolArgs",
+                            "properties": {
+                                "location": {
+                                    "$comment": "City name, e.g. London",
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["location"],
+                            "type": "object"
+                        }
+                    },
+                    "type": "function"
+                }
+            ]
+        },
+        "response": {
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "index": 0,
+                    "message": {
+                        "content": "",
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "function": {
+                                    "arguments": "{\"location\":\"London\"}",
+                                    "name": "get_weather"
+                                },
+                                "id": "call_2w0ddvhy",
+                                "index": 0,
+                                "type": "function"
+                            }
+                        ]
+                    }
+                }
+            ],
+            "created": 1778438588,
+            "id": "chatcmpl-133",
+            "model": "llama3.2:latest",
+            "object": "chat.completion",
+            "system_fingerprint": "fp_ollama",
+            "usage": {
+                "completion_tokens": 17,
+                "prompt_tokens": 181,
+                "total_tokens": 198
+            }
+        }
+    },
+    {
+        "request": {
+            "messages": [
+                {
+                    "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+                    "role": "system"
+                },
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "{\"location\":\"London\"}",
+                                "name": "get_weather"
+                            },
+                            "id": "call_2w0ddvhy",
+                            "type": "function"
+                        }
+                    ]
+                },
+                {
+                    "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                    "role": "tool",
+                    "tool_call_id": "call_2w0ddvhy"
+                }
+            ],
+            "model": "llama3.2:latest",
+            "num_predict": 1024,
+            "tools": [
+                {
+                    "function": {
+                        "description": "Get the current weather for a given location",
+                        "name": "get_weather",
+                        "parameters": {
+                            "$comment": "WeatherToolArgs",
+                            "properties": {
+                                "location": {
+                                    "$comment": "City name, e.g. London",
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["location"],
+                            "type": "object"
+                        }
+                    },
+                    "type": "function"
+                }
+            ]
+        },
+        "response": {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "index": 0,
+                    "message": {
+                        "content": "According to current weather conditions, London has a partly cloudy sky with a temperature of 18°C and a light breeze coming from the west. Would you like me to check the forecast for a specific date or get more detailed information?",
+                        "role": "assistant"
+                    }
+                }
+            ],
+            "created": 1778438589,
+            "id": "chatcmpl-838",
+            "model": "llama3.2:latest",
+            "object": "chat.completion",
+            "system_fingerprint": "fp_ollama",
+            "usage": {
+                "completion_tokens": 47,
+                "prompt_tokens": 137,
+                "total_tokens": 184
+            }
+        }
+    },
+    {
+        "prompt": "and in paris?",
+        "request": {
+            "messages": [
+                {
+                    "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+                    "role": "system"
+                },
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "{\"location\":\"London\"}",
+                                "name": "get_weather"
+                            },
+                            "id": "call_2w0ddvhy",
+                            "type": "function"
+                        }
+                    ]
+                },
+                {
+                    "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                    "role": "tool",
+                    "tool_call_id": "call_2w0ddvhy"
+                },
+                {
+                    "content": "According to current weather conditions, London has a partly cloudy sky with a temperature of 18°C and a light breeze coming from the west. Would you like me to check the forecast for a specific date or get more detailed information?",
+                    "role": "assistant"
+                },
+                {
+                    "content": "and in paris?",
+                    "role": "user"
+                }
+            ],
+            "model": "llama3.2:latest",
+            "num_predict": 1024,
+            "tools": [
+                {
+                    "function": {
+                        "description": "Get the current weather for a given location",
+                        "name": "get_weather",
+                        "parameters": {
+                            "$comment": "WeatherToolArgs",
+                            "properties": {
+                                "location": {
+                                    "$comment": "City name, e.g. London",
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["location"],
+                            "type": "object"
+                        }
+                    },
+                    "type": "function"
+                }
+            ]
+        },
+        "response": {
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "index": 0,
+                    "message": {
+                        "content": "",
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "function": {
+                                    "arguments": "{\"location\":\"Paris\"}",
+                                    "name": "get_weather"
+                                },
+                                "id": "call_291p7a0i",
+                                "index": 0,
+                                "type": "function"
+                            }
+                        ]
+                    }
+                }
+            ],
+            "created": 1778438589,
+            "id": "chatcmpl-165",
+            "model": "llama3.2:latest",
+            "object": "chat.completion",
+            "system_fingerprint": "fp_ollama",
+            "usage": {
+                "completion_tokens": 17,
+                "prompt_tokens": 284,
+                "total_tokens": 301
+            }
+        }
+    },
+    {
+        "request": {
+            "messages": [
+                {
+                    "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+                    "role": "system"
+                },
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "{\"location\":\"London\"}",
+                                "name": "get_weather"
+                            },
+                            "id": "call_2w0ddvhy",
+                            "type": "function"
+                        }
+                    ]
+                },
+                {
+                    "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                    "role": "tool",
+                    "tool_call_id": "call_2w0ddvhy"
+                },
+                {
+                    "content": "According to current weather conditions, London has a partly cloudy sky with a temperature of 18°C and a light breeze coming from the west. Would you like me to check the forecast for a specific date or get more detailed information?",
+                    "role": "assistant"
+                },
+                {
+                    "content": "and in paris?",
+                    "role": "user"
+                },
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "{\"location\":\"Paris\"}",
+                                "name": "get_weather"
+                            },
+                            "id": "call_291p7a0i",
+                            "type": "function"
+                        }
+                    ]
+                },
+                {
+                    "content": "Weather in Paris is sunny, 23°C, no wind.",
+                    "role": "tool",
+                    "tool_call_id": "call_291p7a0i"
+                }
+            ],
+            "model": "llama3.2:latest",
+            "num_predict": 1024,
+            "tools": [
+                {
+                    "function": {
+                        "description": "Get the current weather for a given location",
+                        "name": "get_weather",
+                        "parameters": {
+                            "$comment": "WeatherToolArgs",
+                            "properties": {
+                                "location": {
+                                    "$comment": "City name, e.g. London",
+                                    "type": "string"
+                                }
+                            },
+                            "required": ["location"],
+                            "type": "object"
+                        }
+                    },
+                    "type": "function"
+                }
+            ]
+        },
+        "response": {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "index": 0,
+                    "message": {
+                        "content": "According to current weather conditions, Paris has a sunny sky with a temperature of 23°C and wind speed at 0 meters per second. It's a beautiful day to explore the City of Light! Would you like me to check the forecast for another city or get more detailed information about the current weather?",
+                        "role": "assistant"
+                    }
+                }
+            ],
+            "created": 1778438591,
+            "id": "chatcmpl-823",
+            "model": "llama3.2:latest",
+            "object": "chat.completion",
+            "system_fingerprint": "fp_ollama",
+            "usage": {
+                "completion_tokens": 62,
+                "prompt_tokens": 236,
+                "total_tokens": 298
+            }
+        }
+    }
+]

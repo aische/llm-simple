@@ -1,0 +1,364 @@
+[
+    {
+        "prompt": "how's the weather in london?",
+        "request": {
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                }
+            ],
+            "model": "claude-haiku-4-5-20251001",
+            "system": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+            "tools": [
+                {
+                    "description": "Get the current weather for a given location",
+                    "input_schema": {
+                        "$comment": "WeatherToolArgs",
+                        "properties": {
+                            "location": {
+                                "$comment": "City name, e.g. London",
+                                "type": "string"
+                            }
+                        },
+                        "required": ["location"],
+                        "type": "object"
+                    },
+                    "name": "get_weather"
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "caller": {
+                        "type": "direct"
+                    },
+                    "id": "toolu_01DDtP6JvBHoWtxVLcVsz1JJ",
+                    "input": {
+                        "location": "London"
+                    },
+                    "name": "get_weather",
+                    "type": "tool_use"
+                }
+            ],
+            "id": "msg_01JZsXgNBYvVB4gFbTAEHFzc",
+            "model": "claude-haiku-4-5-20251001",
+            "role": "assistant",
+            "stop_details": null,
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "type": "message",
+            "usage": {
+                "cache_creation": {
+                    "ephemeral_1h_input_tokens": 0,
+                    "ephemeral_5m_input_tokens": 0
+                },
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "inference_geo": "not_available",
+                "input_tokens": 623,
+                "output_tokens": 54,
+                "service_tier": "standard"
+            }
+        }
+    },
+    {
+        "request": {
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "content": [
+                        {
+                            "id": "toolu_01DDtP6JvBHoWtxVLcVsz1JJ",
+                            "input": {
+                                "location": "London"
+                            },
+                            "name": "get_weather",
+                            "type": "tool_use"
+                        }
+                    ],
+                    "role": "assistant"
+                },
+                {
+                    "content": [
+                        {
+                            "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                            "tool_use_id": "toolu_01DDtP6JvBHoWtxVLcVsz1JJ",
+                            "type": "tool_result"
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "model": "claude-haiku-4-5-20251001",
+            "system": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+            "tools": [
+                {
+                    "description": "Get the current weather for a given location",
+                    "input_schema": {
+                        "$comment": "WeatherToolArgs",
+                        "properties": {
+                            "location": {
+                                "$comment": "City name, e.g. London",
+                                "type": "string"
+                            }
+                        },
+                        "required": ["location"],
+                        "type": "object"
+                    },
+                    "name": "get_weather"
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "text": "The weather in London is currently **partly cloudy** with a temperature of **18°C** and a **light breeze from the west**. It's pleasant weather overall!",
+                    "type": "text"
+                }
+            ],
+            "id": "msg_01UXKDjyeAJFHXJXzsvVBNtE",
+            "model": "claude-haiku-4-5-20251001",
+            "role": "assistant",
+            "stop_details": null,
+            "stop_reason": "end_turn",
+            "stop_sequence": null,
+            "type": "message",
+            "usage": {
+                "cache_creation": {
+                    "ephemeral_1h_input_tokens": 0,
+                    "ephemeral_5m_input_tokens": 0
+                },
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "inference_geo": "not_available",
+                "input_tokens": 708,
+                "output_tokens": 40,
+                "service_tier": "standard"
+            }
+        }
+    },
+    {
+        "prompt": "and in paris?",
+        "request": {
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "content": [
+                        {
+                            "id": "toolu_01DDtP6JvBHoWtxVLcVsz1JJ",
+                            "input": {
+                                "location": "London"
+                            },
+                            "name": "get_weather",
+                            "type": "tool_use"
+                        }
+                    ],
+                    "role": "assistant"
+                },
+                {
+                    "content": [
+                        {
+                            "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                            "tool_use_id": "toolu_01DDtP6JvBHoWtxVLcVsz1JJ",
+                            "type": "tool_result"
+                        }
+                    ],
+                    "role": "user"
+                },
+                {
+                    "content": [
+                        {
+                            "text": "The weather in London is currently **partly cloudy** with a temperature of **18°C** and a **light breeze from the west**. It's pleasant weather overall!",
+                            "type": "text"
+                        }
+                    ],
+                    "role": "assistant"
+                },
+                {
+                    "content": "and in paris?",
+                    "role": "user"
+                }
+            ],
+            "model": "claude-haiku-4-5-20251001",
+            "system": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+            "tools": [
+                {
+                    "description": "Get the current weather for a given location",
+                    "input_schema": {
+                        "$comment": "WeatherToolArgs",
+                        "properties": {
+                            "location": {
+                                "$comment": "City name, e.g. London",
+                                "type": "string"
+                            }
+                        },
+                        "required": ["location"],
+                        "type": "object"
+                    },
+                    "name": "get_weather"
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "caller": {
+                        "type": "direct"
+                    },
+                    "id": "toolu_01Q5J5oAGkvBUfM52fFfshJk",
+                    "input": {
+                        "location": "Paris"
+                    },
+                    "name": "get_weather",
+                    "type": "tool_use"
+                }
+            ],
+            "id": "msg_019hKACjpVyumUCpqRWHAcb8",
+            "model": "claude-haiku-4-5-20251001",
+            "role": "assistant",
+            "stop_details": null,
+            "stop_reason": "tool_use",
+            "stop_sequence": null,
+            "type": "message",
+            "usage": {
+                "cache_creation": {
+                    "ephemeral_1h_input_tokens": 0,
+                    "ephemeral_5m_input_tokens": 0
+                },
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "inference_geo": "not_available",
+                "input_tokens": 755,
+                "output_tokens": 54,
+                "service_tier": "standard"
+            }
+        }
+    },
+    {
+        "request": {
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "content": [
+                        {
+                            "id": "toolu_01DDtP6JvBHoWtxVLcVsz1JJ",
+                            "input": {
+                                "location": "London"
+                            },
+                            "name": "get_weather",
+                            "type": "tool_use"
+                        }
+                    ],
+                    "role": "assistant"
+                },
+                {
+                    "content": [
+                        {
+                            "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                            "tool_use_id": "toolu_01DDtP6JvBHoWtxVLcVsz1JJ",
+                            "type": "tool_result"
+                        }
+                    ],
+                    "role": "user"
+                },
+                {
+                    "content": [
+                        {
+                            "text": "The weather in London is currently **partly cloudy** with a temperature of **18°C** and a **light breeze from the west**. It's pleasant weather overall!",
+                            "type": "text"
+                        }
+                    ],
+                    "role": "assistant"
+                },
+                {
+                    "content": "and in paris?",
+                    "role": "user"
+                },
+                {
+                    "content": [
+                        {
+                            "id": "toolu_01Q5J5oAGkvBUfM52fFfshJk",
+                            "input": {
+                                "location": "Paris"
+                            },
+                            "name": "get_weather",
+                            "type": "tool_use"
+                        }
+                    ],
+                    "role": "assistant"
+                },
+                {
+                    "content": [
+                        {
+                            "content": "Weather in Paris is sunny, 23°C, no wind.",
+                            "tool_use_id": "toolu_01Q5J5oAGkvBUfM52fFfshJk",
+                            "type": "tool_result"
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "model": "claude-haiku-4-5-20251001",
+            "system": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+            "tools": [
+                {
+                    "description": "Get the current weather for a given location",
+                    "input_schema": {
+                        "$comment": "WeatherToolArgs",
+                        "properties": {
+                            "location": {
+                                "$comment": "City name, e.g. London",
+                                "type": "string"
+                            }
+                        },
+                        "required": ["location"],
+                        "type": "object"
+                    },
+                    "name": "get_weather"
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "text": "The weather in Paris is **sunny** with a temperature of **23°C** and **no wind**. It's warmer and nicer than London at the moment!",
+                    "type": "text"
+                }
+            ],
+            "id": "msg_01KwfBSA7mE7KUiq6gRk19go",
+            "model": "claude-haiku-4-5-20251001",
+            "role": "assistant",
+            "stop_details": null,
+            "stop_reason": "end_turn",
+            "stop_sequence": null,
+            "type": "message",
+            "usage": {
+                "cache_creation": {
+                    "ephemeral_1h_input_tokens": 0,
+                    "ephemeral_5m_input_tokens": 0
+                },
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "inference_geo": "not_available",
+                "input_tokens": 834,
+                "output_tokens": 39,
+                "service_tier": "standard"
+            }
+        }
+    }
+]

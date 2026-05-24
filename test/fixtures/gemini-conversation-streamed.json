@@ -1,0 +1,396 @@
+[
+    {
+        "prompt": "how's the weather in london?",
+        "request": {
+            "_model": "gemini-2.5-flash",
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": "how's the weather in london?"
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "generationConfig": {
+                "maxOutputTokens": 1024
+            },
+            "system_instruction": {
+                "parts": [
+                    {
+                        "text": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available."
+                    }
+                ]
+            },
+            "tools": [
+                {
+                    "function_declarations": [
+                        {
+                            "description": "Get the current weather for a given location",
+                            "name": "get_weather",
+                            "parameters": {
+                                "$comment": "WeatherToolArgs",
+                                "properties": {
+                                    "location": {
+                                        "$comment": "City name, e.g. London",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["location"],
+                                "type": "object"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "arguments": {
+                        "location": "London"
+                    },
+                    "id": "call_3",
+                    "name": "get_weather",
+                    "type": "tool_call"
+                }
+            ],
+            "text": "",
+            "usage": {
+                "input_tokens": 80,
+                "output_tokens": 15
+            }
+        }
+    },
+    {
+        "request": {
+            "_model": "gemini-2.5-flash",
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": "how's the weather in london?"
+                        }
+                    ],
+                    "role": "user"
+                },
+                {
+                    "parts": [
+                        {
+                            "functionCall": {
+                                "args": {
+                                    "location": "London"
+                                },
+                                "name": "get_weather"
+                            }
+                        }
+                    ],
+                    "role": "model"
+                },
+                {
+                    "parts": [
+                        {
+                            "functionResponse": {
+                                "name": "get_weather",
+                                "response": {
+                                    "result": "Weather in London is partly cloudy, 18°C, light breeze from the west."
+                                }
+                            }
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "generationConfig": {
+                "maxOutputTokens": 1024
+            },
+            "system_instruction": {
+                "parts": [
+                    {
+                        "text": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available."
+                    }
+                ]
+            },
+            "tools": [
+                {
+                    "function_declarations": [
+                        {
+                            "description": "Get the current weather for a given location",
+                            "name": "get_weather",
+                            "parameters": {
+                                "$comment": "WeatherToolArgs",
+                                "properties": {
+                                    "location": {
+                                        "$comment": "City name, e.g. London",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["location"],
+                                "type": "object"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "text": "The",
+                    "type": "text"
+                },
+                {
+                    "text": " weather in London is partly cloudy, 18°C, with a light breeze from",
+                    "type": "text"
+                },
+                {
+                    "text": " the west. \n",
+                    "type": "text"
+                }
+            ],
+            "text": "The weather in London is partly cloudy, 18°C, with a light breeze from the west. \n",
+            "usage": {
+                "input_tokens": 128,
+                "output_tokens": 22
+            }
+        }
+    },
+    {
+        "prompt": "and in paris?",
+        "request": {
+            "_model": "gemini-2.5-flash",
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": "how's the weather in london?"
+                        }
+                    ],
+                    "role": "user"
+                },
+                {
+                    "parts": [
+                        {
+                            "functionCall": {
+                                "args": {
+                                    "location": "London"
+                                },
+                                "name": "get_weather"
+                            }
+                        }
+                    ],
+                    "role": "model"
+                },
+                {
+                    "parts": [
+                        {
+                            "functionResponse": {
+                                "name": "get_weather",
+                                "response": {
+                                    "result": "Weather in London is partly cloudy, 18°C, light breeze from the west."
+                                }
+                            }
+                        }
+                    ],
+                    "role": "user"
+                },
+                {
+                    "parts": [
+                        {
+                            "text": "The weather in London is partly cloudy, 18°C, with a light breeze from the west. \n"
+                        }
+                    ],
+                    "role": "model"
+                },
+                {
+                    "parts": [
+                        {
+                            "text": "and in paris?"
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "generationConfig": {
+                "maxOutputTokens": 1024
+            },
+            "system_instruction": {
+                "parts": [
+                    {
+                        "text": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available."
+                    }
+                ]
+            },
+            "tools": [
+                {
+                    "function_declarations": [
+                        {
+                            "description": "Get the current weather for a given location",
+                            "name": "get_weather",
+                            "parameters": {
+                                "$comment": "WeatherToolArgs",
+                                "properties": {
+                                    "location": {
+                                        "$comment": "City name, e.g. London",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["location"],
+                                "type": "object"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "arguments": {
+                        "location": "Paris"
+                    },
+                    "id": "call_8",
+                    "name": "get_weather",
+                    "type": "tool_call"
+                }
+            ],
+            "text": "",
+            "usage": {
+                "input_tokens": 158,
+                "output_tokens": 15
+            }
+        }
+    },
+    {
+        "request": {
+            "_model": "gemini-2.5-flash",
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": "how's the weather in london?"
+                        }
+                    ],
+                    "role": "user"
+                },
+                {
+                    "parts": [
+                        {
+                            "functionCall": {
+                                "args": {
+                                    "location": "London"
+                                },
+                                "name": "get_weather"
+                            }
+                        }
+                    ],
+                    "role": "model"
+                },
+                {
+                    "parts": [
+                        {
+                            "functionResponse": {
+                                "name": "get_weather",
+                                "response": {
+                                    "result": "Weather in London is partly cloudy, 18°C, light breeze from the west."
+                                }
+                            }
+                        }
+                    ],
+                    "role": "user"
+                },
+                {
+                    "parts": [
+                        {
+                            "text": "The weather in London is partly cloudy, 18°C, with a light breeze from the west. \n"
+                        }
+                    ],
+                    "role": "model"
+                },
+                {
+                    "parts": [
+                        {
+                            "text": "and in paris?"
+                        }
+                    ],
+                    "role": "user"
+                },
+                {
+                    "parts": [
+                        {
+                            "functionCall": {
+                                "args": {
+                                    "location": "Paris"
+                                },
+                                "name": "get_weather"
+                            }
+                        }
+                    ],
+                    "role": "model"
+                },
+                {
+                    "parts": [
+                        {
+                            "functionResponse": {
+                                "name": "get_weather",
+                                "response": {
+                                    "result": "Weather in Paris is sunny, 23°C, no wind."
+                                }
+                            }
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "generationConfig": {
+                "maxOutputTokens": 1024
+            },
+            "system_instruction": {
+                "parts": [
+                    {
+                        "text": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available."
+                    }
+                ]
+            },
+            "tools": [
+                {
+                    "function_declarations": [
+                        {
+                            "description": "Get the current weather for a given location",
+                            "name": "get_weather",
+                            "parameters": {
+                                "$comment": "WeatherToolArgs",
+                                "properties": {
+                                    "location": {
+                                        "$comment": "City name, e.g. London",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["location"],
+                                "type": "object"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "text": "The weather in Paris",
+                    "type": "text"
+                },
+                {
+                    "text": " is sunny, 23°C, with no wind.",
+                    "type": "text"
+                }
+            ],
+            "text": "The weather in Paris is sunny, 23°C, with no wind.",
+            "usage": {
+                "input_tokens": 202,
+                "output_tokens": 17
+            }
+        }
+    }
+]

@@ -1,0 +1,326 @@
+[
+    {
+        "prompt": "how's the weather in london?",
+        "request": {
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                }
+            ],
+            "model": "claude-haiku-4-5-20251001",
+            "stream": true,
+            "system": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+            "tools": [
+                {
+                    "description": "Get the current weather for a given location",
+                    "input_schema": {
+                        "$comment": "WeatherToolArgs",
+                        "properties": {
+                            "location": {
+                                "$comment": "City name, e.g. London",
+                                "type": "string"
+                            }
+                        },
+                        "required": ["location"],
+                        "type": "object"
+                    },
+                    "name": "get_weather"
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "arguments": {
+                        "location": "London"
+                    },
+                    "id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                    "name": "get_weather",
+                    "type": "tool_call"
+                }
+            ],
+            "text": "",
+            "usage": {
+                "input_tokens": 623,
+                "output_tokens": 54
+            }
+        }
+    },
+    {
+        "request": {
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "content": [
+                        {
+                            "id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                            "input": {
+                                "location": "London"
+                            },
+                            "name": "get_weather",
+                            "type": "tool_use"
+                        }
+                    ],
+                    "role": "assistant"
+                },
+                {
+                    "content": [
+                        {
+                            "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                            "tool_use_id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                            "type": "tool_result"
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "model": "claude-haiku-4-5-20251001",
+            "stream": true,
+            "system": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+            "tools": [
+                {
+                    "description": "Get the current weather for a given location",
+                    "input_schema": {
+                        "$comment": "WeatherToolArgs",
+                        "properties": {
+                            "location": {
+                                "$comment": "City name, e.g. London",
+                                "type": "string"
+                            }
+                        },
+                        "required": ["location"],
+                        "type": "object"
+                    },
+                    "name": "get_weather"
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "text": "The weather in London is currently",
+                    "type": "text"
+                },
+                {
+                    "text": " **partly cloudy** with a temperature of **18°C** and a **light breeze from the west**. It's a mild",
+                    "type": "text"
+                },
+                {
+                    "text": " day, so you might want to bring a light jacket if you're heading out!",
+                    "type": "text"
+                }
+            ],
+            "text": "The weather in London is currently **partly cloudy** with a temperature of **18°C** and a **light breeze from the west**. It's a mild day, so you might want to bring a light jacket if you're heading out!",
+            "usage": {
+                "input_tokens": 708,
+                "output_tokens": 55
+            }
+        }
+    },
+    {
+        "prompt": "and in paris?",
+        "request": {
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "content": [
+                        {
+                            "id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                            "input": {
+                                "location": "London"
+                            },
+                            "name": "get_weather",
+                            "type": "tool_use"
+                        }
+                    ],
+                    "role": "assistant"
+                },
+                {
+                    "content": [
+                        {
+                            "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                            "tool_use_id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                            "type": "tool_result"
+                        }
+                    ],
+                    "role": "user"
+                },
+                {
+                    "content": [
+                        {
+                            "text": "The weather in London is currently **partly cloudy** with a temperature of **18°C** and a **light breeze from the west**. It's a mild day, so you might want to bring a light jacket if you're heading out!",
+                            "type": "text"
+                        }
+                    ],
+                    "role": "assistant"
+                },
+                {
+                    "content": "and in paris?",
+                    "role": "user"
+                }
+            ],
+            "model": "claude-haiku-4-5-20251001",
+            "stream": true,
+            "system": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+            "tools": [
+                {
+                    "description": "Get the current weather for a given location",
+                    "input_schema": {
+                        "$comment": "WeatherToolArgs",
+                        "properties": {
+                            "location": {
+                                "$comment": "City name, e.g. London",
+                                "type": "string"
+                            }
+                        },
+                        "required": ["location"],
+                        "type": "object"
+                    },
+                    "name": "get_weather"
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "arguments": {
+                        "location": "Paris"
+                    },
+                    "id": "toolu_01GRMw2m36b1Pg8vyseDuBpS",
+                    "name": "get_weather",
+                    "type": "tool_call"
+                }
+            ],
+            "text": "",
+            "usage": {
+                "input_tokens": 770,
+                "output_tokens": 54
+            }
+        }
+    },
+    {
+        "request": {
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "content": [
+                        {
+                            "id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                            "input": {
+                                "location": "London"
+                            },
+                            "name": "get_weather",
+                            "type": "tool_use"
+                        }
+                    ],
+                    "role": "assistant"
+                },
+                {
+                    "content": [
+                        {
+                            "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                            "tool_use_id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                            "type": "tool_result"
+                        }
+                    ],
+                    "role": "user"
+                },
+                {
+                    "content": [
+                        {
+                            "text": "The weather in London is currently **partly cloudy** with a temperature of **18°C** and a **light breeze from the west**. It's a mild day, so you might want to bring a light jacket if you're heading out!",
+                            "type": "text"
+                        }
+                    ],
+                    "role": "assistant"
+                },
+                {
+                    "content": "and in paris?",
+                    "role": "user"
+                },
+                {
+                    "content": [
+                        {
+                            "id": "toolu_01GRMw2m36b1Pg8vyseDuBpS",
+                            "input": {
+                                "location": "Paris"
+                            },
+                            "name": "get_weather",
+                            "type": "tool_use"
+                        }
+                    ],
+                    "role": "assistant"
+                },
+                {
+                    "content": [
+                        {
+                            "content": "Weather in Paris is sunny, 23°C, no wind.",
+                            "tool_use_id": "toolu_01GRMw2m36b1Pg8vyseDuBpS",
+                            "type": "tool_result"
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "model": "claude-haiku-4-5-20251001",
+            "stream": true,
+            "system": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+            "tools": [
+                {
+                    "description": "Get the current weather for a given location",
+                    "input_schema": {
+                        "$comment": "WeatherToolArgs",
+                        "properties": {
+                            "location": {
+                                "$comment": "City name, e.g. London",
+                                "type": "string"
+                            }
+                        },
+                        "required": ["location"],
+                        "type": "object"
+                    },
+                    "name": "get_weather"
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "text": "The weather in Paris is **sunny**",
+                    "type": "text"
+                },
+                {
+                    "text": " with a temperature of **23°C** and **no wind**. It's a beautiful day there! Paris is a",
+                    "type": "text"
+                },
+                {
+                    "text": " bit warmer than London and has much nicer conditions for being",
+                    "type": "text"
+                },
+                {
+                    "text": " outside.",
+                    "type": "text"
+                }
+            ],
+            "text": "The weather in Paris is **sunny** with a temperature of **23°C** and **no wind**. It's a beautiful day there! Paris is a bit warmer than London and has much nicer conditions for being outside.",
+            "usage": {
+                "input_tokens": 849,
+                "output_tokens": 51
+            }
+        }
+    }
+]

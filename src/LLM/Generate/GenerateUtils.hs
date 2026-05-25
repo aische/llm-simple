@@ -2,7 +2,6 @@ module LLM.Generate.GenerateUtils
   ( maybeThrottle,
     mkRequest,
     usageWithModelCost,
-    emitGenerationStart,
     callWithRetryTimeout,
     withModelFallbacks,
   )
@@ -15,7 +14,6 @@ import Control.Concurrent (threadDelay)
 import LLM.Core.Types (ChatRequest (..), LLMError (Aborted), Turn (..))
 import LLM.Core.Usage (Usage (..), estimateCost)
 import LLM.Core.Utils (withRetry, withTimeout)
-import LLM.Generate.Events (emitEvent)
 import LLM.Generate.Log
   ( formatModelFallback,
     formatTryingModel,
@@ -31,7 +29,6 @@ import LLM.Generate.ToolUtils (filterReadonlyTools, windowOffset)
 import LLM.Generate.Types
   ( Agent (..),
     GenerateError (..),
-    GenerateEventDetail (..),
     GenerateResult,
     RuntimeArgs (..),
     Tool (toolDef),
@@ -56,10 +53,6 @@ mkRequest agent mc conv readonly =
 
 usageWithModelCost :: ModelConfig -> Usage -> Usage
 usageWithModelCost mc u = u {usageTotalCost = estimateCost (mcPricing mc) u}
-
-emitGenerationStart :: RuntimeArgs -> [Turn] -> IO ()
-emitGenerationStart rt _pconv = do
-  emitEvent rt GenerationStarted
 
 callWithRetryTimeout ::
   RuntimeArgs ->

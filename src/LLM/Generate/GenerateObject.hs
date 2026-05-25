@@ -17,7 +17,6 @@ import LLM.Core.Usage (Usage (..), emptyUsage)
 import LLM.Generate.Events (emitEvent)
 import LLM.Generate.GenerateUtils
   ( callWithRetryTimeout,
-    emitGenerationStart,
     mkRequest,
     usageWithModelCost,
     withModelFallbacks,
@@ -75,7 +74,7 @@ generateObjectUntyped ::
   Value ->
   IO (Either GenerateErrorResult (Value, Usage))
 generateObjectUntyped agent models rt messages schema = do
-  emitGenerationStart rt messages
+  emitEvent rt GenerationStarted
   aborted <- isAbortedMaybe (rtAbortSignal rt)
   if aborted
     then do

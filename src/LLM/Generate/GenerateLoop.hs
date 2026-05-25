@@ -20,8 +20,7 @@ import LLM.Generate.Generate
     streamTextWithFallbacks,
   )
 import LLM.Generate.GenerateUtils
-  ( emitGenerationStart,
-    usageWithModelCost,
+  ( usageWithModelCost,
   )
 import LLM.Generate.ModelConfig
   ( ModelWithFallbacks (..),
@@ -66,7 +65,7 @@ agentLoop ::
   [Turn] ->
   IO (Either GenerateErrorResult GenerateTextResult)
 agentLoop call agent models rt initialTurns = do
-  emitGenerationStart rt initialTurns
+  emitEvent rt GenerationStarted
   go initialTurns [] emptyUsage 0
   where
     go :: [Turn] -> [Turn] -> Usage -> Int -> IO (Either GenerateErrorResult GenerateTextResult)

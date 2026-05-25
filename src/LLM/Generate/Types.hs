@@ -59,7 +59,9 @@ data ToolContext = ToolContext
     tcRuntimeArgs :: RuntimeArgs
   }
 
-data GenerateResult = GenerateResult
+type GenerateResult a = Either GenerateError a
+
+data GenerateTextResult = GenerateTextResult
   { grGenerationId :: UUID,
     grNewMessages :: [Turn],
     grText :: Text,
@@ -102,7 +104,7 @@ data GenerateEvent = GenerateEvent
 -- | Generation lifecycle event details
 data GenerateEventDetail
   = GenerationStarted
-  | GenerationFinished GenerateResult
+  | GenerationFinished GenerateTextResult
   | GenerationFailed GenerateError GenerateErrorResult
   | MessageCreated Turn
   | MessageUpdated UUID Text

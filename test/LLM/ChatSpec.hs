@@ -6,7 +6,7 @@ module LLM.ChatSpec (spec) where
 import Data.Aeson (object, (.=))
 import Data.Text (Text)
 import Heptapod (generate)
-import LLM (LLMHooks (..))
+import LLM (GenerateTextResult (..), LLMHooks (..))
 import LLM.Core.Abort (AbortSignal, abort, newAbortSignal)
 import LLM.Core.Types
   ( ChatRequest (reqConversation),
@@ -19,7 +19,8 @@ import LLM.Core.Types
     Turn (ToolTurn, UserTurn),
   )
 import LLM.Core.Usage (PricingInfo (..), Usage (Usage))
-import LLM.Generate.Generate (generateText)
+import LLM.Generate.Events (noEventObserver)
+import LLM.Generate.GenerateLoop (generateText)
 import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig
   ( ModelConfig (..),
@@ -29,7 +30,6 @@ import LLM.Generate.Types
   ( Agent (..),
     GenerateError (..),
     GenerateErrorResult (..),
-    GenerateResult (..),
     RuntimeArgs (..),
     Tool (..),
   )
@@ -40,7 +40,6 @@ import Test.Hspec
     it,
     shouldBe,
   )
-import LLM.Generate.Events (noEventObserver)
 
 -- | A mock gateway that returns a fixed response
 mockGateway :: ChatResponse -> LLMGateway
@@ -142,7 +141,7 @@ runGenerate ::
   ModelWithFallbacks ->
   Maybe AbortSignal ->
   [Turn] ->
-  IO (Either GenerateErrorResult GenerateResult)
+  IO (Either GenerateErrorResult GenerateTextResult)
 runGenerate agent models mSig turns = do
   rt <- mkRuntime mSig
   generateText agent models rt turns

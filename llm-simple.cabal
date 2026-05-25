@@ -57,6 +57,7 @@ library
 
         LLM.Generate.Events
         LLM.Generate.Generate
+        LLM.Generate.GenerateLoop
         LLM.Generate.GenerateObject
         LLM.Generate.GenerateUtils
         LLM.Generate.Tools.HistoryTool

@@ -6,9 +6,9 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (Turn (UserTurn), TypedTool (..))
-import LLM.Generate.Types (GenerateErrorResult, GenerateResult (grText), RuntimeArgs, ToolContext (tcRuntimeArgs))
+import LLM.Generate.Types (GenerateErrorResult, GenerateTextResult (grText), RuntimeArgs, ToolContext (tcRuntimeArgs))
 
-type GenerateText = RuntimeArgs -> [Turn] -> IO (Either GenerateErrorResult GenerateResult)
+type GenerateText = RuntimeArgs -> [Turn] -> IO (Either GenerateErrorResult GenerateTextResult)
 
 newtype WorkerToolArgs = WorkerToolArgs
   { _workerPrompt :: Text

@@ -32,6 +32,7 @@ import LLM.Generate.Types
   ( Agent (..),
     GenerateError (..),
     GenerateEventDetail (..),
+    GenerateResult,
     RuntimeArgs (..),
     Tool (toolDef),
   )
@@ -74,7 +75,7 @@ withModelFallbacks ::
   RuntimeArgs ->
   ModelWithFallbacks ->
   (ModelConfig -> IO (Either LLMError a)) ->
-  IO (Either GenerateError a)
+  IO (GenerateResult a)
 withModelFallbacks rt models invokePerModel =
   case mfwToModelConfigs models of
     [] -> pure $ Left GErrAllModelsFailed

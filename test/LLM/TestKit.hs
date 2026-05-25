@@ -9,9 +9,9 @@ import LLM.Core.LLMProvider (LLMProvider (..))
 import LLM.Core.Types (Turn (..))
 import LLM.Core.Usage (addUsage, emptyUsage)
 import LLM.Core.Utils (parseChatResponse)
-import LLM.Generate.Generate (generateText, streamText)
+import LLM.Generate.GenerateLoop (generateText, streamText)
 import LLM.Generate.ModelConfig (ModelWithFallbacks)
-import LLM.Generate.Types (Agent, GenerateErrorResult (..), GenerateResult (..), RuntimeArgs)
+import LLM.Generate.Types (Agent, GenerateErrorResult (..), GenerateTextResult (..), RuntimeArgs)
 
 data MockRequestResponse = MockRequestResponse
   { prompt :: Maybe Text,
@@ -78,6 +78,6 @@ streamChatLoop stream (agent, models, rt) = aux emptyUsage []
         Left (GenerateErrorResult {gerError = err}) -> do
           print err
           pure conv
-        Right (GenerateResult {grUsage = usage, grNewMessages = newMessages}) -> do
+        Right (GenerateTextResult {grUsage = usage, grNewMessages = newMessages}) -> do
           let conv'' = conv' ++ newMessages
           aux (addUsage totalUsage usage) conv'' rest

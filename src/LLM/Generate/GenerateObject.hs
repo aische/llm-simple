@@ -29,6 +29,7 @@ import LLM.Generate.Types
     GenerateError (..),
     GenerateErrorResult (..),
     GenerateEventDetail (..),
+    GenerateResult,
     RuntimeArgs (..),
   )
 
@@ -112,7 +113,7 @@ callObjectWithFallbacks ::
   RuntimeArgs ->
   [Turn] ->
   Value ->
-  IO (Either GenerateError (Value, Usage))
+  IO (GenerateResult (Value, Usage))
 callObjectWithFallbacks agent models rt turns schema =
   withModelFallbacks rt models $ \mc -> do
     r <- callObject agent mc rt turns schema

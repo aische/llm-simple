@@ -27,6 +27,7 @@ import LLM.Core.Utils (toolResult)
 import LLM.Generate.Logger (Hooks (..))
 import LLM.Generate.Types
   ( GenerateError (..),
+    GenerateResult,
     Tool (Tool, toolDef, toolExecute),
     ToolContext,
   )
@@ -54,7 +55,7 @@ executeTools hooks ctx tools = mapM (executeTool hooks ctx tools)
 
 -- | Execute tool calls one at a time, checking the abort signal between each.
 -- Returns @Left Aborted@ if the signal fires before all calls finish.
-executeToolsWithAbort :: Maybe AbortSignal -> Hooks -> ToolContext -> [Tool] -> [ToolCall] -> IO (Either GenerateError [ToolResult])
+executeToolsWithAbort :: Maybe AbortSignal -> Hooks -> ToolContext -> [Tool] -> [ToolCall] -> IO (GenerateResult [ToolResult])
 executeToolsWithAbort Nothing hooks ctx tools tcs = Right <$> executeTools hooks ctx tools tcs
 executeToolsWithAbort (Just sig) hooks ctx tools tcs = go [] tcs
   where

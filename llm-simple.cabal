@@ -63,6 +63,7 @@ library
         LLM.Agent.ToolUtils
         LLM.Agent.Types
 
+        LLM.Generate
         LLM.Generate.Generate
         LLM.Generate.GenerateObject
         LLM.Generate.GenerateUtils

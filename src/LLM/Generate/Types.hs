@@ -1,4 +1,13 @@
-module LLM.Generate.Types where
+module LLM.Generate.Types 
+  ( GenRequest (..),
+    GenerateResult,
+    GenerateError (..),
+    GenerateErrorResult (..),
+    GenerateTextResult (..),
+    StreamChunk (..),
+    GeneratableObject,
+  )
+where
 
 import Autodocodec (HasCodec)
 import Data.Aeson (FromJSON)

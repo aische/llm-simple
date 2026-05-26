@@ -1,4 +1,4 @@
-module LLM.Tools.DirectoryTree (directoryTreeToolTyped) where
+module LLM.Tools.DirectoryTree (directoryTreeToolTyped, DirectoryTreeToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Control.Monad (forM)

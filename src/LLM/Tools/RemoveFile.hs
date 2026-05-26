@@ -1,4 +1,4 @@
-module LLM.Tools.RemoveFile (removeFileToolTyped) where
+module LLM.Tools.RemoveFile (removeFileToolTyped, RemoveFileToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)

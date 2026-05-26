@@ -1,4 +1,4 @@
-module LLM.Tools.ReplaceInFile (replaceInFileToolTyped) where
+module LLM.Tools.ReplaceInFile (replaceInFileToolTyped, ReplaceInFileToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)

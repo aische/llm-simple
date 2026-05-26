@@ -1,4 +1,4 @@
-module LLM.Tools.CopyFile (copyFileToolTyped) where
+module LLM.Tools.CopyFile (copyFileToolTyped, CopyFileToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)

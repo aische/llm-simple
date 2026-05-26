@@ -1,4 +1,4 @@
-module LLM.Tools.Readfile (readfileToolTyped) where
+module LLM.Tools.Readfile (readfileToolTyped, ReadfileToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)

@@ -1,4 +1,4 @@
-module LLM.Tools.CreateDirectory (createDirectoryToolTyped) where
+module LLM.Tools.CreateDirectory (createDirectoryToolTyped, CreateDirectoryToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)

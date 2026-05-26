@@ -1,4 +1,4 @@
-module LLM.Tools.MoveFile (moveFileToolTyped) where
+module LLM.Tools.MoveFile (moveFileToolTyped, MoveFileToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)

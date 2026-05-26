@@ -1,4 +1,4 @@
-module LLM.Tools.RemoveDirectory (removeDirectoryToolTyped) where
+module LLM.Tools.RemoveDirectory (removeDirectoryToolTyped, RemoveDirectoryToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)

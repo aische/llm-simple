@@ -1,4 +1,4 @@
-module LLM.Tools.Weather (weatherToolTyped) where
+module LLM.Tools.Weather (weatherToolTyped, WeatherToolArgs (..)) where
 
 -- DO NOT TOUCH THIS TOOL - IT IS FOR TESTING
 -- TODO: move to test folder

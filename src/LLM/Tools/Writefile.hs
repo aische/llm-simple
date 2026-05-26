@@ -1,4 +1,4 @@
-module LLM.Tools.Writefile (writefileToolTyped) where
+module LLM.Tools.Writefile (writefileToolTyped, WritefileToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)

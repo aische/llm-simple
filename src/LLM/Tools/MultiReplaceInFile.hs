@@ -1,4 +1,4 @@
-module LLM.Tools.MultiReplaceInFile (multiReplaceInFileToolTyped) where
+module LLM.Tools.MultiReplaceInFile (multiReplaceInFileToolTyped, MultiReplaceInFileToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)

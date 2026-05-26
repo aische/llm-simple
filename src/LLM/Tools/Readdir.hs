@@ -1,4 +1,4 @@
-module LLM.Tools.Readdir (readdirToolTyped) where
+module LLM.Tools.Readdir (readdirToolTyped, ReaddirToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)

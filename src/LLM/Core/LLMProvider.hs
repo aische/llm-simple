@@ -42,6 +42,25 @@ data LLMProvider = LLMProvider
     parseObjectResponse :: Value -> IO LLMObjectResult
   }
 
+-- | Generic streaming chat via the LLMProvider.
+genericStreamText :: LLMProvider -> LLMHooks -> ChatRequest -> (StreamEvent -> IO ()) -> IO LLMTextResult
+genericStreamText p hooks r callback = do
+  let body = buildBody p True r
+  onLLMRequest hooks (providerName p) body
+  result <- try (sendStreamRequest p body callback)
+  case result of
+    Left e -> do
+      onLLMResponseError hooks (providerName p) (T.pack (show (e :: HttpException)))
+      pure $ Left $ NetworkError (T.pack (show (e :: HttpException)))
+    Right r' -> do
+      case r' of
+        Right resp -> do
+          onLLMResponse hooks (providerName p) (streamResponseJson resp)
+          pure r'
+        Left e -> do
+          onLLMResponseError hooks (providerName p) (T.pack (show e))
+          pure $ Left e
+
 -- | Generic non-streaming chat via the LLMProvider.
 genericGenerateText :: LLMProvider -> LLMHooks -> ChatRequest -> IO LLMTextResult
 genericGenerateText p hooks r = do
@@ -49,12 +68,16 @@ genericGenerateText p hooks r = do
   onLLMRequest hooks (providerName p) body
   result <- try (sendRequest p body)
   case result of
-    Left e -> pure $ Left $ NetworkError (T.pack (show (e :: HttpException)))
+    Left e -> do
+      onLLMResponseError hooks (providerName p) (T.pack (show (e :: HttpException)))
+      pure $ Left $ NetworkError (T.pack (show (e :: HttpException)))
     Right (status, respBody) -> do
       onLLMResponse hooks (providerName p) respBody
       if status == 200
         then parseResponse p respBody
-        else pure $ Left $ HttpError status (T.pack $ show respBody)
+        else do
+          onLLMResponseError hooks (providerName p) ("HTTP error: " <> T.pack (show status) <> " " <> T.pack (show respBody))
+          pure $ Left $ HttpError status (T.pack $ show respBody)
 
 -- | Generic object generation via the LLMProvider.
 genericGenerateObject :: LLMProvider -> LLMHooks -> Value -> ChatRequest -> IO LLMObjectResult
@@ -70,21 +93,9 @@ genericGenerateObject p hooks schema r = do
       onLLMResponse hooks (providerName p) respBody
       if status == 200
         then parseObjectResponse p respBody
-        else pure $ Left $ HttpError status (T.pack $ show respBody)
-
--- | Generic streaming chat via the LLMProvider.
-genericStreamText :: LLMProvider -> LLMHooks -> ChatRequest -> (StreamEvent -> IO ()) -> IO LLMTextResult
-genericStreamText p hooks r callback = do
-  let body = buildBody p True r
-  onLLMRequest hooks (providerName p) body
-  result <- try (sendStreamRequest p body callback)
-  case result of
-    Left e -> pure $ Left $ NetworkError (T.pack (show (e :: HttpException)))
-    Right r' -> do
-      case r' of
-        Right resp -> onLLMResponse hooks (providerName p) (streamResponseJson resp)
-        _ -> pure ()
-      pure r'
+        else do
+          onLLMResponseError hooks (providerName p) ("HTTP error: " <> T.pack (show status) <> " " <> T.pack (show respBody))
+          pure $ Left $ HttpError status (T.pack $ show respBody)
 
 -- | Convert any LLMProvider instance into a LLMGateway.
 -- LLMHooks are not baked in — they are passed at call time via 'ChatEnv'.

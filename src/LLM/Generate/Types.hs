@@ -1,4 +1,4 @@
-module LLM.Generate.Types 
+module LLM.Generate.Types
   ( GenRequest (..),
     GenerateResult,
     GenerateError (..),
@@ -36,10 +36,10 @@ data GenRequest = GenRequest
 type GenerateResult a = Either GenerateError a
 
 data GenerateTextResult = GenerateTextResult
-  { grGenerationId :: UUID,
-    grNewMessages :: [Turn],
-    grText :: Text,
-    grUsage :: Usage
+  { gtrGenerationId :: UUID,
+    gtrNewMessages :: [Turn],
+    gtrText :: Text,
+    gtrUsage :: Usage
   }
   deriving (Show, Eq)
 

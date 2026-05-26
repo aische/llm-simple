@@ -79,6 +79,6 @@ streamChatLoop stream (agent, models, rt) = aux emptyUsage []
         Left (GenerateErrorResult {gerError = err}) -> do
           print err
           pure conv
-        Right (GenerateTextResult {grUsage = usage, grNewMessages = newMessages}) -> do
+        Right (GenerateTextResult {gtrUsage = usage, gtrNewMessages = newMessages}) -> do
           let conv'' = conv' ++ newMessages
           aux (addUsage totalUsage usage) conv'' rest

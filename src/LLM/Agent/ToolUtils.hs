@@ -2,6 +2,7 @@ module LLM.Agent.ToolUtils
   ( executeTool,
     executeTools,
     executeToolsWithAbort,
+    createToolContext,
     getSchema,
     toTool,
     filterReadonlyTools,
@@ -21,7 +22,7 @@ import LLM.Agent.Types
   ( Agent (..),
     RuntimeArgs (..),
     Tool (Tool, toolDef, toolExecute),
-    ToolContext,
+    ToolContext (..),
   )
 import LLM.Core.Abort (AbortSignal, isAborted)
 import LLM.Core.Types
@@ -31,6 +32,7 @@ import LLM.Core.Types
     Turn (..),
     TypedTool (TypedTool),
   )
+import LLM.Core.Usage (Usage)
 import LLM.Core.Utils (toolResult)
 import LLM.Generate.Logger (Hooks (..))
 import LLM.Generate.Types
@@ -74,6 +76,20 @@ executeToolsWithAbort (Just sig) hooks ctx tools tcs = go [] tcs
         else do
           r <- executeTool hooks ctx tools tc
           go (r : acc) rest
+
+createToolContext ::
+  Agent ->
+  [Turn] ->
+  Usage ->
+  RuntimeArgs ->
+  ToolContext
+createToolContext agent messages roundUsage rt =
+  ToolContext
+    { tcConversation = messages,
+      tcUsage = roundUsage,
+      tcWindowOffset = windowOffset (agContextWindow agent) messages,
+      tcRuntimeArgs = rt
+    }
 
 getSchema :: (AC.HasCodec t, FromJSON t) => TypedTool ToolContext t -> AC.JSONCodec t
 getSchema _ = AC.codec

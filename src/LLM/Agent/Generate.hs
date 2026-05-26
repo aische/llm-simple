@@ -7,12 +7,15 @@ where
 
 import Data.Maybe (fromMaybe)
 import LLM.Agent.Events (emitEvent)
-import LLM.Agent.ToolUtils (createGenRequest, executeToolsWithAbort, windowOffset)
+import LLM.Agent.ToolUtils
+  ( createGenRequest,
+    createToolContext,
+    executeToolsWithAbort,
+  )
 import LLM.Agent.Types
-  ( Agent (agContextWindow, agMaxToolRounds, agTools),
+  ( Agent (agMaxToolRounds, agTools),
     GenerateEventDetail (..),
     RuntimeArgs (..),
-    ToolContext (..),
   )
 import LLM.Core.Abort (isAbortedMaybe)
 import LLM.Core.Types
@@ -102,7 +105,7 @@ agentLoop call agent models rt initialTurns = do
                       pure $ Right successResult
                     _ -> do
                       let assistantTurn = AssistantTurn txt toolCalls
-                          toolContext = mkToolContext agent (currentTurns ++ [assistantTurn]) newUsage rt
+                          toolContext = createToolContext agent (currentTurns ++ [assistantTurn]) newUsage rt
 
                       emitEvent rt (MessageCreated assistantTurn)
                       emitEvent rt (ToolRoundStarted loopCount)
@@ -120,17 +123,3 @@ agentLoop call agent models rt initialTurns = do
                           emitEvent rt (ToolRoundFinished loopCount)
                           let turnsToAdd = [assistantTurn, toolTurn]
                           go (currentTurns ++ turnsToAdd) (newTurnsAcc ++ turnsToAdd) newUsage (loopCount + 1)
-
-mkToolContext ::
-  Agent ->
-  [Turn] ->
-  Usage ->
-  RuntimeArgs ->
-  ToolContext
-mkToolContext agent messages roundUsage rt =
-  ToolContext
-    { tcConversation = messages,
-      tcUsage = roundUsage,
-      tcWindowOffset = windowOffset (agContextWindow agent) messages,
-      tcRuntimeArgs = rt
-    }

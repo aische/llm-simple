@@ -11,9 +11,10 @@ import LLM.Agent.ToolUtils
   ( createGenRequest,
     createToolContext,
     executeToolsWithAbort,
+    getResolvedTools,
   )
 import LLM.Agent.Types
-  ( Agent (agMaxToolRounds, agTools),
+  ( Agent (agMaxToolRounds),
     GenerateEventDetail (..),
     RuntimeArgs (..),
   )
@@ -105,12 +106,12 @@ agentLoop call agent models rt initialTurns = do
                       pure $ Right successResult
                     _ -> do
                       let assistantTurn = AssistantTurn txt toolCalls
-                          toolContext = createToolContext agent (currentTurns ++ [assistantTurn]) newUsage rt
-
+                          toolContext = createToolContext agent currentTurns newUsage rt
+                          tools = getResolvedTools agent rt
                       emitEvent rt (MessageCreated assistantTurn)
                       emitEvent rt (ToolRoundStarted loopCount)
 
-                      toolResultsE <- executeToolsWithAbort (rtAbortSignal rt) (rtHooks rt) toolContext (agTools agent) toolCalls
+                      toolResultsE <- executeToolsWithAbort (rtAbortSignal rt) (rtHooks rt) toolContext tools toolCalls
 
                       case toolResultsE of
                         Left err -> do

@@ -6,6 +6,7 @@ module LLM.Agent.ToolUtils
     getSchema,
     toTool,
     filterReadonlyTools,
+    getResolvedTools,
     windowOffset,
     createGenRequest,
   )
@@ -139,8 +140,7 @@ findNthUserFromEnd n conv = go (length conv - 1) n
 createGenRequest :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
 createGenRequest agent rt messages =
   let offset = windowOffset (agContextWindow agent) messages
-      tools =
-        filterReadonlyTools (rtReadonly rt) (agTools agent) ++ getHistoryTool agent
+      tools = getResolvedTools agent rt
    in GenRequest
         { grSystemPrompt = agSystemPrompt agent,
           grTools = map toolDef tools,
@@ -149,6 +149,9 @@ createGenRequest agent rt messages =
           grLLMHooks = rtLLMHooks rt,
           grHooks = rtHooks rt
         }
+
+getResolvedTools :: Agent -> RuntimeArgs -> [Tool]
+getResolvedTools agent rt = filterReadonlyTools (rtReadonly rt) (agTools agent) ++ getHistoryTool agent
 
 getHistoryTool :: Agent -> [Tool]
 getHistoryTool agent = case agContextWindow agent of

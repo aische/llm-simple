@@ -116,7 +116,6 @@ defaultAgent =
     { agName = "test",
       agSystemPrompt = Nothing,
       agTools = [],
-      agWorkers = Nothing,
       agMaxToolRounds = 10,
       agContextWindow = Nothing
     }

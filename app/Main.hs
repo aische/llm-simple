@@ -3,12 +3,15 @@
 module Main where
 
 import Autodocodec qualified as AC
+import Configuration.Dotenv (defaultConfig, loadFile)
+import Control.Exception (SomeException (SomeException), catch)
 import Data.Aeson (FromJSON)
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import Heptapod (generate)
-import LLM (ollamaGateway, toTool)
+import LLM (ollamaGateway, openAIGateway, toTool)
 import LLM.Agent.Generate (generateText, streamText)
 import LLM.Agent.GenerateObject (generateObject)
 import LLM.Agent.Types
@@ -26,6 +29,7 @@ import LLM.Tools.FsConfig (FsConfig (..))
 import LLM.Tools.Readdir (readdirToolTyped)
 import LLM.Tools.Readfile (readfileToolTyped)
 import LLM.Tools.Writefile (writefileToolTyped)
+import System.Environment (getEnv)
 
 agent :: Agent
 agent =
@@ -39,16 +43,15 @@ agent =
               toTool $ readdirToolTyped fsConfig,
               toTool $ directoryTreeToolTyped fsConfig
             ],
-          agWorkers = Nothing,
           agMaxToolRounds = 3,
           agContextWindow = Nothing
         }
 
-model1 :: ModelConfig
-model1 =
+model1 :: Text -> ModelConfig
+model1 apiKey =
   ModelConfig
-    { mcGateway = ollamaGateway,
-      mcModel = "llama3.2:latest",
+    { mcGateway = openAIGateway apiKey,
+      mcModel = "gpt-4.1-2025-04-14",
       mcPricing = PricingInfo {pricePerMillionInput = 1.0, pricePerMillionOutput = 5.00},
       mcMaxTokens = 1024,
       mcTemperature = Nothing,
@@ -60,7 +63,9 @@ model1 =
 
 main :: IO ()
 main = do
-  let models = ModelWithFallbacks model1 []
+  loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
+  openAIGatewayKey <- getEnv "OPENAI_API_KEY"
+  let models = ModelWithFallbacks (model1 $ T.pack openAIGatewayKey) []
   uuid1 <- generate
   let runtime =
         RuntimeArgs
@@ -77,8 +82,8 @@ main = do
   r <- streamText onStreamChunk agent models runtime currentConversation
   print r
 
-  o <- generateObject agent models runtime currentConversation
-  printExampleObject o
+-- o <- generateObject agent models runtime currentConversation
+-- printExampleObject o
 
 printExampleObject :: Either a (ExampleObject, Usage) -> IO ()
 printExampleObject (Right (o, _)) = print o
@@ -91,7 +96,9 @@ onStreamChunk = \case
   StreamToolCallChunk _ -> pure ()
 
 printEvent :: GenerateEvent -> IO ()
-printEvent = print
+printEvent ev = do
+  putStrLn "--------------------------------"
+  print ev
 
 data ExampleObject = ExampleObject
   { _title :: Text,

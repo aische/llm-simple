@@ -27,7 +27,6 @@ data Agent = Agent
   { agName :: Text,
     agSystemPrompt :: Maybe Text,
     agTools :: [Tool],
-    agWorkers :: Maybe [Text],
     agMaxToolRounds :: Int,
     agContextWindow :: Maybe Int -- max recent turns sent to the model; Nothing = all
   }

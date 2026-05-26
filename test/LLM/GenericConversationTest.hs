@@ -52,7 +52,6 @@ createSpec opts = describe (specTitle opts) $ do
               agTools =
                 [ toTool weatherToolTyped
                 ],
-              agWorkers = Nothing,
               agMaxToolRounds = 3,
               agContextWindow = Nothing
             }
@@ -87,7 +86,14 @@ createSpec opts = describe (specTitle opts) $ do
             }
         systemPrompt = "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available."
         models = ModelWithFallbacks modelConf []
-        agent = Agent {agName = "test", agSystemPrompt = Just systemPrompt, agTools = [toTool weatherToolTyped], agWorkers = Nothing, agMaxToolRounds = 3, agContextWindow = Nothing}
+        agent =
+          Agent
+            { agName = "test",
+              agSystemPrompt = Just systemPrompt,
+              agTools = [toTool weatherToolTyped],
+              agMaxToolRounds = 3,
+              agContextWindow = Nothing
+            }
         runtime =
           RuntimeArgs
             { rtGenerationId = uuid1,

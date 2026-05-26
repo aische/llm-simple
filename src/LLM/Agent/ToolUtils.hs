@@ -155,5 +155,5 @@ getResolvedTools agent rt = filterReadonlyTools (rtReadonly rt) (agTools agent) 
 
 getHistoryTool :: Agent -> [Tool]
 getHistoryTool agent = case agContextWindow agent of
-  Just _ -> [toTool historyToolTyped]
-  Nothing -> []
+  Just n | n > 0 -> [toTool historyToolTyped]
+  _ -> []

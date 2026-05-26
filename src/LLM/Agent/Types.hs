@@ -1,4 +1,4 @@
-module LLM.Generate.Types where
+module LLM.Agent.Types where
 
 import Autodocodec (HasCodec)
 import Data.Aeson (FromJSON, Value)
@@ -6,14 +6,13 @@ import Data.Text (Text)
 import Data.UUID.Types (UUID)
 import LLM.Core.Abort (AbortSignal)
 import LLM.Core.Types
-  ( LLMError,
-    LLMHooks,
-    ToolCall,
+  ( LLMHooks,
     ToolDef (..),
     Turn,
   )
 import LLM.Core.Usage (Usage)
-import LLM.Generate.Logger (Hooks)
+import LLM.Generate0.Logger (Hooks)
+import LLM.Generate0.Types (GenerateError, GenerateErrorResult, GenerateTextResult, GenRequest (..))
 
 -- | Agent configuration
 data Agent = Agent
@@ -35,9 +34,6 @@ data RuntimeArgs = RuntimeArgs
     rtReadonly :: Bool
   }
 
--- | History of messages (empty or ending with final assistant message)
-type History = [Turn]
-
 -- | A tool: its definition (sent to the model) paired with its implementation.
 -- 'toolExecute' receives a 'ToolContext' (full conversation + usage) and
 -- the JSON arguments from the model.
@@ -58,41 +54,6 @@ data ToolContext = ToolContext
     tcWindowOffset :: Int,
     tcRuntimeArgs :: RuntimeArgs
   }
-
-type GenerateResult a = Either GenerateError a
-
-data GenerateTextResult = GenerateTextResult
-  { grGenerationId :: UUID,
-    grNewMessages :: [Turn],
-    grText :: Text,
-    grUsage :: Usage
-  }
-  deriving (Show, Eq)
-
-data GenerateErrorResult = GenerateErrorResult
-  { gerError :: GenerateError,
-    gerGenerationId :: UUID,
-    gerPartialNewMessages :: [Turn], -- What was generated before the crash
-    gerUsage :: Usage
-  }
-  deriving (Show, Eq)
-
-data GenerateError
-  = GErrLLM LLMError
-  | GErrToolExceeded
-  | GErrAllModelsFailed
-  | GErrAborted
-  | GErrParseObjectError Text
-  deriving (Show, Eq)
-
-data StreamChunk
-  = -- | Final answer text for the pre-allocated assistant message.
-    AnswerDelta UUID Text
-  | -- | Text from an LLM round that also issued tool calls.
-    PreambleDelta Text
-  | -- | A complete tool call from the provider stream.
-    StreamToolCallChunk ToolCall
-  deriving (Show, Eq)
 
 -- | Generation lifecycle event
 data GenerateEvent = GenerateEvent
@@ -116,3 +77,16 @@ data GenerateEventDetail
 type EventObserver = GenerateEvent -> IO ()
 
 type GeneratableObject t = (FromJSON t, HasCodec t)
+
+-- 
+
+createGenRequest :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
+createGenRequest agent rt messages =
+  GenRequest
+    { grSystemPrompt = agSystemPrompt agent,
+      grTools = map toolDef (agTools agent), -- TODO: filter
+      grMessages = messages, -- TODO: WINDOW
+      grAbortSignal = rtAbortSignal rt,
+      grLLMHooks = rtLLMHooks rt,
+      grHooks = rtHooks rt
+    }

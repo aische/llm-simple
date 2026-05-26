@@ -3,16 +3,13 @@ module LLM.GenericConversationTest (createSpec, GenericConversationTextOps (..))
 import Data.Text qualified as T
 import Heptapod (generate)
 import LLM (LLMHooks (..))
+import LLM.Agent.Events (noEventObserver)
+import LLM.Agent.ToolUtils (toTool)
+import LLM.Agent.Types (Agent (..), RuntimeArgs (..))
 import LLM.Core.LLMProvider (LLMProvider, toGateway)
 import LLM.Core.Usage (PricingInfo (..))
-import LLM.Generate.Events (noEventObserver)
-import LLM.Generate.Logger (noHooks)
-import LLM.Generate.ModelConfig
-  ( ModelConfig (..),
-    ModelWithFallbacks (ModelWithFallbacks),
-  )
-import LLM.Generate.ToolUtils (toTool)
-import LLM.Generate.Types (Agent (..), RuntimeArgs (..))
+import LLM.Generate0.Logger (noHooks)
+import LLM.Generate0.ModelConfig (ModelConfig (..), ModelWithFallbacks (ModelWithFallbacks))
 import LLM.TestKit
   ( loadRecordedConversation,
     mockProvider,

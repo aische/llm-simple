@@ -17,6 +17,7 @@ import LLM.Generate0.Logger (Hooks)
 
 data GenRequest = GenRequest
   { grSystemPrompt :: Maybe Text,
+    grMessages :: [Turn],
     grTools :: [ToolDef],
     grAbortSignal :: Maybe AbortSignal,
     grLLMHooks :: LLMHooks,

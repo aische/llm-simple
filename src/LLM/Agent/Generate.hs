@@ -1,4 +1,5 @@
-module LLM.Generate.GenerateLoop
+{- HLINT ignore "Eta reduce" -}
+module LLM.Agent.Generate
   ( streamText,
     generateText,
     usageWithModelCost,
@@ -6,6 +7,18 @@ module LLM.Generate.GenerateLoop
 where
 
 import Data.Maybe (fromMaybe)
+import LLM.Agent.Events (emitEvent)
+import LLM.Agent.ToolUtils
+  ( executeToolsWithAbort,
+    windowOffset,
+  )
+import LLM.Agent.Types
+  ( Agent (agContextWindow, agMaxToolRounds, agTools),
+    GenerateEventDetail (..),
+    RuntimeArgs (..),
+    ToolContext (..),
+    createGenRequest,
+  )
 import LLM.Core.Abort (isAbortedMaybe)
 import LLM.Core.Types
   ( ChatResponse (..),
@@ -13,29 +26,21 @@ import LLM.Core.Types
   )
 import LLM.Core.Usage (Usage (..), emptyUsage)
 import LLM.Core.Utils (getToolCalls)
-import LLM.Generate.Events (emitEvent)
-import LLM.Generate.Generate
+import LLM.Generate0.Generate
   ( generateTextWithFallbacks,
-    mkToolContext,
     streamTextWithFallbacks,
   )
-import LLM.Generate.GenerateUtils
+import LLM.Generate0.GenerateUtils
   ( usageWithModelCost,
   )
-import LLM.Generate.ModelConfig
+import LLM.Generate0.ModelConfig
   ( ModelWithFallbacks (..),
   )
-import LLM.Generate.ToolUtils
-  ( executeToolsWithAbort,
-  )
-import LLM.Generate.Types
-  ( Agent (..),
-    GenerateError (..),
+import LLM.Generate0.Types
+  ( GenerateError (..),
     GenerateErrorResult (..),
-    GenerateEventDetail (..),
     GenerateResult,
     GenerateTextResult (..),
-    RuntimeArgs (..),
     StreamChunk (..),
   )
 
@@ -46,7 +51,7 @@ generateText ::
   RuntimeArgs ->
   [Turn] ->
   IO (Either GenerateErrorResult GenerateTextResult)
-generateText = agentLoop generateTextWithFallbacks
+generateText = agentLoop (\a m r t -> generateTextWithFallbacks (createGenRequest a r t) m)
 
 streamText ::
   (StreamChunk -> IO ()) ->
@@ -55,7 +60,7 @@ streamText ::
   RuntimeArgs ->
   [Turn] ->
   IO (Either GenerateErrorResult GenerateTextResult)
-streamText onChunk = agentLoop (streamTextWithFallbacks onChunk)
+streamText onChunk = agentLoop (\a m r t -> streamTextWithFallbacks onChunk (createGenRequest a r t) m)
 
 agentLoop ::
   (Agent -> ModelWithFallbacks -> RuntimeArgs -> [Turn] -> IO (GenerateResult ChatResponse)) ->
@@ -73,20 +78,20 @@ agentLoop call agent models rt initialTurns = do
       aborted <- isAbortedMaybe (rtAbortSignal rt)
       if aborted
         then do
-          let errResult = GenerateErrorResult GErrAborted (rtGenerationId rt) newTurnsAcc currentUsage
+          let errResult = GenerateErrorResult GErrAborted newTurnsAcc currentUsage
           emitEvent rt (GenerationFailed GErrAborted errResult)
           pure $ Left errResult
         else
           if loopCount >= agMaxToolRounds agent
             then do
-              let errResult = GenerateErrorResult GErrToolExceeded (rtGenerationId rt) newTurnsAcc currentUsage
+              let errResult = GenerateErrorResult GErrToolExceeded newTurnsAcc currentUsage
               emitEvent rt (GenerationFailed GErrToolExceeded errResult)
               pure $ Left errResult
             else do
               result <- call agent models rt currentTurns
               case result of
                 Left err -> do
-                  let errResult = GenerateErrorResult err (rtGenerationId rt) newTurnsAcc currentUsage
+                  let errResult = GenerateErrorResult err newTurnsAcc currentUsage
                   emitEvent rt (GenerationFailed err errResult)
                   pure $ Left errResult
                 Right resp -> do
@@ -114,7 +119,7 @@ agentLoop call agent models rt initialTurns = do
 
                       case toolResultsE of
                         Left err -> do
-                          let errResult = GenerateErrorResult err (rtGenerationId rt) (newTurnsAcc ++ [assistantTurn]) newUsage
+                          let errResult = GenerateErrorResult err (newTurnsAcc ++ [assistantTurn]) newUsage
                           emitEvent rt (GenerationFailed err errResult)
                           pure $ Left errResult
                         Right toolResults -> do
@@ -123,3 +128,17 @@ agentLoop call agent models rt initialTurns = do
                           emitEvent rt (ToolRoundFinished loopCount)
                           let turnsToAdd = [assistantTurn, toolTurn]
                           go (currentTurns ++ turnsToAdd) (newTurnsAcc ++ turnsToAdd) newUsage (loopCount + 1)
+
+mkToolContext ::
+  Agent ->
+  [Turn] ->
+  Usage ->
+  RuntimeArgs ->
+  ToolContext
+mkToolContext agent messages roundUsage rt =
+  ToolContext
+    { tcConversation = messages,
+      tcUsage = roundUsage,
+      tcWindowOffset = windowOffset (agContextWindow agent) messages,
+      tcRuntimeArgs = rt
+    }

@@ -1,4 +1,4 @@
-module LLM.Generate.Tools.WorkerTool where
+module LLM.Agent.Tools.WorkerTool where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)
@@ -6,7 +6,8 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (Turn (UserTurn), TypedTool (..))
-import LLM.Generate.Types (GenerateErrorResult, GenerateTextResult (grText), RuntimeArgs, ToolContext (tcRuntimeArgs))
+import LLM.Agent.Types (RuntimeArgs, ToolContext (tcRuntimeArgs))
+import LLM.Generate0.Types (GenerateErrorResult, GenerateTextResult (grText))
 
 type GenerateText = RuntimeArgs -> [Turn] -> IO (Either GenerateErrorResult GenerateTextResult)
 

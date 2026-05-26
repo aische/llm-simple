@@ -1,4 +1,4 @@
-module LLM.Generate.Events
+module LLM.Agent.Events
   ( emitEvent,
     noEventObserver,
   )
@@ -6,7 +6,7 @@ where
 
 import Control.Exception (SomeException, try)
 import Control.Monad (void)
-import LLM.Generate.Types
+import LLM.Agent.Types
   ( EventObserver,
     GenerateEvent (..),
     GenerateEventDetail,

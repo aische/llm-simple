@@ -1,4 +1,4 @@
-module LLM.Generate.Tools.HistoryTool where
+module LLM.Agent.Tools.HistoryTool where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)
@@ -6,7 +6,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (ToolCall (tcName), ToolResult (trContent, trName), Turn (..), TypedTool (..))
-import LLM.Generate.Types (ToolContext (..))
+import LLM.Agent.Types (ToolContext (..))
 
 newtype HistoryToolArgs = HistoryToolArgs
   { _historyChunk :: Int

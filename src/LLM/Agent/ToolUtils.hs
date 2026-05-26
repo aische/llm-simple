@@ -1,4 +1,4 @@
-module LLM.Generate.ToolUtils
+module LLM.Agent.ToolUtils
   ( executeTool,
     executeTools,
     executeToolsWithAbort,
@@ -24,13 +24,12 @@ import LLM.Core.Types
     TypedTool (TypedTool),
   )
 import LLM.Core.Utils (toolResult)
-import LLM.Generate.Logger (Hooks (..))
-import LLM.Generate.Types
+import LLM.Generate0.Logger (Hooks (..))
+import LLM.Generate0.Types
   ( GenerateError (..),
     GenerateResult,
-    Tool (Tool, toolDef, toolExecute),
-    ToolContext,
   )
+import LLM.Agent.Types (ToolContext, Tool (toolDef, toolExecute, Tool))
 
 -- | Execute a single tool call by looking it up in the tool list
 executeTool :: Hooks -> ToolContext -> [Tool] -> ToolCall -> IO ToolResult

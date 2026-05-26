@@ -55,18 +55,13 @@ library
         LLM.Providers.Ollama
         LLM.Providers.DeepSeek
 
-        LLM.Generate.Events
-        LLM.Generate.Generate
-        LLM.Generate.GenerateLoop
-        LLM.Generate.GenerateObject
-        LLM.Generate.GenerateUtils
-        LLM.Generate.Tools.HistoryTool
-        LLM.Generate.Tools.WorkerTool
-        LLM.Generate.Log
-        LLM.Generate.Logger
-        LLM.Generate.ModelConfig
-        LLM.Generate.ToolUtils
-        LLM.Generate.Types
+        LLM.Agent.Events
+        LLM.Agent.Generate
+        LLM.Agent.GenerateObject
+        LLM.Agent.Tools.HistoryTool
+        LLM.Agent.Tools.WorkerTool
+        LLM.Agent.ToolUtils
+        LLM.Agent.Types
 
         LLM.Generate0.Generate
         LLM.Generate0.GenerateObject

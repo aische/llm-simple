@@ -14,7 +14,6 @@ import LLM.Core.Types
     LLMGateway (..),
     LLMTextResult,
     StreamEvent (..),
-    Turn (..),
   )
 import LLM.Core.Usage (emptyUsage)
 import LLM.Generate0.GenerateUtils
@@ -36,11 +35,10 @@ import LLM.Generate0.Types
 generateTextWithFallbacks ::
   GenRequest ->
   ModelWithFallbacks ->
-  [Turn] ->
   IO (GenerateResult ChatResponse)
-generateTextWithFallbacks gr models turns =
+generateTextWithFallbacks gr models =
   withModelFallbacks gr models $ \mc -> do
-    r <- generateTextLLM gr mc turns
+    r <- generateTextLLM gr mc
     case r of
       Left err -> pure $ Left err
       Right resp ->
@@ -51,27 +49,26 @@ streamTextWithFallbacks ::
   (StreamChunk -> IO ()) ->
   GenRequest ->
   ModelWithFallbacks ->
-  [Turn] ->
   IO (GenerateResult ChatResponse)
-streamTextWithFallbacks onChunk gr models turns =
+streamTextWithFallbacks onChunk gr models =
   withModelFallbacks gr models $ \mc -> do
-    r <- streamTextLLM onChunk gr mc turns
+    r <- streamTextLLM onChunk gr mc
     case r of
       Left err -> pure $ Left err
       Right resp ->
         let usage = usageWithModelCost mc (fromMaybe emptyUsage (respUsage resp))
          in pure $ Right resp {respUsage = Just usage}
 
-generateTextLLM :: GenRequest -> ModelConfig -> [Turn] -> IO LLMTextResult
-generateTextLLM gr mc turns =
+generateTextLLM :: GenRequest -> ModelConfig -> IO LLMTextResult
+generateTextLLM gr mc =
   callWithRetryTimeout gr mc $
-    let request = mkRequest gr mc turns
+    let request = mkRequest gr mc
      in gwGenerateText (mcGateway mc) (grLLMHooks gr) request
 
-streamTextLLM :: (StreamChunk -> IO ()) -> GenRequest -> ModelConfig -> [Turn] -> IO LLMTextResult
-streamTextLLM onChunk gr mc turns =
+streamTextLLM :: (StreamChunk -> IO ()) -> GenRequest -> ModelConfig -> IO LLMTextResult
+streamTextLLM onChunk gr mc =
   callWithRetryTimeout gr mc $
-    let request = mkRequest gr mc turns
+    let request = mkRequest gr mc
      in do
           onProviderEvent <- mkProviderStreamCallback gr onChunk
           gwStreamText (mcGateway mc) (grLLMHooks gr) request onProviderEvent

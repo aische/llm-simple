@@ -9,18 +9,18 @@ import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import Heptapod (generate)
 import LLM (ollamaGateway, toTool)
-import LLM.Core.Types (LLMHooks (..), Turn (UserTurn))
-import LLM.Core.Usage (PricingInfo (..), Usage)
-import LLM.Generate.GenerateLoop (generateText, streamText)
-import LLM.Generate.GenerateObject (generateObject)
-import LLM.Generate.Logger (noHooks)
-import LLM.Generate.ModelConfig (ModelConfig (..), ModelWithFallbacks (..))
-import LLM.Generate.Types
+import LLM.Agent.Generate (generateText, streamText)
+import LLM.Agent.GenerateObject (generateObject)
+import LLM.Agent.Types
   ( Agent (..),
     GenerateEvent (..),
     RuntimeArgs (..),
-    StreamChunk (..),
   )
+import LLM.Core.Types (LLMHooks (..), Turn (UserTurn))
+import LLM.Core.Usage (PricingInfo (..), Usage)
+import LLM.Generate0.Logger (noHooks)
+import LLM.Generate0.ModelConfig (ModelConfig (..), ModelWithFallbacks (..))
+import LLM.Generate0.Types (StreamChunk (..))
 import LLM.Tools.DirectoryTree (directoryTreeToolTyped)
 import LLM.Tools.FsConfig (FsConfig (..))
 import LLM.Tools.Readdir (readdirToolTyped)
@@ -86,7 +86,7 @@ printExampleObject (Left _) = pure ()
 
 onStreamChunk :: StreamChunk -> IO ()
 onStreamChunk = \case
-  AnswerDelta _ txt -> TIO.putStr txt
+  AnswerDelta txt -> TIO.putStr txt
   PreambleDelta txt -> TIO.putStr txt
   StreamToolCallChunk _ -> pure ()
 

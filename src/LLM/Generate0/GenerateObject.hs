@@ -12,7 +12,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import LLM.Core.Abort (isAbortedMaybe)
 import LLM.Core.ProviderUtils (stripBoundsAndComments)
-import LLM.Core.Types (LLMGateway (..), LLMObjectResult, Turn (..))
+import LLM.Core.Types (LLMGateway (..), LLMObjectResult)
 import LLM.Core.Usage (Usage (..), emptyUsage)
 import LLM.Generate0.GenerateUtils
   ( callWithRetryTimeout,
@@ -33,7 +33,6 @@ generateObject ::
   (GeneratableObject t) =>
   GenRequest ->
   ModelWithFallbacks ->
-  [Turn] ->
   IO (Either GenerateErrorResult (t, Usage))
 generateObject = generateObjectInternal AC.codec
 
@@ -42,11 +41,10 @@ generateObjectInternal ::
   AC.JSONCodec t ->
   GenRequest ->
   ModelWithFallbacks ->
-  [Turn] ->
   IO (Either GenerateErrorResult (t, Usage))
-generateObjectInternal codec gr models messages = do
+generateObjectInternal codec gr models = do
   let jsonschema = stripBoundsAndComments $ AE.toJSON $ jsonSchemaVia codec
-  res <- generateObjectUntyped gr models messages jsonschema
+  res <- generateObjectUntyped gr models jsonschema
   case res of
     Left e -> pure (Left e)
     Right (v, u) -> do
@@ -63,17 +61,16 @@ generateObjectInternal codec gr models messages = do
 generateObjectUntyped ::
   GenRequest ->
   ModelWithFallbacks ->
-  [Turn] ->
   Value ->
   IO (Either GenerateErrorResult (Value, Usage))
-generateObjectUntyped gr models messages schema = do
+generateObjectUntyped gr models schema = do
   aborted <- isAbortedMaybe (grAbortSignal gr)
   if aborted
     then do
       let errResult = GenerateErrorResult GErrAborted [] emptyUsage
       pure $ Left errResult
     else do
-      result <- callObjectWithFallbacks gr models messages schema
+      result <- callObjectWithFallbacks gr models schema
       case result of
         Left err -> do
           let errResult = GenerateErrorResult err [] emptyUsage
@@ -84,26 +81,24 @@ generateObjectUntyped gr models messages schema = do
 callObject ::
   GenRequest ->
   ModelConfig ->
-  [Turn] ->
   Value ->
   IO LLMObjectResult
-callObject gr mc turns schema =
+callObject gr mc schema =
   callWithRetryTimeout gr mc $
     gwGenerateObject
       (mcGateway mc)
       (grLLMHooks gr)
       schema
-      (mkRequest gr mc turns)
+      (mkRequest gr mc)
 
 callObjectWithFallbacks ::
   GenRequest ->
   ModelWithFallbacks ->
-  [Turn] ->
   Value ->
   IO (GenerateResult (Value, Usage))
-callObjectWithFallbacks gr models turns schema =
+callObjectWithFallbacks gr models schema =
   withModelFallbacks gr models $ \mc -> do
-    r <- callObject gr mc turns schema
+    r <- callObject gr mc schema
     case r of
       Left err -> pure $ Left err
       Right (v, mbu) ->

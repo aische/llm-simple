@@ -6,32 +6,35 @@ module LLM.ChatSpec (spec) where
 import Data.Aeson (object, (.=))
 import Data.Text (Text)
 import Heptapod (generate)
-import LLM (GenerateTextResult (..), LLMHooks (..))
+import LLM.Agent.Events (noEventObserver)
+import LLM.Agent.Generate (generateText)
+import LLM.Agent.Types
+  ( Agent (..),
+    RuntimeArgs (..),
+    Tool (..),
+  )
 import LLM.Core.Abort (AbortSignal, abort, newAbortSignal)
 import LLM.Core.Types
-  ( ChatRequest (reqConversation),
-    ChatResponse (ChatResponse),
+  ( ChatRequest (..),
+    ChatResponse (..),
     ContentBlock (TextBlock, ToolCallBlock),
-    LLMError (HttpError),
+    LLMError (..),
     LLMGateway (..),
+    LLMHooks (..),
     ToolCall (ToolCall),
     ToolDef (ToolDef, toolDescription, toolName, toolParameters, toolReadonly),
-    Turn (ToolTurn, UserTurn),
+    Turn (..),
   )
 import LLM.Core.Usage (PricingInfo (..), Usage (Usage))
-import LLM.Generate.Events (noEventObserver)
-import LLM.Generate.GenerateLoop (generateText)
-import LLM.Generate.Logger (noHooks)
-import LLM.Generate.ModelConfig
+import LLM.Generate0.Logger (noHooks)
+import LLM.Generate0.ModelConfig
   ( ModelConfig (..),
     ModelWithFallbacks (..),
   )
-import LLM.Generate.Types
-  ( Agent (..),
-    GenerateError (..),
+import LLM.Generate0.Types
+  ( GenerateError (..),
     GenerateErrorResult (..),
-    RuntimeArgs (..),
-    Tool (..),
+    GenerateTextResult (..),
   )
 import Test.Hspec
   ( Spec,

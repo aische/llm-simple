@@ -8,10 +8,9 @@ module LLM.Generate0.GenerateUtils
 where
 
 import Control.Concurrent (threadDelay)
-
 import Data.Text (Text)
 import Data.Text qualified as T
-import LLM.Core.Types (ChatRequest (..), LLMError (..), LLMGateway (gwName), Turn (..))
+import LLM.Core.Types (ChatRequest (..), LLMError (..), LLMGateway (gwName))
 import LLM.Core.Usage (Usage (..), estimateCost)
 import LLM.Core.Utils (withRetry, withTimeout)
 import LLM.Generate0.Logger (Hooks (..), LogLevel (..), onLog)
@@ -27,11 +26,11 @@ maybeThrottle :: Maybe Int -> IO a -> IO a
 maybeThrottle Nothing io = io
 maybeThrottle (Just ms) io = threadDelay (ms * 1000) >> io
 
-mkRequest :: GenRequest -> ModelConfig -> [Turn] -> ChatRequest
-mkRequest gr mc conv =
+mkRequest :: GenRequest -> ModelConfig -> ChatRequest
+mkRequest gr mc =
   ChatRequest
     { reqModel = mcModel mc,
-      reqConversation = conv,
+      reqConversation = grMessages gr,
       reqSystem = grSystemPrompt gr,
       reqMaxTokens = mcMaxTokens mc,
       reqTemperature = mcTemperature mc,

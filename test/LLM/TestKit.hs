@@ -5,13 +5,14 @@ import Data.Aeson.Types (parseMaybe)
 import Data.Map qualified as M
 import Data.Text (Text)
 import GHC.Generics (Generic)
+import LLM.Agent.Generate (generateText, streamText)
+import LLM.Agent.Types (Agent, RuntimeArgs)
 import LLM.Core.LLMProvider (LLMProvider (..))
 import LLM.Core.Types (Turn (..))
 import LLM.Core.Usage (addUsage, emptyUsage)
 import LLM.Core.Utils (parseChatResponse)
-import LLM.Generate.GenerateLoop (generateText, streamText)
-import LLM.Generate.ModelConfig (ModelWithFallbacks)
-import LLM.Generate.Types (Agent, GenerateErrorResult (..), GenerateTextResult (..), RuntimeArgs)
+import LLM.Generate0.ModelConfig (ModelWithFallbacks)
+import LLM.Generate0.Types (GenerateErrorResult (..), GenerateTextResult (..))
 
 data MockRequestResponse = MockRequestResponse
   { prompt :: Maybe Text,

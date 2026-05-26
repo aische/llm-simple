@@ -1,9 +1,9 @@
 module LLM.Agent.GenerateObject where
 
 import Data.Aeson (Value)
+import LLM.Agent.ToolUtils (createGenRequest)
 import LLM.Agent.Types
   ( Agent (..),
-    GeneratableObject,
     RuntimeArgs (..),
   )
 import LLM.Core.Types
@@ -14,8 +14,7 @@ import LLM.Generate.GenerateObject qualified as G0
 import LLM.Generate.ModelConfig
   ( ModelWithFallbacks (..),
   )
-import LLM.Generate.Types (GenerateErrorResult)
-import LLM.Agent.ToolUtils (createGenRequest)
+import LLM.Generate.Types (GeneratableObject, GenerateErrorResult)
 
 generateObject ::
   (GeneratableObject t) =>

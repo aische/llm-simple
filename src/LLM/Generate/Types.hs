@@ -67,25 +67,4 @@ data StreamChunk
     StreamToolCallChunk ToolCall
   deriving (Show, Eq)
 
--- | Generation lifecycle event
--- data GenerateEvent = GenerateEvent
---   { geGenerationId :: UUID,
---     geDetail :: GenerateEventDetail
---   }
---   deriving (Show, Eq)
-
--- | Generation lifecycle event details
--- data GenerateEventDetail
---   = GenerationStarted
---   | GenerationFinished GenerateTextResult
---   | GenerationFailed GenerateError GenerateErrorResult
---   | MessageCreated Turn
---   | MessageUpdated UUID Text
---   | MessageFinalized Turn
---   | ToolRoundStarted Int
---   | ToolRoundFinished Int
---   deriving (Show, Eq)
-
--- type EventObserver = GenerateEvent -> IO ()
-
 type GeneratableObject t = (FromJSON t, HasCodec t)

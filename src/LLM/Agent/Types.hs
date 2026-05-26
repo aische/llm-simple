@@ -1,7 +1,15 @@
-module LLM.Agent.Types where
+module LLM.Agent.Types
+  ( Agent (..),
+    RuntimeArgs (..),
+    Tool (..),
+    ToolContext (..),
+    GenerateEvent (..),
+    GenerateEventDetail (..),
+    EventObserver,
+  )
+where
 
-import Autodocodec (HasCodec)
-import Data.Aeson (FromJSON, Value)
+import Data.Aeson (Value)
 import Data.Text (Text)
 import Data.UUID.Types (UUID)
 import LLM.Core.Abort (AbortSignal)
@@ -75,5 +83,3 @@ data GenerateEventDetail
   deriving (Show, Eq)
 
 type EventObserver = GenerateEvent -> IO ()
-
-type GeneratableObject t = (FromJSON t, HasCodec t)

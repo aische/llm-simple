@@ -2,7 +2,6 @@
 module LLM.Agent.Generate
   ( streamText,
     generateText,
-    usageWithModelCost,
   )
 where
 
@@ -25,9 +24,6 @@ import LLM.Core.Utils (getToolCalls)
 import LLM.Generate.Generate
   ( generateTextWithFallbacks,
     streamTextWithFallbacks,
-  )
-import LLM.Generate.GenerateUtils
-  ( usageWithModelCost,
   )
 import LLM.Generate.ModelConfig
   ( ModelWithFallbacks (..),

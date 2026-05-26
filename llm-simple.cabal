@@ -55,6 +55,7 @@ library
         LLM.Providers.Ollama
         LLM.Providers.DeepSeek
 
+        LLM.Agent
         LLM.Agent.Events
         LLM.Agent.Generate
         LLM.Agent.GenerateObject

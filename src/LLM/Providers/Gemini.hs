@@ -65,11 +65,11 @@ import Network.HTTP.Req
     (=:),
   )
 
--- | Gemini provider configuration
--- | Create an LLMClient from Gemini credentials
+-- | Create a LLMGateway for the Gemini provider. Takes the API key as a parameter.
 geminiGateway :: Text -> LLMGateway
 geminiGateway apiKey = toGateway (geminiProvider apiKey)
 
+-- | Create a LLMProvider for the Gemini provider. Takes the API key as a parameter.
 geminiProvider :: Text -> LLMProvider
 geminiProvider apiKey =
   LLMProvider

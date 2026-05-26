@@ -65,9 +65,11 @@ import Network.HTTP.Req
     (/:),
   )
 
+-- | Create a LLMGateway for the Claude provider. Takes the API key as a parameter.
 claudeGateway :: Text -> LLMGateway
 claudeGateway apiKey = toGateway $ claudeProvider apiKey
 
+-- | Create a LLMProvider for the Claude provider. Takes the API key as a parameter.
 claudeProvider :: Text -> LLMProvider
 claudeProvider apiKey =
   LLMProvider

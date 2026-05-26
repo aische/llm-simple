@@ -1,4 +1,10 @@
-module LLM.Providers.Ollama (ollama, ollamaWith, ollamaGateway, ollamaGatewayWith) where
+module LLM.Providers.Ollama
+  ( ollamaProvider,
+    ollamaProviderWith,
+    ollamaGateway,
+    ollamaGatewayWith,
+  )
+where
 
 import Data.Aeson
   ( KeyValue ((.=)),
@@ -41,16 +47,20 @@ import Network.HTTP.Req
     (/:),
   )
 
+-- | Create a LLMGateway for the default Ollama instance (localhost:11434).
+ollamaGateway :: LLMGateway
+ollamaGateway = toGateway ollamaProvider
+
+-- | Create a LLMGateway for a custom Ollama instance.
+ollamaGatewayWith :: Url 'Http -> Option 'Http -> LLMGateway
+ollamaGatewayWith baseUrl baseOpts = toGateway (ollamaProviderWith baseUrl baseOpts)
+
 -- | Default Ollama provider at localhost:11434.
-ollama :: LLMProvider
-ollama = ollamaProvider (http "localhost") (port 11434)
+ollamaProvider :: LLMProvider
+ollamaProvider = ollamaProviderWith (http "localhost") (port 11434)
 
--- | Custom Ollama provider with a different host/port.
-ollamaWith :: Url 'Http -> Option 'Http -> LLMProvider
-ollamaWith = ollamaProvider
-
-ollamaProvider :: Url scheme -> Option scheme -> LLMProvider
-ollamaProvider baseUrl baseOpts =
+ollamaProviderWith :: Url scheme -> Option scheme -> LLMProvider
+ollamaProviderWith baseUrl baseOpts =
   LLMProvider
     { providerName = "ollama",
       -- Ollama uses the same request format as OpenAI, but without stream_options
@@ -94,14 +104,6 @@ ollamaProvider baseUrl baseOpts =
     parseObject = withObject "OpenAIObjectResponse" $ \o -> do
       (choice : _) <- o .: "choices" :: Parser [Value]
       withObject "choice" (\co -> co .: "message" >>= withObject "message" (.: "content")) choice
-
--- | Create a LLMGateway for the default Ollama instance (localhost:11434).
-ollamaGateway :: LLMGateway
-ollamaGateway = toGateway ollama
-
--- | Create a LLMGateway for a custom Ollama instance.
-ollamaGatewayWith :: Url 'Http -> Option 'Http -> LLMGateway
-ollamaGatewayWith baseUrl baseOpts = toGateway (ollamaWith baseUrl baseOpts)
 
 -- | Build request body — same as OpenAI but without stream_options
 -- since Ollama doesn't support include_usage.

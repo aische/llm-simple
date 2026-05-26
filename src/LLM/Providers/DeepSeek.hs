@@ -52,6 +52,14 @@ import Network.HTTP.Req
     (/:),
   )
 
+-- | Create a LLMGateway for the DeepSeek provider. Takes the API key as a parameter.
+deepSeekGateway :: Text -> LLMGateway
+deepSeekGateway apiKey = toGateway $ deepSeekProvider apiKey
+
+-- | Create a LLMGateway for the DeepSeek provider with a custom base URL. Takes the API key and base URL as parameters.
+deepSeekGatewayWith :: Url scheme -> Option scheme -> Text -> LLMGateway
+deepSeekGatewayWith baseUrl baseOpts apiKey = toGateway (deepSeekProviderWith baseUrl baseOpts apiKey)
+
 -- | DeepSeek provider at api.deepseek.com.
 deepSeekProvider :: Text -> LLMProvider
 deepSeekProvider = deepSeekProviderWith (https "api.deepseek.com") mempty
@@ -102,12 +110,6 @@ deepSeekProviderWith baseUrl baseOpts apiKey =
     parseObject = withObject "OpenAIObjectResponse" $ \o -> do
       (choice : _) <- o .: "choices" :: Parser [Value]
       withObject "choice" (\co -> co .: "message" >>= withObject "message" (.: "content")) choice
-
-deepSeekGateway :: Text -> LLMGateway
-deepSeekGateway apiKey = toGateway $ deepSeekProvider apiKey
-
-deepSeekGatewayWith :: Url scheme -> Option scheme -> Text -> LLMGateway
-deepSeekGatewayWith baseUrl baseOpts apiKey = toGateway (deepSeekProviderWith baseUrl baseOpts apiKey)
 
 -- | OpenAI-compatible body; DeepSeek uses @max_tokens@ (not @max_completion_tokens@).
 deepSeekBuildBody :: Bool -> ChatRequest -> Value

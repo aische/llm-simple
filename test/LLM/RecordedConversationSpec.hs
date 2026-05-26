@@ -3,7 +3,7 @@ module LLM.RecordedConversationSpec (spec) where
 import LLM.GenericConversationTest (GenericConversationTextOps (..), createSpec)
 import LLM.Providers.Claude (claudeProvider)
 import LLM.Providers.Gemini (geminiProvider)
-import LLM.Providers.Ollama (ollama)
+import LLM.Providers.Ollama (ollamaProvider)
 import LLM.Providers.OpenAI (openAIProvider)
 import Test.Hspec (SpecWith, describe)
 
@@ -37,7 +37,7 @@ spec =
     createSpec $
       GenericConversationTextOps
         "Ollama"
-        ollama
+        ollamaProvider
         "llama3.2:latest"
         ollamaConversationGeneratedFilePath
         ollamaConversationStreamedFilePath

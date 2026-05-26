@@ -49,6 +49,7 @@ library
         LLM.Core.Utils
         LLM.Core.ProviderUtils
 
+        LLM.Providers
         LLM.Providers.Gemini
         LLM.Providers.Claude
         LLM.Providers.OpenAI

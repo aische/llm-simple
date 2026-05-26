@@ -42,11 +42,12 @@ directoryTreeExecTyped :: FsConfig -> DirectoryTreeToolArgs -> IO Text
 directoryTreeExecTyped cfg args = do
   let relPath = T.unpack $ _dtPath args
   resolved <- sandboxPath cfg relPath
-  drawTree resolved
+  let displayRoot = if null relPath then "." else relPath
+  drawTree resolved displayRoot
 
-drawTree :: FilePath -> IO T.Text
-drawTree path = do
-  let rootName = T.pack path
+drawTree :: FilePath -> FilePath -> IO T.Text
+drawTree path displayRoot = do
+  let rootName = T.pack displayRoot
   linesOfTree <- drawTreeHelper "" path
   pure $ T.unlines (rootName : linesOfTree)
 

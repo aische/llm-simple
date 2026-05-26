@@ -12,7 +12,7 @@ import LLM.Core.Types
   )
 import LLM.Core.Usage (Usage)
 import LLM.Generate.Logger (Hooks)
-import LLM.Generate.Types (GenerateError, GenerateErrorResult, GenerateTextResult, GenRequest (..))
+import LLM.Generate.Types (GenerateError, GenerateErrorResult, GenerateTextResult)
 
 -- | Agent configuration
 data Agent = Agent
@@ -77,16 +77,3 @@ data GenerateEventDetail
 type EventObserver = GenerateEvent -> IO ()
 
 type GeneratableObject t = (FromJSON t, HasCodec t)
-
--- 
-
-createGenRequest :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
-createGenRequest agent rt messages =
-  GenRequest
-    { grSystemPrompt = agSystemPrompt agent,
-      grTools = map toolDef (agTools agent), -- TODO: filter
-      grMessages = messages, -- TODO: WINDOW
-      grAbortSignal = rtAbortSignal rt,
-      grLLMHooks = rtLLMHooks rt,
-      grHooks = rtHooks rt
-    }

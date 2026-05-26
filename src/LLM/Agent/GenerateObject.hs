@@ -5,7 +5,6 @@ import LLM.Agent.Types
   ( Agent (..),
     GeneratableObject,
     RuntimeArgs (..),
-    createGenRequest,
   )
 import LLM.Core.Types
   ( Turn (..),
@@ -16,6 +15,7 @@ import LLM.Generate.ModelConfig
   ( ModelWithFallbacks (..),
   )
 import LLM.Generate.Types (GenerateErrorResult)
+import LLM.Agent.ToolUtils (createGenRequest)
 
 generateObject ::
   (GeneratableObject t) =>

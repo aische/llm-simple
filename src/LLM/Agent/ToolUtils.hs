@@ -6,6 +6,7 @@ module LLM.Agent.ToolUtils
     toTool,
     filterReadonlyTools,
     windowOffset,
+    createGenRequest,
   )
 where
 
@@ -15,7 +16,12 @@ import Control.Exception (SomeException, try)
 import Data.Aeson (FromJSON)
 import Data.Aeson qualified as AE
 import Data.Text qualified as T
-import LLM.Agent.Types (Tool (Tool, toolDef, toolExecute), ToolContext)
+import LLM.Agent.Types
+  ( Agent (..),
+    RuntimeArgs (..),
+    Tool (Tool, toolDef, toolExecute),
+    ToolContext,
+  )
 import LLM.Core.Abort (AbortSignal, isAborted)
 import LLM.Core.Types
   ( ToolCall (..),
@@ -27,7 +33,8 @@ import LLM.Core.Types
 import LLM.Core.Utils (toolResult)
 import LLM.Generate.Logger (Hooks (..))
 import LLM.Generate.Types
-  ( GenerateError (..),
+  ( GenRequest (..),
+    GenerateError (..),
     GenerateResult,
   )
 
@@ -111,3 +118,15 @@ findNthUserFromEnd n conv = go (length conv - 1) n
       | otherwise = case conv !! idx of
           UserTurn _ -> go (idx - 1) (remaining - 1)
           _ -> go (idx - 1) remaining
+
+createGenRequest :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
+createGenRequest agent rt messages =
+  let offset = windowOffset (agContextWindow agent) messages
+   in GenRequest
+        { grSystemPrompt = agSystemPrompt agent,
+          grTools = map toolDef $ filterReadonlyTools (rtReadonly rt) (agTools agent),
+          grMessages = drop offset messages,
+          grAbortSignal = rtAbortSignal rt,
+          grLLMHooks = rtLLMHooks rt,
+          grHooks = rtHooks rt
+        }

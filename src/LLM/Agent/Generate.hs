@@ -8,16 +8,12 @@ where
 
 import Data.Maybe (fromMaybe)
 import LLM.Agent.Events (emitEvent)
-import LLM.Agent.ToolUtils
-  ( executeToolsWithAbort,
-    windowOffset,
-  )
+import LLM.Agent.ToolUtils (createGenRequest, executeToolsWithAbort, windowOffset)
 import LLM.Agent.Types
   ( Agent (agContextWindow, agMaxToolRounds, agTools),
     GenerateEventDetail (..),
     RuntimeArgs (..),
     ToolContext (..),
-    createGenRequest,
   )
 import LLM.Core.Abort (isAbortedMaybe)
 import LLM.Core.Types

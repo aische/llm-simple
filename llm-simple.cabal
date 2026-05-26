@@ -144,6 +144,7 @@ test-suite llm-simple-test
                         LLM.OpenAISpec
                         LLM.TypesSpec
                         LLM.ChatSpec
+                        LLM.DeepSeekSpec
                         LLM.TestKit
     hs-source-dirs:     test
     build-depends:

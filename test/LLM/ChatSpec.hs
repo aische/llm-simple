@@ -69,11 +69,11 @@ mockToolGateway =
     { gwName = "mock-tool",
       gwGenerateText = \_ req ->
         if any isToolTurn (reqConversation req)
-          then pure $ Right (ChatResponse "The weather is sunny." [TextBlock "The weather is sunny."] (Just (Usage 80 15 0)))
+          then pure $ Right (ChatResponse "The weather is sunny." [TextBlock "The weather is sunny."] (Just (Usage 80 15 0)) Nothing)
           else
             let tc = ToolCall "call_1" "get_weather" (object ["location" .= ("London" :: Text)])
-             in pure $ Right (ChatResponse "" [ToolCallBlock tc] (Just (Usage 50 10 0))),
-      gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing)
+             in pure $ Right (ChatResponse "" [ToolCallBlock tc] (Just (Usage 50 10 0)) Nothing),
+      gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing)
     }
   where
     isToolTurn (ToolTurn _) = True
@@ -91,6 +91,7 @@ mockModel gw =
       mcPricing = zeroPricing,
       mcMaxTokens = 1024,
       mcTemperature = Nothing,
+      mcThinking = Nothing,
       mcRequestTimeout = Nothing,
       mcThrottleDelay = Nothing,
       mcRetryCount = 0,
@@ -152,7 +153,7 @@ spec :: Spec
 spec = describe "Chat" $ do
   describe "generateText" $ do
     it "returns text for a simple response" $ do
-      let gw = mockGateway (ChatResponse "Hi there!" [TextBlock "Hi there!"] (Just (Usage 10 5 0)))
+      let gw = mockGateway (ChatResponse "Hi there!" [TextBlock "Hi there!"] (Just (Usage 10 5 0)) Nothing)
           models = ModelWithFallbacks (mockModel gw) []
       result <- runGenerate defaultAgent models Nothing [UserTurn "hello"]
       case result of
@@ -188,8 +189,8 @@ spec = describe "Chat" $ do
               { gwName = "mock-infinite",
                 gwGenerateText = \_ _ ->
                   let tc = ToolCall "call_1" "get_weather" (object [])
-                   in pure $ Right (ChatResponse "" [ToolCallBlock tc] Nothing),
-                gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing)
+                   in pure $ Right (ChatResponse "" [ToolCallBlock tc] Nothing Nothing),
+                gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing)
               }
           agent = defaultAgent {agMaxToolRounds = 2, agTools = [weatherTool]}
           models = ModelWithFallbacks (mockModel infiniteToolGateway) []
@@ -200,7 +201,7 @@ spec = describe "Chat" $ do
 
     it "falls back to next model on retryable error" $ do
       let failGw = mockErrorGateway (HttpError 503 "service unavailable")
-          okGw = mockGateway (ChatResponse "Fallback worked!" [TextBlock "Fallback worked!"] (Just (Usage 10 5 0)))
+          okGw = mockGateway (ChatResponse "Fallback worked!" [TextBlock "Fallback worked!"] (Just (Usage 10 5 0)) Nothing)
           models = ModelWithFallbacks (mockModel failGw) [mockModel okGw]
       result <- runGenerate defaultAgent models Nothing [UserTurn "hello"]
       case result of
@@ -209,7 +210,7 @@ spec = describe "Chat" $ do
 
     it "falls back on non-retryable error too" $ do
       let failGw = mockErrorGateway (HttpError 400 "bad request")
-          okGw = mockGateway (ChatResponse "Fallback worked!" [TextBlock "Fallback worked!"] (Just (Usage 10 5 0)))
+          okGw = mockGateway (ChatResponse "Fallback worked!" [TextBlock "Fallback worked!"] (Just (Usage 10 5 0)) Nothing)
           models = ModelWithFallbacks (mockModel failGw) [mockModel okGw]
       result <- runGenerate defaultAgent models Nothing [UserTurn "hello"]
       case result of
@@ -226,7 +227,7 @@ spec = describe "Chat" $ do
         other -> expectationFailure $ "Expected HttpError 400 from last model, got: " <> show other
 
     it "returns Aborted when signal is fired before the call" $ do
-      let gw = mockGateway (ChatResponse "Hi!" [TextBlock "Hi!"] Nothing)
+      let gw = mockGateway (ChatResponse "Hi!" [TextBlock "Hi!"] Nothing Nothing)
           models = ModelWithFallbacks (mockModel gw) []
       sig <- newAbortSignal
       abort sig
@@ -256,8 +257,8 @@ spec = describe "Chat" $ do
                 gwGenerateText = \_ _ ->
                   let tc1 = ToolCall "c1" "slow" (object [])
                       tc2 = ToolCall "c2" "slow" (object [])
-                   in pure $ Right (ChatResponse "" [ToolCallBlock tc1, ToolCallBlock tc2] Nothing),
-                gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing)
+                   in pure $ Right (ChatResponse "" [ToolCallBlock tc1, ToolCallBlock tc2] Nothing Nothing),
+                gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing)
               }
           agent = defaultAgent {agTools = [slowTool]}
           models = ModelWithFallbacks (mockModel twoCallGw) []
@@ -267,8 +268,8 @@ spec = describe "Chat" $ do
         other -> expectationFailure $ "Expected GErrAborted during tools, got: " <> show other
 
     it "does not fall back on Aborted" $ do
-      let gw = mockGateway (ChatResponse "Hi!" [TextBlock "Hi!"] Nothing)
-          okGw = mockGateway (ChatResponse "Fallback" [TextBlock "Fallback"] Nothing)
+      let gw = mockGateway (ChatResponse "Hi!" [TextBlock "Hi!"] Nothing Nothing)
+          okGw = mockGateway (ChatResponse "Fallback" [TextBlock "Fallback"] Nothing Nothing)
           models = ModelWithFallbacks (mockModel gw) [mockModel okGw]
       sig <- newAbortSignal
       abort sig

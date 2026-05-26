@@ -83,7 +83,8 @@ streamResponseJson r =
   object
     [ "text" .= respText r,
       "content" .= map blockToJson (respContent r),
-      "usage" .= fmap usageToJson (respUsage r)
+      "usage" .= fmap usageToJson (respUsage r),
+      "reasoning" .= respReasoning r
     ]
   where
     blockToJson (TextBlock t) = object ["type" .= ("text" :: Text), "text" .= t]
@@ -105,7 +106,14 @@ parseChatResponse = AE.withObject "ChatResponse" $ \v -> do
   text <- v AE..: "text"
   content <- v AE..: "content" >>= mapM parseContentBlock
   usage <- v AE..:? "usage" >>= mapM parseUsage
-  pure $ ChatResponse text content usage
+  reasoning <- v AE..:? "reasoning"
+  pure
+    ChatResponse
+      { respText = text,
+        respContent = content,
+        respUsage = usage,
+        respReasoning = reasoning
+      }
   where
     parseContentBlock = AE.withObject "ContentBlock" $ \o -> do
       t <- o AE..: "type"

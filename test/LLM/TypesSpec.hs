@@ -55,13 +55,13 @@ spec = describe "Types" $ do
 
   describe "hasToolCalls / getToolCalls" $ do
     it "returns False for text-only response" $ do
-      let resp = ChatResponse "hello" [TextBlock "hello"] Nothing
+      let resp = ChatResponse "hello" [TextBlock "hello"] Nothing Nothing
       hasToolCalls resp `shouldBe` False
       getToolCalls resp `shouldBe` []
 
     it "returns True when tool calls present" $ do
       let tc = ToolCall "id1" "get_weather" (object ["location" .= ("London" :: String)])
-          resp = ChatResponse "" [ToolCallBlock tc] Nothing
+          resp = ChatResponse "" [ToolCallBlock tc] Nothing Nothing
       hasToolCalls resp `shouldBe` True
       getToolCalls resp `shouldBe` [tc]
 

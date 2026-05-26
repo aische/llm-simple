@@ -92,9 +92,10 @@ formatChunk = T.intercalate "\n" . map formatTurn
 
 formatTurn :: Turn -> Text
 formatTurn (UserTurn t) = "[User] " <> t
-formatTurn (AssistantTurn t calls) =
+formatTurn (AssistantTurn t mReasoning calls) =
   "[Assistant] "
     <> t
+    <> maybe "" (\r -> " [reasoning: " <> T.take 200 r <> "]") mReasoning
     <> if null calls
       then ""
       else " [called: " <> T.intercalate ", " (map tcName calls) <> "]"

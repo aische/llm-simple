@@ -98,14 +98,14 @@ agentLoop call agent models rt initialTurns = do
 
                   case toolCalls of
                     [] -> do
-                      let finalTurn = AssistantTurn txt []
+                      let finalTurn = AssistantTurn txt (respReasoning resp) []
                           finalTurnsAcc = newTurnsAcc ++ [finalTurn]
                           successResult = GenerateTextResult (rtGenerationId rt) finalTurnsAcc txt newUsage
                       emitEvent rt (MessageFinalized finalTurn)
                       emitEvent rt (GenerationFinished successResult)
                       pure $ Right successResult
                     _ -> do
-                      let assistantTurn = AssistantTurn txt toolCalls
+                      let assistantTurn = AssistantTurn txt (respReasoning resp) toolCalls
                           toolContext = createToolContext agent currentTurns newUsage rt
                           tools = getResolvedTools agent rt
                       emitEvent rt (MessageCreated assistantTurn)

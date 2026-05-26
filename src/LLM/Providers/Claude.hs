@@ -170,7 +170,7 @@ parseClaudeStream reader callback = do
   let text = T.concat [t | TextBlock t <- blocks]
   if null blocks
     then pure $ Left EmptyResponse
-    else pure $ Right (ChatResponse text blocks (Just usage))
+    else pure $ Right (ChatResponse text blocks (Just usage) Nothing)
 
 -- Parsers for streaming events
 parseMessageStartUsage :: Value -> Parser Int
@@ -241,7 +241,7 @@ encodeTurn (UserTurn content) =
         "content" .= content
       ]
   ]
-encodeTurn (AssistantTurn text calls) =
+encodeTurn (AssistantTurn text _mReasoning calls) =
   [ object
       [ "role" .= ("assistant" :: Text),
         "content" .= (textBlocks ++ toolBlocks)
@@ -289,7 +289,7 @@ parseClaudeResponse v = case parseMaybe go v of
     [] -> Left EmptyResponse
     _ ->
       let text = T.concat [t | TextBlock t <- blocks]
-       in Right (ChatResponse text blocks (parseClaudeUsage v))
+       in Right (ChatResponse text blocks (parseClaudeUsage v) Nothing)
   where
     go :: Value -> Parser [ContentBlock]
     go = withObject "ClaudeResponse" $ \o -> do

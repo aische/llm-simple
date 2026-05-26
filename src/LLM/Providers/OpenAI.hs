@@ -6,6 +6,7 @@ module LLM.Providers.OpenAI
     parseOpenAIResponse,
     parseOpenAIUsage,
     buildMessages,
+    encodeTurn,
     encodeToolDef,
     parseOpenAIStream,
     openAIBuildBody,
@@ -30,7 +31,7 @@ import Data.Aeson.Types (Pair, Parser, parseMaybe)
 import Data.ByteString.Lazy qualified as BSL
 import Data.Foldable (forM_)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
@@ -46,7 +47,7 @@ import LLM.Core.Types
         reqTemperature,
         reqTools
       ),
-    ChatResponse (ChatResponse),
+    ChatResponse (ChatResponse, respContent, respReasoning, respText, respUsage),
     ContentBlock (..),
     LLMError (EmptyResponse),
     LLMGateway,
@@ -56,6 +57,8 @@ import LLM.Core.Types
     ToolDef (toolDescription, toolName, toolParameters),
     ToolResult (trCallId, trContent),
     Turn (..),
+    MessageEncodeOptions (..),
+    defaultMessageEncodeOptions,
   )
 import LLM.Core.Usage (Usage (..))
 import Network.HTTP.Client qualified as HC
@@ -148,32 +151,37 @@ openAIBuildBodyPairs :: Bool -> ChatRequest -> [Pair]
 openAIBuildBodyPairs stream r =
   [ "model" .= reqModel r,
     "max_completion_tokens" .= reqMaxTokens r,
-    "messages" .= buildMessages r
+    "messages" .= buildMessages defaultMessageEncodeOptions r
   ]
     ++ ["temperature" .= t | Just t <- [reqTemperature r]]
     ++ ["tools" .= map encodeToolDef (reqTools r) | not (null (reqTools r))]
     ++ ["stream" .= True | stream]
     ++ ["stream_options" .= object ["include_usage" .= True] | stream]
 
-buildMessages :: ChatRequest -> [Value]
-buildMessages r =
+buildMessages :: MessageEncodeOptions -> ChatRequest -> [Value]
+buildMessages opts r =
   maybe [] (\sys -> [object ["role" .= ("system" :: Text), "content" .= sys]]) (reqSystem r)
-    ++ concatMap encodeTurn (reqConversation r)
+    ++ concatMap (encodeTurn opts) (reqConversation r)
 
-encodeTurn :: Turn -> [Value]
-encodeTurn (UserTurn content) =
+encodeTurn :: MessageEncodeOptions -> Turn -> [Value]
+encodeTurn _ (UserTurn content) =
   [ object
       [ "role" .= ("user" :: Text),
         "content" .= content
       ]
   ]
-encodeTurn (AssistantTurn text calls) =
+encodeTurn opts (AssistantTurn text mReasoning calls) =
   [ object $
       ["role" .= ("assistant" :: Text)]
         ++ ["content" .= text | not (T.null text)]
+        ++ [ "reasoning_content" .= rc
+             | meoIncludeReasoning opts,
+               Just rc <- [mReasoning],
+               not (T.null rc)
+           ]
         ++ ["tool_calls" .= map encodeToolCall calls | not (null calls)]
   ]
-encodeTurn (ToolTurn results) =
+encodeTurn _ (ToolTurn results) =
   map encodeToolResult results
 
 encodeToolDef :: ToolDef -> Value
@@ -213,13 +221,20 @@ encodeToolResult tr =
 parseOpenAIResponse :: Value -> LLMTextResult
 parseOpenAIResponse v = case parseMaybe go v of
   Nothing -> Left EmptyResponse
-  Just blocks -> case blocks of
-    [] -> Left EmptyResponse
-    _ ->
-      let text = T.concat [t | TextBlock t <- blocks]
-       in Right (ChatResponse text blocks (parseOpenAIUsage v))
+  Just (mReasoning, blocks) ->
+    if null blocks && isNothing mReasoning
+      then Left EmptyResponse
+      else
+        let text = T.concat [t | TextBlock t <- blocks]
+         in Right
+              ChatResponse
+                { respText = text,
+                  respContent = blocks,
+                  respUsage = parseOpenAIUsage v,
+                  respReasoning = mReasoning
+                }
   where
-    go :: Value -> Parser [ContentBlock]
+    go :: Value -> Parser (Maybe Text, [ContentBlock])
     go = withObject "OpenAIResponse" $ \o -> do
       (choice : _) <- o .: "choices" :: Parser [Value]
       withObject
@@ -230,15 +245,16 @@ parseOpenAIResponse v = case parseMaybe go v of
         )
         choice
 
-    parseMessage :: Object -> Parser [ContentBlock]
+    parseMessage :: Object -> Parser (Maybe Text, [ContentBlock])
     parseMessage mo = do
+      mReasoning <- mo .:? "reasoning_content" :: Parser (Maybe Text)
       contentBlocks <- do
         mc <- mo .:? "content" :: Parser (Maybe Text)
         pure [TextBlock t | Just t <- [mc], not (T.null t)]
       toolBlocks <- do
         tcs <- mo .:? "tool_calls" .!= [] :: Parser [Value]
         mapM parseToolCall tcs
-      pure (contentBlocks ++ toolBlocks)
+      pure (mReasoning, contentBlocks ++ toolBlocks)
 
     parseToolCall :: Value -> Parser ContentBlock
     parseToolCall = withObject "tool_call" $ \tc -> do
@@ -266,6 +282,7 @@ parseOpenAIUsage = parseMaybe $ withObject "OpenAIResponse" $ \o -> do
 parseOpenAIStream :: HC.BodyReader -> (StreamEvent -> IO ()) -> IO LLMTextResult
 parseOpenAIStream reader callback = do
   blocksRef <- newIORef ([] :: [ContentBlock])
+  reasoningRef <- newIORef Nothing
   usageRef <- newIORef Nothing
   -- Track in-flight tool calls: index -> (id, name, accumulated args)
   toolAccRef <- newIORef ([] :: [(Int, Text, Text, Text)])
@@ -276,6 +293,12 @@ parseOpenAIStream reader callback = do
       else case decodeStrict' (encodeUtf8 raw) of
         Nothing -> pure ()
         Just v -> do
+          -- Reasoning deltas
+          case parseMaybe parseStreamReasoningDelta v of
+            Just (Just txt) | not (T.null txt) -> do
+              modifyIORef' reasoningRef (Just . maybe txt (<> txt) . id)
+              callback (StreamReasoningDelta txt)
+            _ -> pure ()
           -- Text deltas
           case parseMaybe parseStreamTextDelta v of
             Just txt | not (T.null txt) -> do
@@ -323,11 +346,25 @@ parseOpenAIStream reader callback = do
     modifyIORef' blocksRef (ToolCallBlock tc :)
     callback (StreamToolCall tc)
   blocks <- reverse <$> readIORef blocksRef
+  mReasoning <- readIORef reasoningRef
   usage <- readIORef usageRef
   let text = T.concat [t | TextBlock t <- blocks]
-  if null blocks
+  if null blocks && isNothing mReasoning
     then pure $ Left EmptyResponse
-    else pure $ Right (ChatResponse text blocks usage)
+    else
+      pure $
+        Right
+          ChatResponse
+            { respText = text,
+              respContent = blocks,
+              respUsage = usage,
+              respReasoning = mReasoning
+            }
+
+parseStreamReasoningDelta :: Value -> Parser (Maybe Text)
+parseStreamReasoningDelta = withObject "chunk" $ \o -> do
+  (c : _) <- o .: "choices" :: Parser [Value]
+  withObject "choice" (\co -> do d <- co .: "delta"; withObject "delta" (.:? "reasoning_content") d) c
 
 parseStreamTextDelta :: Value -> Parser Text
 parseStreamTextDelta = withObject "chunk" $ \o -> do

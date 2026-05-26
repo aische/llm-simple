@@ -34,7 +34,8 @@ mkRequest gr mc =
       reqSystem = grSystemPrompt gr,
       reqMaxTokens = mcMaxTokens mc,
       reqTemperature = mcTemperature mc,
-      reqTools = grTools gr
+      reqTools = grTools gr,
+      reqThinking = mcThinking mc
     }
 
 usageWithModelCost :: ModelConfig -> Usage -> Usage

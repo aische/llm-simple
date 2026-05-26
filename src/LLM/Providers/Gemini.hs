@@ -155,7 +155,7 @@ parseGeminiStream reader callback = do
   let text = T.concat [t | TextBlock t <- blocks]
   if null blocks
     then pure $ Left EmptyResponse
-    else pure $ Right (ChatResponse text blocks usage)
+    else pure $ Right (ChatResponse text blocks usage Nothing)
   where
     assignToolId :: (StreamEvent -> IO ()) -> ContentBlock -> IO ContentBlock
     assignToolId cb (TextBlock t) = do
@@ -223,7 +223,7 @@ encodeTurn (UserTurn content) =
         "parts" .= [object ["text" .= content]]
       ]
   ]
-encodeTurn (AssistantTurn text calls) =
+encodeTurn (AssistantTurn text _mReasoning calls) =
   [ object
       [ "role" .= ("model" :: Text),
         "parts" .= (textParts ++ callParts)
@@ -293,7 +293,7 @@ parseGeminiResponse v = case parseMaybe go v of
       [] -> pure $ Left EmptyResponse
       _ ->
         let text = T.concat [t | TextBlock t <- blocks']
-         in pure $ Right (ChatResponse text blocks' (parseGeminiUsage v))
+         in pure $ Right (ChatResponse text blocks' (parseGeminiUsage v) Nothing)
   where
     go :: Value -> Parser [ContentBlock]
     go = withObject "GeminiResponse" $ \o -> do

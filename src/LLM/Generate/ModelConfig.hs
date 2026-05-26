@@ -8,7 +8,7 @@ where
 
 import Control.Retry (RetryPolicyM, fullJitterBackoff, limitRetries)
 import Data.Text (Text)
-import LLM.Core.Types (LLMGateway)
+import LLM.Core.Types (LLMGateway, ThinkingMode)
 import LLM.Core.Usage (PricingInfo)
 
 data ModelConfig = ModelConfig
@@ -17,6 +17,7 @@ data ModelConfig = ModelConfig
     mcPricing :: PricingInfo,
     mcMaxTokens :: Int,
     mcTemperature :: Maybe Double,
+    mcThinking :: Maybe ThinkingMode,
     mcRequestTimeout :: Maybe Int, -- milliseconds; timeout the whole request if it takes too long
     mcThrottleDelay :: Maybe Int, -- milliseconds; wait before each API call
     mcRetryCount :: Int,

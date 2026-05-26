@@ -61,6 +61,8 @@ data GenerateError
 data StreamChunk
   = -- | Final answer text for the pre-allocated assistant message.
     AnswerDelta Text
+  | -- | Chain-of-thought text from thinking mode.
+    ReasoningDelta Text
   | -- | Text from an LLM round that also issued tool calls.
     PreambleDelta Text
   | -- | A complete tool call from the provider stream.

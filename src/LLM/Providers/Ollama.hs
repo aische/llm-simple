@@ -28,6 +28,7 @@ import LLM.Core.Types
       ),
     LLMError (EmptyResponse),
     LLMGateway,
+    defaultMessageEncodeOptions,
   )
 import LLM.Providers.OpenAI (buildMessages, encodeToolDef, openAIBuildBodyPairs, parseOpenAIResponse, parseOpenAIStream, parseOpenAIUsage)
 import Network.HTTP.Req
@@ -111,7 +112,7 @@ ollamaBuildBody :: Bool -> ChatRequest -> Value
 ollamaBuildBody stream r =
   object $
     [ "model" .= reqModel r,
-      "messages" .= buildMessages r
+      "messages" .= buildMessages defaultMessageEncodeOptions r
     ]
       ++ ["num_predict" .= reqMaxTokens r]
       ++ ["temperature" .= t | Just t <- [reqTemperature r]]

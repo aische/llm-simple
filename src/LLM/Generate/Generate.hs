@@ -85,6 +85,7 @@ mkProviderStreamCallback _gr onChunk = do
   -- TODO: this is not a good implementation
   channelRef <- newIORef AnswerChannel
   pure $ \case
+    StreamReasoningDelta txt -> onChunk (ReasoningDelta txt)
     StreamDelta txt -> do
       channel <- readIORef channelRef
       case channel of

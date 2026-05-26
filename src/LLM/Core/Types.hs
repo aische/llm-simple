@@ -1,5 +1,6 @@
 module LLM.Core.Types
   ( Turn (..),
+    assistantTurn,
     ContentBlock (..),
     ChatRequest (..),
     ChatResponse (..),
@@ -14,6 +15,10 @@ module LLM.Core.Types
     StreamEvent (..),
     TypedTool (..),
     LLMHooks (..),
+    ThinkingMode (..),
+    MessageEncodeOptions (..),
+    defaultMessageEncodeOptions,
+    deepSeekMessageEncodeOptions,
   )
 where
 
@@ -44,12 +49,34 @@ data LLMHooks = LLMHooks
     onLLMResponseError :: Text -> Text -> IO ()
   }
 
+-- | DeepSeek thinking mode configuration.
+data ThinkingMode = ThinkingMode
+  { tmEnabled :: Bool,
+    tmEffort :: Maybe Text -- e.g. @high@ or @max@
+  }
+  deriving (Show, Eq)
+
+-- | Controls how conversation turns are encoded for provider APIs.
+newtype MessageEncodeOptions = MessageEncodeOptions
+  { meoIncludeReasoning :: Bool
+  }
+  deriving (Show, Eq)
+
+defaultMessageEncodeOptions :: MessageEncodeOptions
+defaultMessageEncodeOptions = MessageEncodeOptions {meoIncludeReasoning = False}
+
+deepSeekMessageEncodeOptions :: MessageEncodeOptions
+deepSeekMessageEncodeOptions = MessageEncodeOptions {meoIncludeReasoning = True}
+
 -- | A single turn in a conversation
 data Turn
   = UserTurn Text
-  | AssistantTurn Text [ToolCall] -- text (possibly empty) + any tool calls
+  | AssistantTurn Text (Maybe Text) [ToolCall] -- content, reasoning_content, tool calls
   | ToolTurn [ToolResult]
   deriving (Show, Eq, Generic, FromJSON, ToJSON)
+
+assistantTurn :: Text -> Maybe Text -> [ToolCall] -> Turn
+assistantTurn = AssistantTurn
 
 -- | A tool definition sent to the model
 data ToolDef = ToolDef
@@ -101,7 +128,8 @@ data ChatRequest = ChatRequest
     reqSystem :: Maybe Text,
     reqMaxTokens :: Int,
     reqTemperature :: Maybe Double,
-    reqTools :: [ToolDef]
+    reqTools :: [ToolDef],
+    reqThinking :: Maybe ThinkingMode
   }
   deriving (Show, Eq)
 
@@ -115,12 +143,14 @@ data ContentBlock
 data ChatResponse = ChatResponse
   { respText :: Text,
     respContent :: [ContentBlock],
-    respUsage :: Maybe Usage
+    respUsage :: Maybe Usage,
+    respReasoning :: Maybe Text
   }
   deriving (Show, Eq)
 
 -- | Events emitted during streaming
 data StreamEvent
-  = StreamDelta Text -- incremental text chunk
+  = StreamReasoningDelta Text -- incremental chain-of-thought chunk
+  | StreamDelta Text -- incremental answer text chunk
   | StreamToolCall ToolCall -- complete tool call
   deriving (Show, Eq)

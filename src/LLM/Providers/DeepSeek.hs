@@ -3,6 +3,7 @@ module LLM.Providers.DeepSeek
     deepSeekGatewayWith,
     deepSeekProvider,
     deepSeekProviderWith,
+    deepSeekBuildBodyPairs,
   )
 where
 
@@ -24,10 +25,13 @@ import LLM.Core.Types
       ( reqMaxTokens,
         reqModel,
         reqTemperature,
+        reqThinking,
         reqTools
       ),
     LLMError (EmptyResponse),
     LLMGateway,
+    ThinkingMode (..),
+    deepSeekMessageEncodeOptions,
   )
 import LLM.Providers.OpenAI
   ( authHeader,
@@ -119,12 +123,21 @@ deepSeekBuildBodyPairs :: Bool -> ChatRequest -> [Pair]
 deepSeekBuildBodyPairs stream r =
   [ "model" .= reqModel r,
     "max_tokens" .= reqMaxTokens r,
-    "messages" .= buildMessages r,
-    -- Thinking mode requires reasoning_content on tool-call follow-ups; we do not
-    -- preserve it yet. Disable until AssistantTurn carries reasoning_content.
-    "thinking" .= object ["type" .= ("disabled" :: Text)]
+    "messages" .= buildMessages deepSeekMessageEncodeOptions r
   ]
+    ++ thinkingPairs r
     ++ ["temperature" .= t | Just t <- [reqTemperature r]]
     ++ ["tools" .= map encodeToolDef (reqTools r) | not (null (reqTools r))]
     ++ ["stream" .= True | stream]
     ++ ["stream_options" .= object ["include_usage" .= True] | stream]
+
+thinkingPairs :: ChatRequest -> [Pair]
+thinkingPairs r =
+  case reqThinking r of
+    Just tm
+      | not (tmEnabled tm) ->
+          ["thinking" .= object ["type" .= ("disabled" :: Text)]]
+    Just tm ->
+      ("thinking" .= object ["type" .= ("enabled" :: Text)]) : ["reasoning_effort" .= e | Just e <- [tmEffort tm]]
+    Nothing ->
+      ["thinking" .= object ["type" .= ("enabled" :: Text)]]

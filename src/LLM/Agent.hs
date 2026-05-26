@@ -3,8 +3,6 @@ module LLM.Agent
     streamText,
     generateObject,
     generateObjectUntyped,
-    emitEvent,
-    noEventObserver,
     Agent (..),
     RuntimeArgs (..),
     Tool (..),
@@ -12,13 +10,8 @@ module LLM.Agent
     GenerateEvent (..),
     GenerateEventDetail (..),
     EventObserver,
-    executeTool,
-    executeTools,
-    executeToolsWithAbort,
-    getSchema,
+    noEventObserver,
     toTool,
-    filterReadonlyTools,
-    windowOffset,
     createGenRequest,
   )
 where

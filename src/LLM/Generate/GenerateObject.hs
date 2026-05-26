@@ -1,6 +1,6 @@
 module LLM.Generate.GenerateObject
-  ( generateObject,
-    generateObjectUntyped,
+  ( genObject,
+    genObjectUntyped,
   )
 where
 
@@ -29,22 +29,22 @@ import LLM.Generate.Types
     GenerateResult,
   )
 
-generateObject ::
+genObject ::
   (GeneratableObject t) =>
   GenRequest ->
   ModelWithFallbacks ->
   IO (Either GenerateErrorResult (t, Usage))
-generateObject = generateObjectInternal AC.codec
+genObject = genObjectInternal AC.codec
 
-generateObjectInternal ::
+genObjectInternal ::
   (GeneratableObject t) =>
   AC.JSONCodec t ->
   GenRequest ->
   ModelWithFallbacks ->
   IO (Either GenerateErrorResult (t, Usage))
-generateObjectInternal codec gr models = do
+genObjectInternal codec gr models = do
   let jsonschema = stripBoundsAndComments $ AE.toJSON $ jsonSchemaVia codec
-  res <- generateObjectUntyped gr models jsonschema
+  res <- genObjectUntyped gr models jsonschema
   case res of
     Left e -> pure (Left e)
     Right (v, u) -> do
@@ -58,12 +58,12 @@ generateObjectInternal codec gr models = do
                 u
         AE.Success a -> pure $ Right (a, u)
 
-generateObjectUntyped ::
+genObjectUntyped ::
   GenRequest ->
   ModelWithFallbacks ->
   Value ->
   IO (Either GenerateErrorResult (Value, Usage))
-generateObjectUntyped gr models schema = do
+genObjectUntyped gr models schema = do
   aborted <- isAbortedMaybe (grAbortSignal gr)
   if aborted
     then do

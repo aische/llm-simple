@@ -16,6 +16,7 @@ import Control.Exception (SomeException, try)
 import Data.Aeson (FromJSON)
 import Data.Aeson qualified as AE
 import Data.Text qualified as T
+import LLM.Agent.Tools.HistoryTool (historyToolTyped)
 import LLM.Agent.Types
   ( Agent (..),
     RuntimeArgs (..),
@@ -122,11 +123,18 @@ findNthUserFromEnd n conv = go (length conv - 1) n
 createGenRequest :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
 createGenRequest agent rt messages =
   let offset = windowOffset (agContextWindow agent) messages
+      tools =
+        filterReadonlyTools (rtReadonly rt) (agTools agent) ++ getHistoryTool agent
    in GenRequest
         { grSystemPrompt = agSystemPrompt agent,
-          grTools = map toolDef $ filterReadonlyTools (rtReadonly rt) (agTools agent),
+          grTools = map toolDef tools,
           grMessages = drop offset messages,
           grAbortSignal = rtAbortSignal rt,
           grLLMHooks = rtLLMHooks rt,
           grHooks = rtHooks rt
         }
+
+getHistoryTool :: Agent -> [Tool]
+getHistoryTool agent = case agContextWindow agent of
+  Just _ -> [toTool historyToolTyped]
+  Nothing -> []

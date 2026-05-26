@@ -11,11 +11,11 @@ import LLM.Core.Types
   ( Turn (..),
   )
 import LLM.Core.Usage (Usage (..))
-import LLM.Generate0.GenerateObject qualified as G0
-import LLM.Generate0.ModelConfig
+import LLM.Generate.GenerateObject qualified as G0
+import LLM.Generate.ModelConfig
   ( ModelWithFallbacks (..),
   )
-import LLM.Generate0.Types (GenerateErrorResult)
+import LLM.Generate.Types (GenerateErrorResult)
 
 generateObject ::
   (GeneratableObject t) =>

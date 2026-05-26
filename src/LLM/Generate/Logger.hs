@@ -1,4 +1,4 @@
-module LLM.Generate0.Logger
+module LLM.Generate.Logger
   ( Hooks (..),
     Logger,
     LogLevel (..),

@@ -1,4 +1,4 @@
-module LLM.Generate0.GenerateUtils
+module LLM.Generate.GenerateUtils
   ( maybeThrottle,
     mkRequest,
     usageWithModelCost,
@@ -13,14 +13,14 @@ import Data.Text qualified as T
 import LLM.Core.Types (ChatRequest (..), LLMError (..), LLMGateway (gwName))
 import LLM.Core.Usage (Usage (..), estimateCost)
 import LLM.Core.Utils (withRetry, withTimeout)
-import LLM.Generate0.Logger (Hooks (..), LogLevel (..), onLog)
-import LLM.Generate0.ModelConfig
+import LLM.Generate.Logger (Hooks (..), LogLevel (..), onLog)
+import LLM.Generate.ModelConfig
   ( ModelConfig (..),
     ModelWithFallbacks (..),
     mfwToModelConfigs,
     modelRetryPolicy,
   )
-import LLM.Generate0.Types (GenRequest (..), GenerateError (..), GenerateResult)
+import LLM.Generate.Types (GenRequest (..), GenerateError (..), GenerateResult)
 
 maybeThrottle :: Maybe Int -> IO a -> IO a
 maybeThrottle Nothing io = io

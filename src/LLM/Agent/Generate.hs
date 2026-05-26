@@ -26,17 +26,17 @@ import LLM.Core.Types
   )
 import LLM.Core.Usage (Usage (..), emptyUsage)
 import LLM.Core.Utils (getToolCalls)
-import LLM.Generate0.Generate
+import LLM.Generate.Generate
   ( generateTextWithFallbacks,
     streamTextWithFallbacks,
   )
-import LLM.Generate0.GenerateUtils
+import LLM.Generate.GenerateUtils
   ( usageWithModelCost,
   )
-import LLM.Generate0.ModelConfig
+import LLM.Generate.ModelConfig
   ( ModelWithFallbacks (..),
   )
-import LLM.Generate0.Types
+import LLM.Generate.Types
   ( GenerateError (..),
     GenerateErrorResult (..),
     GenerateResult,

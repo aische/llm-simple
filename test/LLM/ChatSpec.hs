@@ -26,12 +26,12 @@ import LLM.Core.Types
     Turn (..),
   )
 import LLM.Core.Usage (PricingInfo (..), Usage (Usage))
-import LLM.Generate0.Logger (noHooks)
-import LLM.Generate0.ModelConfig
+import LLM.Generate.Logger (noHooks)
+import LLM.Generate.ModelConfig
   ( ModelConfig (..),
     ModelWithFallbacks (..),
   )
-import LLM.Generate0.Types
+import LLM.Generate.Types
   ( GenerateError (..),
     GenerateErrorResult (..),
     GenerateTextResult (..),

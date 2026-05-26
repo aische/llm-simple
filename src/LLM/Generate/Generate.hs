@@ -1,4 +1,4 @@
-module LLM.Generate0.Generate
+module LLM.Generate.Generate
   ( usageWithModelCost,
     generateTextLLM,
     streamTextLLM,
@@ -16,17 +16,17 @@ import LLM.Core.Types
     StreamEvent (..),
   )
 import LLM.Core.Usage (emptyUsage)
-import LLM.Generate0.GenerateUtils
+import LLM.Generate.GenerateUtils
   ( callWithRetryTimeout,
     mkRequest,
     usageWithModelCost,
     withModelFallbacks,
   )
-import LLM.Generate0.ModelConfig
+import LLM.Generate.ModelConfig
   ( ModelConfig (..),
     ModelWithFallbacks (..),
   )
-import LLM.Generate0.Types
+import LLM.Generate.Types
   ( GenRequest (..),
     GenerateResult,
     StreamChunk (..),

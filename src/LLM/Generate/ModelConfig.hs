@@ -1,4 +1,4 @@
-module LLM.Generate0.ModelConfig
+module LLM.Generate.ModelConfig
   ( ModelConfig (..),
     ModelWithFallbacks (..),
     mfwToModelConfigs,

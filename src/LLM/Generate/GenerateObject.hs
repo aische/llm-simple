@@ -1,4 +1,4 @@
-module LLM.Generate0.GenerateObject
+module LLM.Generate.GenerateObject
   ( generateObject,
     generateObjectUntyped,
   )
@@ -14,14 +14,14 @@ import LLM.Core.Abort (isAbortedMaybe)
 import LLM.Core.ProviderUtils (stripBoundsAndComments)
 import LLM.Core.Types (LLMGateway (..), LLMObjectResult)
 import LLM.Core.Usage (Usage (..), emptyUsage)
-import LLM.Generate0.GenerateUtils
+import LLM.Generate.GenerateUtils
   ( callWithRetryTimeout,
     mkRequest,
     usageWithModelCost,
     withModelFallbacks,
   )
-import LLM.Generate0.ModelConfig (ModelConfig (mcGateway), ModelWithFallbacks)
-import LLM.Generate0.Types
+import LLM.Generate.ModelConfig (ModelConfig (mcGateway), ModelWithFallbacks)
+import LLM.Generate.Types
   ( GenRequest (grAbortSignal, grLLMHooks),
     GeneratableObject,
     GenerateError (..),

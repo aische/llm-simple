@@ -11,8 +11,8 @@ import LLM.Core.Types
     Turn,
   )
 import LLM.Core.Usage (Usage)
-import LLM.Generate0.Logger (Hooks)
-import LLM.Generate0.Types (GenerateError, GenerateErrorResult, GenerateTextResult, GenRequest (..))
+import LLM.Generate.Logger (Hooks)
+import LLM.Generate.Types (GenerateError, GenerateErrorResult, GenerateTextResult, GenRequest (..))
 
 -- | Agent configuration
 data Agent = Agent

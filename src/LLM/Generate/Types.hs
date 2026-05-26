@@ -1,4 +1,4 @@
-module LLM.Generate0.Types where
+module LLM.Generate.Types where
 
 import Autodocodec (HasCodec)
 import Data.Aeson (FromJSON)
@@ -13,7 +13,7 @@ import LLM.Core.Types
     Turn,
   )
 import LLM.Core.Usage (Usage)
-import LLM.Generate0.Logger (Hooks)
+import LLM.Generate.Logger (Hooks)
 
 data GenRequest = GenRequest
   { grSystemPrompt :: Maybe Text,

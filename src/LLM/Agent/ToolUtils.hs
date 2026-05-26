@@ -15,6 +15,7 @@ import Control.Exception (SomeException, try)
 import Data.Aeson (FromJSON)
 import Data.Aeson qualified as AE
 import Data.Text qualified as T
+import LLM.Agent.Types (Tool (Tool, toolDef, toolExecute), ToolContext)
 import LLM.Core.Abort (AbortSignal, isAborted)
 import LLM.Core.Types
   ( ToolCall (..),
@@ -24,12 +25,11 @@ import LLM.Core.Types
     TypedTool (TypedTool),
   )
 import LLM.Core.Utils (toolResult)
-import LLM.Generate0.Logger (Hooks (..))
-import LLM.Generate0.Types
+import LLM.Generate.Logger (Hooks (..))
+import LLM.Generate.Types
   ( GenerateError (..),
     GenerateResult,
   )
-import LLM.Agent.Types (ToolContext, Tool (toolDef, toolExecute, Tool))
 
 -- | Execute a single tool call by looking it up in the tool list
 executeTool :: Hooks -> ToolContext -> [Tool] -> ToolCall -> IO ToolResult

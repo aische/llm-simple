@@ -11,8 +11,8 @@ import LLM.Core.LLMProvider (LLMProvider (..))
 import LLM.Core.Types (Turn (..))
 import LLM.Core.Usage (addUsage, emptyUsage)
 import LLM.Core.Utils (parseChatResponse)
-import LLM.Generate0.ModelConfig (ModelWithFallbacks)
-import LLM.Generate0.Types (GenerateErrorResult (..), GenerateTextResult (..))
+import LLM.Generate.ModelConfig (ModelWithFallbacks)
+import LLM.Generate.Types (GenerateErrorResult (..), GenerateTextResult (..))
 
 data MockRequestResponse = MockRequestResponse
   { prompt :: Maybe Text,

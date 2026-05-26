@@ -73,6 +73,7 @@ library
         LLM.Generate.Logger
         LLM.Generate.Types
 
+        LLM.Tools
         LLM.Tools.Weather
         LLM.Tools.DirectoryTree
         LLM.Tools.MultiReplaceInFile

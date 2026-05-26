@@ -1,3 +1,4 @@
+-- | Single-request generation functions.
 module LLM.Generate
   ( generateTextLLM,
     streamTextLLM,

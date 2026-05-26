@@ -1,3 +1,4 @@
+-- | Core types and functions for LLM operations
 module LLM.Core
   ( LLMGateway (..),
     ChatRequest (..),

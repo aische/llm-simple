@@ -1,3 +1,4 @@
+-- | Agent loop with tools
 module LLM.Agent
   ( generateText,
     streamText,

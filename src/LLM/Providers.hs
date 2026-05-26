@@ -1,3 +1,4 @@
+-- | Collection of LLM providers
 module LLM.Providers
   ( -- * OpenAI
     openAIProvider,

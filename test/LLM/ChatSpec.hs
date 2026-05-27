@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-missing-fields #-}
 
 module LLM.ChatSpec (spec) where
@@ -50,7 +49,8 @@ mockGateway resp =
   LLMGateway
     { gwName = "mock",
       gwGenerateText = \_ _ -> pure (Right resp),
-      gwStreamText = \_ _ _ -> pure (Right resp)
+      gwStreamText = \_ _ _ -> pure (Right resp),
+      gwGenerateObject = \_ _ _ -> pure (Right (object [], Nothing))
     }
 
 -- | A mock gateway that returns an error
@@ -59,7 +59,8 @@ mockErrorGateway err =
   LLMGateway
     { gwName = "mock-error",
       gwGenerateText = \_ _ -> pure (Left err),
-      gwStreamText = \_ _ _ -> pure (Left err)
+      gwStreamText = \_ _ _ -> pure (Left err),
+      gwGenerateObject = \_ _ _ -> pure (Left err)
     }
 
 -- | A mock gateway that calls a tool, then responds with text
@@ -73,7 +74,8 @@ mockToolGateway =
           else
             let tc = ToolCall "call_1" "get_weather" (object ["location" .= ("London" :: Text)])
              in pure $ Right (ChatResponse "" [ToolCallBlock tc] (Just (Usage 50 10 0)) Nothing),
-      gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing)
+      gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing),
+      gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
     }
   where
     isToolTurn (ToolTurn _) = True
@@ -190,7 +192,8 @@ spec = describe "Chat" $ do
                 gwGenerateText = \_ _ ->
                   let tc = ToolCall "call_1" "get_weather" (object [])
                    in pure $ Right (ChatResponse "" [ToolCallBlock tc] Nothing Nothing),
-                gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing)
+                gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing),
+                gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
               }
           agent = defaultAgent {agMaxToolRounds = 2, agTools = [weatherTool]}
           models = ModelWithFallbacks (mockModel infiniteToolGateway) []
@@ -258,7 +261,8 @@ spec = describe "Chat" $ do
                   let tc1 = ToolCall "c1" "slow" (object [])
                       tc2 = ToolCall "c2" "slow" (object [])
                    in pure $ Right (ChatResponse "" [ToolCallBlock tc1, ToolCallBlock tc2] Nothing Nothing),
-                gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing)
+                gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing),
+                gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
               }
           agent = defaultAgent {agTools = [slowTool]}
           models = ModelWithFallbacks (mockModel twoCallGw) []

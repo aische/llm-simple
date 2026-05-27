@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module LLM.DeepSeekSpec (spec) where
 
 import Data.Aeson (Value (Object, String), object, (.=))

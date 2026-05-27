@@ -35,6 +35,7 @@ common opts
         OverloadedRecordDot
         DuplicateRecordFields
         NoFieldSelectors
+        StrictData
     ghc-options: 
         -Wall 
         -Wunused-imports

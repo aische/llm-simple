@@ -42,7 +42,7 @@ mkFsConfig dir =
 -- Throws 'SandboxViolation' on escape attempts.
 sandboxPath :: FsConfig -> FilePath -> IO FilePath
 sandboxPath cfg relPath = do
-  let base = fsBasePath cfg
+  let base = cfg.fsBasePath
       candidate = base </> relPath
   exists <- doesPathExist candidate
   canonical <-

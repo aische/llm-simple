@@ -89,22 +89,22 @@ geminiProvider apiKey =
       parseResponse = parseGeminiResponse,
       buildObjectBody = \r schema ->
         object $
-          [ "_model" .= reqModel r,
-            "contents" .= concatMap encodeTurn (reqConversation r),
+          [ "_model" .= r.reqModel,
+            "contents" .= concatMap encodeTurn r.reqConversation,
             "generationConfig"
               .= object
-                ( [ "maxOutputTokens" .= reqMaxTokens r,
+                ( [ "maxOutputTokens" .= r.reqMaxTokens,
                     "responseMimeType" .= ("application/json" :: Text),
                     "responseSchema" .= schema
                   ]
-                    ++ ["temperature" .= t | Just t <- [reqTemperature r]]
+                    ++ ["temperature" .= t | Just t <- [r.reqTemperature]]
                 )
           ]
             ++ [ "system_instruction" .= object ["parts" .= [object ["text" .= sys]]]
-                 | Just sys <- [reqSystem r]
+                 | Just sys <- [r.reqSystem]
                ]
-            ++ [ "tools" .= [object ["function_declarations" .= map encodeToolDef (reqTools r)]]
-                 | not (null (reqTools r))
+            ++ [ "tools" .= [object ["function_declarations" .= map encodeToolDef r.reqTools]]
+                 | not (null r.reqTools)
                ],
       sendObjectRequest = sendRequest,
       parseObjectResponse = parseGeminiObjectResponse
@@ -137,7 +137,7 @@ parseGeminiStream reader callback = do
   blocksRef <- newIORef ([] :: [ContentBlock])
   usageRef <- newIORef Nothing
   readSSEEvents (HC.brRead reader) $ \sse -> do
-    case decodeStrict' (encodeUtf8 (sseData sse)) of
+    case decodeStrict' (encodeUtf8 sse.sseData) of
       Nothing -> pure ()
       Just v -> do
         -- Each SSE chunk is a complete response fragment; parse parts from it
@@ -205,15 +205,15 @@ geminiBuildBody r = object $ geminiBuildBodyPairs r
 
 geminiBuildBodyPairs :: ChatRequest -> [Pair]
 geminiBuildBodyPairs r =
-  [ "_model" .= reqModel r,
-    "contents" .= concatMap encodeTurn (reqConversation r),
+  [ "_model" .= r.reqModel,
+    "contents" .= concatMap encodeTurn r.reqConversation,
     "generationConfig" .= genConfig r
   ]
     ++ [ "system_instruction" .= object ["parts" .= [object ["text" .= sys]]]
-         | Just sys <- [reqSystem r]
+         | Just sys <- [r.reqSystem]
        ]
-    ++ [ "tools" .= [object ["function_declarations" .= map encodeToolDef (reqTools r)]]
-         | not (null (reqTools r))
+    ++ [ "tools" .= [object ["function_declarations" .= map encodeToolDef r.reqTools]]
+         | not (null r.reqTools)
        ]
 
 encodeTurn :: Turn -> [Value]
@@ -242,9 +242,9 @@ encodeTurn (ToolTurn results) =
 encodeToolDef :: ToolDef -> Value
 encodeToolDef td =
   object
-    [ "name" .= toolName td,
-      "description" .= toolDescription td,
-      "parameters" .= toolParameters td
+    [ "name" .= td.toolName,
+      "description" .= td.toolDescription,
+      "parameters" .= td.toolParameters
     ]
 
 encodeFunctionCall :: ToolCall -> Value
@@ -252,8 +252,8 @@ encodeFunctionCall tc =
   object
     [ "functionCall"
         .= object
-          [ "name" .= tcName tc,
-            "args" .= tcArguments tc
+          [ "name" .= tc.tcName,
+            "args" .= tc.tcArguments
           ]
     ]
 
@@ -262,8 +262,8 @@ encodeFunctionResponse tr =
   object
     [ "functionResponse"
         .= object
-          [ "name" .= trName tr,
-            "response" .= object ["result" .= trContent tr]
+          [ "name" .= tr.trName,
+            "response" .= object ["result" .= tr.trContent]
           ]
     ]
 
@@ -281,8 +281,8 @@ normalizeBlock b = pure b
 genConfig :: ChatRequest -> Value
 genConfig r =
   object $
-    ("maxOutputTokens" .= reqMaxTokens r)
-      : ["temperature" .= t | Just t <- [reqTemperature r]]
+    ("maxOutputTokens" .= r.reqMaxTokens)
+      : ["temperature" .= t | Just t <- [r.reqTemperature]]
 
 parseGeminiResponse :: Value -> IO LLMTextResult
 parseGeminiResponse v = case parseMaybe go v of

@@ -21,8 +21,8 @@ instance AC.HasCodec WritefileToolArgs where
   codec =
     AC.object "write content to a file" $
       WritefileToolArgs
-        <$> AC.requiredField "path" "Relative file path to write to" AC..= _wfPath
-        <*> AC.requiredField "content" "The text content to write to the file" AC..= _wfContent
+        <$> AC.requiredField "path" "Relative file path to write to" AC..= (\x -> x._wfPath)
+        <*> AC.requiredField "content" "The text content to write to the file" AC..= (\x -> x._wfContent)
 
 writefileToolTyped :: FsConfig -> TypedTool ctx WritefileToolArgs
 writefileToolTyped cfg =
@@ -38,8 +38,8 @@ writefileToolTyped cfg =
 
 writefileExecTyped :: FsConfig -> WritefileToolArgs -> IO Text
 writefileExecTyped cfg args = do
-  let p = _wfPath args
-      c = _wfContent args
+  let p = args._wfPath
+      c = args._wfContent
   resolved <- sandboxWritePath cfg (T.unpack p)
   TIO.writeFile resolved c
   pure $ "Successfully wrote " <> T.pack (show (T.length c)) <> " characters to " <> p

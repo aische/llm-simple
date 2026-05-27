@@ -68,7 +68,7 @@ mockToolGateway =
   LLMGateway
     { gwName = "mock-tool",
       gwGenerateText = \_ req ->
-        if any isToolTurn (reqConversation req)
+        if any isToolTurn req.reqConversation
           then pure $ Right (ChatResponse "The weather is sunny." [TextBlock "The weather is sunny."] (Just (Usage 80 15 0)) Nothing)
           else
             let tc = ToolCall "call_1" "get_weather" (object ["location" .= ("London" :: Text)])
@@ -158,9 +158,9 @@ spec = describe "Chat" $ do
       result <- runGenerate defaultAgent models Nothing [UserTurn "hello"]
       case result of
         Right r -> do
-          gtrText r `shouldBe` "Hi there!"
-          length (gtrNewMessages r) `shouldBe` 1 -- AssistantTurn
-          gtrUsage r `shouldBe` Usage 10 5 0
+          r.gtrText `shouldBe` "Hi there!"
+          length r.gtrNewMessages `shouldBe` 1 -- AssistantTurn
+          r.gtrUsage `shouldBe` Usage 10 5 0
         Left err -> expectationFailure $ show err
 
     it "propagates errors" $ do
@@ -177,10 +177,10 @@ spec = describe "Chat" $ do
       result <- runGenerate agent models Nothing [UserTurn "weather in london?"]
       case result of
         Right r -> do
-          gtrText r `shouldBe` "The weather is sunny."
+          r.gtrText `shouldBe` "The weather is sunny."
           -- AssistantTurn(tool call) + ToolTurn + AssistantTurn(final)
-          length (gtrNewMessages r) `shouldBe` 3
-          gtrUsage r `shouldBe` Usage 130 25 0 -- 50+80 input, 10+15 output
+          length r.gtrNewMessages `shouldBe` 3
+          r.gtrUsage `shouldBe` Usage 130 25 0 -- 50+80 input, 10+15 output
         Left err -> expectationFailure $ show err
 
     it "respects maxToolRounds" $ do
@@ -205,7 +205,7 @@ spec = describe "Chat" $ do
           models = ModelWithFallbacks (mockModel failGw) [mockModel okGw]
       result <- runGenerate defaultAgent models Nothing [UserTurn "hello"]
       case result of
-        Right r -> gtrText r `shouldBe` "Fallback worked!"
+        Right r -> r.gtrText `shouldBe` "Fallback worked!"
         Left err -> expectationFailure $ "Expected fallback success, got: " <> show err
 
     it "falls back on non-retryable error too" $ do
@@ -214,7 +214,7 @@ spec = describe "Chat" $ do
           models = ModelWithFallbacks (mockModel failGw) [mockModel okGw]
       result <- runGenerate defaultAgent models Nothing [UserTurn "hello"]
       case result of
-        Right r -> gtrText r `shouldBe` "Fallback worked!"
+        Right r -> r.gtrText `shouldBe` "Fallback worked!"
         Left err -> expectationFailure $ "Expected fallback success, got: " <> show err
 
     it "returns error from last model when all fail" $ do

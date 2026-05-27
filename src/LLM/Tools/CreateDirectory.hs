@@ -20,8 +20,8 @@ instance AC.HasCodec CreateDirectoryToolArgs where
   codec =
     AC.object "create a directory" $
       CreateDirectoryToolArgs
-        <$> AC.requiredField "path" "Relative path of the directory to create" AC..= _cdPath
-        <*> AC.optionalFieldWithDefault "parents" True "Create intermediate parent directories as needed" AC..= _cdParents
+        <$> AC.requiredField "path" "Relative path of the directory to create" AC..= (\x -> x._cdPath)
+        <*> AC.optionalFieldWithDefault "parents" True "Create intermediate parent directories as needed" AC..= (\x -> x._cdParents)
 
 createDirectoryToolTyped :: FsConfig -> TypedTool ctx CreateDirectoryToolArgs
 createDirectoryToolTyped cfg =
@@ -37,8 +37,8 @@ createDirectoryToolTyped cfg =
 
 createDirectoryExecTyped :: FsConfig -> CreateDirectoryToolArgs -> IO Text
 createDirectoryExecTyped cfg args = do
-  let p = _cdPath args
-      parents = _cdParents args
+  let p = args._cdPath
+      parents = args._cdParents
   resolved <- sandboxPath cfg (T.unpack p)
   createDirectoryIfMissing parents resolved
   pure $ "Successfully created directory " <> p

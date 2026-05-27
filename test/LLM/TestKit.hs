@@ -37,9 +37,9 @@ loadRecordedConversation filePath = do
   case s of
     Nothing -> error "can't read conversation"
     Just rrs ->
-      let pairs = map (\rr -> (request rr, response rr)) rrs
+      let pairs = map (\rr -> (rr.request, rr.response)) rrs
           rrMap = M.fromList pairs
-          prompts = rrs >>= \rsp -> case prompt rsp of Nothing -> []; Just p -> [p]
+          prompts = rrs >>= \rsp -> case rsp.prompt of Nothing -> []; Just p -> [p]
        in pure (rrMap, prompts)
 
 mockProvider :: MockConversationMap -> LLMProvider -> LLMProvider

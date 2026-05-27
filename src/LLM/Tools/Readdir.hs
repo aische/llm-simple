@@ -20,7 +20,7 @@ instance AC.HasCodec ReaddirToolArgs where
   codec :: AC.JSONCodec ReaddirToolArgs
   codec =
     AC.object "list a directory" $
-      ReaddirToolArgs <$> AC.requiredField "path" "Relative directory path to list" AC..= _rdPath
+      ReaddirToolArgs <$> AC.requiredField "path" "Relative directory path to list" AC..= (\x -> x._rdPath)
 
 readdirToolTyped :: FsConfig -> TypedTool ctx ReaddirToolArgs
 readdirToolTyped fsConfig =
@@ -36,7 +36,7 @@ readdirToolTyped fsConfig =
 
 readdirExecTyped :: FsConfig -> ReaddirToolArgs -> IO Text
 readdirExecTyped cfg args = do
-  let relPath = T.unpack $ _rdPath args
+  let relPath = T.unpack args._rdPath
   resolved <- sandboxPath cfg relPath
   entries <- sort <$> listDirectory resolved
   annotated <- mapM (annotateEntry resolved) $ filter (not . isFileHidden) entries

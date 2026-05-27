@@ -20,7 +20,7 @@ instance AC.HasCodec WeatherToolArgs where
   codec =
     AC.object "WeatherToolArgs" $
       WeatherToolArgs
-        <$> AC.requiredField "location" "City name, e.g. London" AC..= _weatherLocation
+        <$> AC.requiredField "location" "City name, e.g. London" AC..= (\x -> x._weatherLocation)
 
 -- DO NOT TOUCH THIS TOOL - IT IS FOR TESTING
 
@@ -38,7 +38,7 @@ weatherToolTyped =
 -- | Dummy implementation — in reality you'd call a weather API
 getWeather :: WeatherToolArgs -> IO Text
 getWeather args = do
-  let loc = _weatherLocation args
+  let loc = args._weatherLocation
   case toLower loc of
     "london" -> pure "Weather in London is partly cloudy, 18°C, light breeze from the west."
     "paris" -> pure "Weather in Paris is sunny, 23°C, no wind."

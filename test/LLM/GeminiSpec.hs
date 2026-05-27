@@ -22,7 +22,7 @@ spec = describe "Gemini" $ do
       resp <- parseGeminiResponse val
       case resp of
         Right r -> do
-          respText r `shouldBe` "Hello! How can I help you today?"
+          r.respText `shouldBe` "Hello! How can I help you today?"
           hasToolCalls r `shouldBe` False
         Left err -> expectationFailure $ "Parse failed: " <> show err
 
@@ -33,7 +33,7 @@ spec = describe "Gemini" $ do
         Right r -> do
           hasToolCalls r `shouldBe` True
           let [tc] = getToolCalls r
-          tcName tc `shouldBe` "get_weather"
+          tc.tcName `shouldBe` "get_weather"
         Left err -> expectationFailure $ "Parse failed: " <> show err
 
   describe "parseGeminiUsage" $ do

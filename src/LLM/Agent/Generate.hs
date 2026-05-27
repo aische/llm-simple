@@ -71,14 +71,14 @@ agentLoop call agent models rt initialTurns = do
   where
     go :: [Turn] -> [Turn] -> Usage -> Int -> IO (Either GenerateErrorResult GenerateTextResult)
     go currentTurns newTurnsAcc currentUsage loopCount = do
-      aborted <- isAbortedMaybe (rtAbortSignal rt)
+      aborted <- isAbortedMaybe rt.rtAbortSignal
       if aborted
         then do
           let errResult = GenerateErrorResult GErrAborted newTurnsAcc currentUsage
           emitEvent rt (GenerationFailed GErrAborted errResult)
           pure $ Left errResult
         else
-          if loopCount >= agMaxToolRounds agent
+          if loopCount >= agent.agMaxToolRounds
             then do
               let errResult = GenerateErrorResult GErrToolExceeded newTurnsAcc currentUsage
               emitEvent rt (GenerationFailed GErrToolExceeded errResult)
@@ -91,27 +91,27 @@ agentLoop call agent models rt initialTurns = do
                   emitEvent rt (GenerationFailed err errResult)
                   pure $ Left errResult
                 Right resp -> do
-                  let txt = respText resp
+                  let txt = resp.respText
                       toolCalls = getToolCalls resp
-                      roundUsage = fromMaybe emptyUsage (respUsage resp)
+                      roundUsage = fromMaybe emptyUsage resp.respUsage
                       newUsage = currentUsage <> roundUsage
 
                   case toolCalls of
                     [] -> do
-                      let finalTurn = AssistantTurn txt (respReasoning resp) []
+                      let finalTurn = AssistantTurn txt resp.respReasoning []
                           finalTurnsAcc = newTurnsAcc ++ [finalTurn]
-                          successResult = GenerateTextResult (rtGenerationId rt) finalTurnsAcc txt newUsage
+                          successResult = GenerateTextResult rt.rtGenerationId finalTurnsAcc txt newUsage
                       emitEvent rt (MessageFinalized finalTurn)
                       emitEvent rt (GenerationFinished successResult)
                       pure $ Right successResult
                     _ -> do
-                      let assistantTurn = AssistantTurn txt (respReasoning resp) toolCalls
+                      let assistantTurn = AssistantTurn txt resp.respReasoning toolCalls
                           toolContext = createToolContext agent currentTurns newUsage rt
                           tools = getResolvedTools agent rt
                       emitEvent rt (MessageCreated assistantTurn)
                       emitEvent rt (ToolRoundStarted loopCount)
 
-                      toolResultsE <- executeToolsWithAbort (rtAbortSignal rt) (rtHooks rt) toolContext tools toolCalls
+                      toolResultsE <- executeToolsWithAbort rt.rtAbortSignal rt.rtHooks toolContext tools toolCalls
 
                       case toolResultsE of
                         Left err -> do

@@ -42,7 +42,7 @@ generateTextWithFallbacks gr models =
     case r of
       Left err -> pure $ Left err
       Right resp ->
-        let usage = usageWithModelCost mc (fromMaybe emptyUsage (respUsage resp))
+        let usage = usageWithModelCost mc (fromMaybe emptyUsage resp.respUsage)
          in pure $ Right resp {respUsage = Just usage}
 
 streamTextWithFallbacks ::
@@ -56,14 +56,14 @@ streamTextWithFallbacks onChunk gr models =
     case r of
       Left err -> pure $ Left err
       Right resp ->
-        let usage = usageWithModelCost mc (fromMaybe emptyUsage (respUsage resp))
+        let usage = usageWithModelCost mc (fromMaybe emptyUsage resp.respUsage)
          in pure $ Right resp {respUsage = Just usage}
 
 generateTextLLM :: GenRequest -> ModelConfig -> IO LLMTextResult
 generateTextLLM gr mc =
   callWithRetryTimeout gr mc $
     let request = mkRequest gr mc
-     in gwGenerateText (mcGateway mc) (grLLMHooks gr) request
+     in mc.mcGateway.gwGenerateText gr.grLLMHooks request
 
 streamTextLLM :: (StreamChunk -> IO ()) -> GenRequest -> ModelConfig -> IO LLMTextResult
 streamTextLLM onChunk gr mc =
@@ -71,7 +71,7 @@ streamTextLLM onChunk gr mc =
     let request = mkRequest gr mc
      in do
           onProviderEvent <- mkProviderStreamCallback gr onChunk
-          gwStreamText (mcGateway mc) (grLLMHooks gr) request onProviderEvent
+          mc.mcGateway.gwStreamText gr.grLLMHooks request onProviderEvent
 
 data StreamChannel
   = AnswerChannel

@@ -19,7 +19,7 @@ instance AC.HasCodec RemoveDirectoryToolArgs where
   codec =
     AC.object "remove a directory" $
       RemoveDirectoryToolArgs
-        <$> AC.requiredField "path" "Relative path of the directory to remove" AC..= _rdPath
+        <$> AC.requiredField "path" "Relative path of the directory to remove" AC..= (\x -> x._rdPath)
 
 removeDirectoryToolTyped :: FsConfig -> TypedTool ctx RemoveDirectoryToolArgs
 removeDirectoryToolTyped cfg =
@@ -34,7 +34,7 @@ removeDirectoryToolTyped cfg =
 
 removeDirectoryExecTyped :: FsConfig -> RemoveDirectoryToolArgs -> IO Text
 removeDirectoryExecTyped cfg args = do
-  let p = _rdPath args
+  let p = args._rdPath
   resolved <- sandboxPath cfg (T.unpack p)
   removeDirectoryRecursive resolved
   pure $ "Successfully removed directory " <> p

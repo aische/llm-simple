@@ -32,7 +32,7 @@ import System.Timeout (timeout)
 
 -- | Smart constructor for tool results
 toolResult :: ToolCall -> Text -> ToolResult
-toolResult tc = ToolResult (tcId tc) (tcName tc)
+toolResult tc = ToolResult tc.tcId tc.tcName
 
 -- | Check whether a response contains tool calls
 hasToolCalls :: ChatResponse -> Bool
@@ -40,7 +40,7 @@ hasToolCalls = not . null . getToolCalls
 
 -- | Extract tool calls from a response
 getToolCalls :: ChatResponse -> [ToolCall]
-getToolCalls = concatMap go . respContent
+getToolCalls r = concatMap go r.respContent
   where
     go (ToolCallBlock tc) = [tc]
     go _ = []
@@ -81,24 +81,24 @@ withRetry policy logRetryableError action =
 streamResponseJson :: ChatResponse -> Value
 streamResponseJson r =
   object
-    [ "text" .= respText r,
-      "content" .= map blockToJson (respContent r),
-      "usage" .= fmap usageToJson (respUsage r),
-      "reasoning" .= respReasoning r
+    [ "text" .= r.respText,
+      "content" .= map blockToJson r.respContent,
+      "usage" .= fmap usageToJson r.respUsage,
+      "reasoning" .= r.respReasoning
     ]
   where
     blockToJson (TextBlock t) = object ["type" .= ("text" :: Text), "text" .= t]
     blockToJson (ToolCallBlock tc) =
       object
         [ "type" .= ("tool_call" :: Text),
-          "id" .= tcId tc,
-          "name" .= tcName tc,
-          "arguments" .= tcArguments tc
+          "id" .= tc.tcId,
+          "name" .= tc.tcName,
+          "arguments" .= tc.tcArguments
         ]
     usageToJson u =
       object
-        [ "input_tokens" .= usageInputTokens u,
-          "output_tokens" .= usageOutputTokens u
+        [ "input_tokens" .= u.usageInputTokens,
+          "output_tokens" .= u.usageOutputTokens
         ]
 
 parseChatResponse :: Value -> Parser ChatResponse

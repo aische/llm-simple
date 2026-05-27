@@ -64,7 +64,7 @@ genObjectUntyped ::
   Value ->
   IO (Either GenerateErrorResult (Value, Usage))
 genObjectUntyped gr models schema = do
-  aborted <- isAbortedMaybe (grAbortSignal gr)
+  aborted <- isAbortedMaybe gr.grAbortSignal
   if aborted
     then do
       let errResult = GenerateErrorResult GErrAborted [] emptyUsage
@@ -85,9 +85,8 @@ callObject ::
   IO LLMObjectResult
 callObject gr mc schema =
   callWithRetryTimeout gr mc $
-    gwGenerateObject
-      (mcGateway mc)
-      (grLLMHooks gr)
+    mc.mcGateway.gwGenerateObject
+      gr.grLLMHooks
       schema
       (mkRequest gr mc)
 

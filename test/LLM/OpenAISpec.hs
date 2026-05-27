@@ -25,7 +25,7 @@ spec = describe "OpenAI" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/openai-text.json"
       case parseOpenAIResponse val of
         Right resp -> do
-          respText resp `shouldBe` "Hello! How can I help you today?"
+          resp.respText `shouldBe` "Hello! How can I help you today?"
           hasToolCalls resp `shouldBe` False
         Left err -> expectationFailure $ "Parse failed: " <> show err
 
@@ -35,8 +35,8 @@ spec = describe "OpenAI" $ do
         Right resp -> do
           hasToolCalls resp `shouldBe` True
           let [tc] = getToolCalls resp
-          tcName tc `shouldBe` "get_weather"
-          tcId tc `shouldBe` "call_abc123"
+          tc.tcName `shouldBe` "get_weather"
+          tc.tcId `shouldBe` "call_abc123"
         Left err -> expectationFailure $ "Parse failed: " <> show err
 
   describe "parseOpenAIUsage" $ do

@@ -32,6 +32,9 @@ common opts
         DerivingVia
         LambdaCase
         OverloadedStrings
+        OverloadedRecordDot
+        DuplicateRecordFields
+        NoFieldSelectors
     ghc-options: 
         -Wall 
         -Wunused-imports

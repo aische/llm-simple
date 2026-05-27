@@ -25,7 +25,7 @@ spec = describe "Claude" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/claude-text.json"
       case parseClaudeResponse val of
         Right resp -> do
-          respText resp `shouldBe` "Hello! How can I help you today?"
+          resp.respText `shouldBe` "Hello! How can I help you today?"
           hasToolCalls resp `shouldBe` False
         Left err -> expectationFailure $ "Parse failed: " <> show err
 
@@ -33,11 +33,11 @@ spec = describe "Claude" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/claude-tool-use.json"
       case parseClaudeResponse val of
         Right resp -> do
-          respText resp `shouldBe` "Let me check the weather for you."
+          resp.respText `shouldBe` "Let me check the weather for you."
           hasToolCalls resp `shouldBe` True
           let [tc] = getToolCalls resp
-          tcName tc `shouldBe` "get_weather"
-          tcId tc `shouldBe` "toolu_01A09q90qw90lq917835lq9"
+          tc.tcName `shouldBe` "get_weather"
+          tc.tcId `shouldBe` "toolu_01A09q90qw90lq917835lq9"
         Left err -> expectationFailure $ "Parse failed: " <> show err
 
   describe "parseClaudeUsage" $ do

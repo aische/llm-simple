@@ -52,12 +52,12 @@ import LLM.Core.Types
     LLMError (EmptyResponse),
     LLMGateway,
     LLMTextResult,
+    MessageEncodeOptions (..),
     StreamEvent (..),
     ToolCall (..),
     ToolDef (toolDescription, toolName, toolParameters),
     ToolResult (trCallId, trContent),
     Turn (..),
-    MessageEncodeOptions (..),
     defaultMessageEncodeOptions,
   )
 import LLM.Core.Usage (Usage (..))
@@ -149,19 +149,19 @@ openAIBuildBody stream r = object $ openAIBuildBodyPairs stream r
 
 openAIBuildBodyPairs :: Bool -> ChatRequest -> [Pair]
 openAIBuildBodyPairs stream r =
-  [ "model" .= reqModel r,
-    "max_completion_tokens" .= reqMaxTokens r,
+  [ "model" .= r.reqModel,
+    "max_completion_tokens" .= r.reqMaxTokens,
     "messages" .= buildMessages defaultMessageEncodeOptions r
   ]
-    ++ ["temperature" .= t | Just t <- [reqTemperature r]]
-    ++ ["tools" .= map encodeToolDef (reqTools r) | not (null (reqTools r))]
+    ++ ["temperature" .= t | Just t <- [r.reqTemperature]]
+    ++ ["tools" .= map encodeToolDef r.reqTools | not (null r.reqTools)]
     ++ ["stream" .= True | stream]
     ++ ["stream_options" .= object ["include_usage" .= True] | stream]
 
 buildMessages :: MessageEncodeOptions -> ChatRequest -> [Value]
 buildMessages opts r =
-  maybe [] (\sys -> [object ["role" .= ("system" :: Text), "content" .= sys]]) (reqSystem r)
-    ++ concatMap (encodeTurn opts) (reqConversation r)
+  maybe [] (\sys -> [object ["role" .= ("system" :: Text), "content" .= sys]]) r.reqSystem
+    ++ concatMap (encodeTurn opts) r.reqConversation
 
 encodeTurn :: MessageEncodeOptions -> Turn -> [Value]
 encodeTurn _ (UserTurn content) =
@@ -175,7 +175,7 @@ encodeTurn opts (AssistantTurn text mReasoning calls) =
       ["role" .= ("assistant" :: Text)]
         ++ ["content" .= text | not (T.null text)]
         ++ [ "reasoning_content" .= rc
-             | meoIncludeReasoning opts,
+             | opts.meoIncludeReasoning,
                Just rc <- [mReasoning],
                not (T.null rc)
            ]
@@ -190,21 +190,21 @@ encodeToolDef td =
     [ "type" .= ("function" :: Text),
       "function"
         .= object
-          [ "name" .= toolName td,
-            "description" .= toolDescription td,
-            "parameters" .= toolParameters td
+          [ "name" .= td.toolName,
+            "description" .= td.toolDescription,
+            "parameters" .= td.toolParameters
           ]
     ]
 
 encodeToolCall :: ToolCall -> Value
 encodeToolCall tc =
   object
-    [ "id" .= tcId tc,
+    [ "id" .= tc.tcId,
       "type" .= ("function" :: Text),
       "function"
         .= object
-          [ "name" .= tcName tc,
-            "arguments" .= decodeUtf8 (BSL.toStrict (encode (tcArguments tc)))
+          [ "name" .= tc.tcName,
+            "arguments" .= decodeUtf8 (BSL.toStrict (encode tc.tcArguments))
           ]
     ]
 
@@ -212,8 +212,8 @@ encodeToolResult :: ToolResult -> Value
 encodeToolResult tr =
   object
     [ "role" .= ("tool" :: Text),
-      "tool_call_id" .= trCallId tr,
-      "content" .= trContent tr
+      "tool_call_id" .= tr.trCallId,
+      "content" .= tr.trContent
     ]
 
 -- Response parsing
@@ -287,7 +287,7 @@ parseOpenAIStream reader callback = do
   -- Track in-flight tool calls: index -> (id, name, accumulated args)
   toolAccRef <- newIORef ([] :: [(Int, Text, Text, Text)])
   readSSEEvents (HC.brRead reader) $ \sse -> do
-    let raw = sseData sse
+    let raw = sse.sseData
     if raw == "[DONE]"
       then pure ()
       else case decodeStrict' (encodeUtf8 raw) of
@@ -296,7 +296,7 @@ parseOpenAIStream reader callback = do
           -- Reasoning deltas
           case parseMaybe parseStreamReasoningDelta v of
             Just (Just txt) | not (T.null txt) -> do
-              modifyIORef' reasoningRef (Just . maybe txt (<> txt) . id)
+              modifyIORef' reasoningRef (Just . maybe txt (<> txt))
               callback (StreamReasoningDelta txt)
             _ -> pure ()
           -- Text deltas

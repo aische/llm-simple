@@ -85,7 +85,7 @@ claudeProvider apiKey =
       buildObjectBody = \r schema ->
         let schemaText = TL.toStrict . decodeUtf8 $ encode schema
             instruction = "Respond with a raw JSON object matching this schema. No markdown, no explanation, no code fences:\n" <> schemaText
-            conv' = reqConversation r <> [UserTurn instruction]
+            conv' = r.reqConversation <> [UserTurn instruction]
          in claudeBuildBody False (r {reqConversation = conv'}),
       sendObjectRequest = sendRequest,
       -- parseObjectResponse _ = parseClaudeObjectResponse
@@ -117,22 +117,22 @@ parseClaudeStream reader callback = do
   -- For accumulating tool_use input JSON across deltas
   toolAccRef <- newIORef (Nothing :: Maybe (Text, Text, Text)) -- (id, name, json_so_far)
   readSSEEvents (HC.brRead reader) $ \sse -> do
-    case sseEvent sse of
+    case sse.sseEvent of
       Just "message_start" ->
         -- Extract input token count from message.usage
-        case decodeStrict' (encodeUtf8 (sseData sse)) of
+        case decodeStrict' (encodeUtf8 sse.sseData) of
           Just v -> case parseMaybe parseMessageStartUsage v of
             Just inputToks -> modifyIORef' usageRef $ \u -> u {usageInputTokens = inputToks}
             Nothing -> pure ()
           Nothing -> pure ()
       Just "content_block_start" ->
-        case decodeStrict' (encodeUtf8 (sseData sse)) of
+        case decodeStrict' (encodeUtf8 sse.sseData) of
           Just v -> case parseMaybe parseContentBlockStart v of
             Just (cid, name) -> writeIORef toolAccRef (Just (cid, name, ""))
             Nothing -> pure () -- text block start, nothing to do
           Nothing -> pure ()
       Just "content_block_delta" ->
-        case decodeStrict' (encodeUtf8 (sseData sse)) of
+        case decodeStrict' (encodeUtf8 sse.sseData) of
           Just v -> do
             -- Try text delta
             case parseMaybe parseTextDelta v of
@@ -159,7 +159,7 @@ parseClaudeStream reader callback = do
             writeIORef toolAccRef Nothing
           _ -> writeIORef toolAccRef Nothing
       Just "message_delta" ->
-        case decodeStrict' (encodeUtf8 (sseData sse)) of
+        case decodeStrict' (encodeUtf8 sse.sseData) of
           Just v -> case parseMaybe parseMessageDeltaUsage v of
             Just outputToks -> modifyIORef' usageRef $ \u -> u {usageOutputTokens = outputToks}
             Nothing -> pure ()
@@ -225,13 +225,13 @@ parseInputJsonDelta = withObject "delta_event" $ \o -> do
 claudeBuildBody :: Bool -> ChatRequest -> Value
 claudeBuildBody stream r =
   object $
-    [ "model" .= reqModel r,
-      "max_tokens" .= reqMaxTokens r,
-      "messages" .= concatMap encodeTurn (reqConversation r)
+    [ "model" .= r.reqModel,
+      "max_tokens" .= r.reqMaxTokens,
+      "messages" .= concatMap encodeTurn r.reqConversation
     ]
-      ++ ["system" .= sys | Just sys <- [reqSystem r]]
-      ++ ["temperature" .= t | Just t <- [reqTemperature r]]
-      ++ ["tools" .= map encodeToolDef (reqTools r) | not (null (reqTools r))]
+      ++ ["system" .= sys | Just sys <- [r.reqSystem]]
+      ++ ["temperature" .= t | Just t <- [r.reqTemperature]]
+      ++ ["tools" .= map encodeToolDef r.reqTools | not (null r.reqTools)]
       ++ ["stream" .= True | stream]
 
 encodeTurn :: Turn -> [Value]
@@ -260,26 +260,26 @@ encodeTurn (ToolTurn results) =
 encodeToolDef :: ToolDef -> Value
 encodeToolDef td =
   object
-    [ "name" .= toolName td,
-      "description" .= toolDescription td,
-      "input_schema" .= toolParameters td
+    [ "name" .= td.toolName,
+      "description" .= td.toolDescription,
+      "input_schema" .= td.toolParameters
     ]
 
 encodeToolUseBlock :: ToolCall -> Value
 encodeToolUseBlock tc =
   object
     [ "type" .= ("tool_use" :: Text),
-      "id" .= tcId tc,
-      "name" .= tcName tc,
-      "input" .= tcArguments tc
+      "id" .= tc.tcId,
+      "name" .= tc.tcName,
+      "input" .= tc.tcArguments
     ]
 
 encodeToolResult :: ToolResult -> Value
 encodeToolResult tr =
   object
     [ "type" .= ("tool_result" :: Text),
-      "tool_use_id" .= trCallId tr,
-      "content" .= trContent tr
+      "tool_use_id" .= tr.trCallId,
+      "content" .= tr.trContent
     ]
 
 parseClaudeResponse :: Value -> LLMTextResult

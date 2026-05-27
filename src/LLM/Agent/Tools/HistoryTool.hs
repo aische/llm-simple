@@ -5,8 +5,8 @@ import Data.Aeson (FromJSON)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
-import LLM.Core.Types (ToolCall (tcName), ToolResult (trContent, trName), Turn (..), TypedTool (..))
 import LLM.Agent.Types (ToolContext (..))
+import LLM.Core.Types (ToolCall (tcName), ToolResult (trContent, trName), Turn (..), TypedTool (..))
 
 newtype HistoryToolArgs = HistoryToolArgs
   { _historyChunk :: Int
@@ -18,17 +18,17 @@ instance AC.HasCodec HistoryToolArgs where
   codec :: AC.JSONCodec HistoryToolArgs
   codec =
     AC.object "get conversation history" $
-      HistoryToolArgs <$> AC.requiredField "chunk" "0 = most recent hidden chunk, 1 = the one before that, etc." AC..= _historyChunk
+      HistoryToolArgs <$> AC.requiredField "chunk" "0 = most recent hidden chunk, 1 = the one before that, etc." AC..= (\x -> x._historyChunk)
 
 getHistoryExecTyped :: ToolContext -> HistoryToolArgs -> IO Text
 getHistoryExecTyped ctx args = do
-  let chunkIdx = _historyChunk args
-      hidden = take (tcWindowOffset ctx) (tcConversation ctx)
+  let chunkIdx = args._historyChunk
+      hidden = take ctx.tcWindowOffset ctx.tcConversation
   if null hidden
     then pure "(no earlier history)"
     else do
       let -- Count user messages in the visible window to determine page size
-          nUserMessages = countUserTurns (drop (tcWindowOffset ctx) (tcConversation ctx))
+          nUserMessages = countUserTurns (drop ctx.tcWindowOffset ctx.tcConversation)
           -- Chunk the hidden prefix into pages of N user messages each
           chunks = chunkBackward nUserMessages hidden
       if chunkIdx < 0 || chunkIdx >= length chunks
@@ -98,10 +98,10 @@ formatTurn (AssistantTurn t mReasoning calls) =
     <> maybe "" (\r -> " [reasoning: " <> T.take 200 r <> "]") mReasoning
     <> if null calls
       then ""
-      else " [called: " <> T.intercalate ", " (map tcName calls) <> "]"
+      else " [called: " <> T.intercalate ", " (map (\x -> x.tcName) calls) <> "]"
 formatTurn (ToolTurn results) =
   "[Tool results] "
-    <> T.intercalate ", " [trName r <> ": " <> T.take 200 (trContent r) | r <- results]
+    <> T.intercalate ", " [r.trName <> ": " <> T.take 200 r.trContent | r <- results]
 
 -- parseChunk :: Value -> Parser Int
 -- parseChunk = withObject "args" (.: "chunk")

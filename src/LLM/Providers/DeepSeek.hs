@@ -121,23 +121,23 @@ deepSeekBuildBody stream r = object $ deepSeekBuildBodyPairs stream r
 
 deepSeekBuildBodyPairs :: Bool -> ChatRequest -> [Pair]
 deepSeekBuildBodyPairs stream r =
-  [ "model" .= reqModel r,
-    "max_tokens" .= reqMaxTokens r,
+  [ "model" .= r.reqModel,
+    "max_tokens" .= r.reqMaxTokens,
     "messages" .= buildMessages deepSeekMessageEncodeOptions r
   ]
     ++ thinkingPairs r
-    ++ ["temperature" .= t | Just t <- [reqTemperature r]]
-    ++ ["tools" .= map encodeToolDef (reqTools r) | not (null (reqTools r))]
+    ++ ["temperature" .= t | Just t <- [r.reqTemperature]]
+    ++ ["tools" .= map encodeToolDef r.reqTools | not (null r.reqTools)]
     ++ ["stream" .= True | stream]
     ++ ["stream_options" .= object ["include_usage" .= True] | stream]
 
 thinkingPairs :: ChatRequest -> [Pair]
 thinkingPairs r =
-  case reqThinking r of
+  case r.reqThinking of
     Just tm
-      | not (tmEnabled tm) ->
+      | not tm.tmEnabled ->
           ["thinking" .= object ["type" .= ("disabled" :: Text)]]
     Just tm ->
-      ("thinking" .= object ["type" .= ("enabled" :: Text)]) : ["reasoning_effort" .= e | Just e <- [tmEffort tm]]
+      ("thinking" .= object ["type" .= ("enabled" :: Text)]) : ["reasoning_effort" .= e | Just e <- [tm.tmEffort]]
     Nothing ->
       ["thinking" .= object ["type" .= ("enabled" :: Text)]]

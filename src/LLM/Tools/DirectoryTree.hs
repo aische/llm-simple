@@ -24,7 +24,7 @@ instance AC.HasCodec DirectoryTreeToolArgs where
   codec :: AC.JSONCodec DirectoryTreeToolArgs
   codec =
     AC.object "show a directory tree and its subdirectories" $
-      DirectoryTreeToolArgs <$> AC.requiredField "path" "Relative directory path to show the tree of" AC..= _dtPath
+      DirectoryTreeToolArgs <$> AC.requiredField "path" "Relative directory path to show the tree of" AC..= (\x -> x._dtPath)
 
 directoryTreeToolTyped :: FsConfig -> TypedTool ctx DirectoryTreeToolArgs
 directoryTreeToolTyped fsConfig =
@@ -40,7 +40,7 @@ directoryTreeToolTyped fsConfig =
 
 directoryTreeExecTyped :: FsConfig -> DirectoryTreeToolArgs -> IO Text
 directoryTreeExecTyped cfg args = do
-  let relPath = T.unpack $ _dtPath args
+  let relPath = T.unpack args._dtPath
   resolved <- sandboxPath cfg relPath
   let displayRoot = if null relPath then "." else relPath
   drawTree resolved displayRoot

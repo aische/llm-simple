@@ -44,20 +44,20 @@ import LLM.Generate.Types
 
 -- | Execute a single tool call by looking it up in the tool list
 executeTool :: Hooks -> ToolContext -> [Tool] -> ToolCall -> IO ToolResult
-executeTool hooks ctx tools tc = case lookup (tcName tc) toolMap of
-  Nothing -> pure $ toolResult tc ("Unknown tool: " <> tcName tc)
+executeTool hooks ctx tools tc = case lookup tc.tcName toolMap of
+  Nothing -> pure $ toolResult tc ("Unknown tool: " <> tc.tcName)
   Just exec -> do
-    onToolCall hooks (tcName tc) (AE.toJSON (tcArguments tc))
-    result <- try (exec ctx (tcArguments tc))
+    hooks.onToolCall tc.tcName (AE.toJSON tc.tcArguments)
+    result <- try (exec ctx tc.tcArguments)
     case result of
       Right text -> do
-        onToolResult hooks (tcName tc) text
+        hooks.onToolResult tc.tcName text
         pure $ toolResult tc text
       Left (e :: SomeException) -> do
-        onToolError hooks (tcName tc) (T.pack (show e))
+        hooks.onToolError tc.tcName (T.pack (show e))
         pure $ toolResult tc ("Tool error: " <> T.pack (show e))
   where
-    toolMap = [(toolName (toolDef t), toolExecute t) | t <- tools]
+    toolMap = [(t.toolDef.toolName, t.toolExecute) | t <- tools]
 
 -- | Execute all tool calls from a response
 executeTools :: Hooks -> ToolContext -> [Tool] -> [ToolCall] -> IO [ToolResult]
@@ -88,7 +88,7 @@ createToolContext agent messages roundUsage rt =
   ToolContext
     { tcConversation = messages,
       tcUsage = roundUsage,
-      tcWindowOffset = windowOffset (agContextWindow agent) messages,
+      tcWindowOffset = windowOffset agent.agContextWindow messages,
       tcRuntimeArgs = rt
     }
 
@@ -113,7 +113,7 @@ toTool t@(TypedTool name descr readonly exec) =
 
 filterReadonlyTools :: Bool -> [Tool] -> [Tool]
 filterReadonlyTools False tools = tools
-filterReadonlyTools True tools = filter (toolReadonly . toolDef) tools
+filterReadonlyTools True tools = filter (\x -> x.toolDef.toolReadonly) tools
 
 -- | Compute the index where the visible window starts.
 -- The window includes the last @n@ user messages and all turns that follow
@@ -139,21 +139,21 @@ findNthUserFromEnd n conv = go (length conv - 1) n
 
 createGenRequest :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
 createGenRequest agent rt messages =
-  let offset = windowOffset (agContextWindow agent) messages
+  let offset = windowOffset agent.agContextWindow messages
       tools = getResolvedTools agent rt
    in GenRequest
-        { grSystemPrompt = agSystemPrompt agent,
-          grTools = map toolDef tools,
+        { grSystemPrompt = agent.agSystemPrompt,
+          grTools = map (\x -> x.toolDef) tools,
           grMessages = drop offset messages,
-          grAbortSignal = rtAbortSignal rt,
-          grLLMHooks = rtLLMHooks rt,
-          grHooks = rtHooks rt
+          grAbortSignal = rt.rtAbortSignal,
+          grLLMHooks = rt.rtLLMHooks,
+          grHooks = rt.rtHooks
         }
 
 getResolvedTools :: Agent -> RuntimeArgs -> [Tool]
-getResolvedTools agent rt = filterReadonlyTools (rtReadonly rt) (agTools agent) ++ getHistoryTool agent
+getResolvedTools agent rt = filterReadonlyTools rt.rtReadonly agent.agTools ++ getHistoryTool agent
 
 getHistoryTool :: Agent -> [Tool]
-getHistoryTool agent = case agContextWindow agent of
+getHistoryTool agent = case agent.agContextWindow of
   Just n | n > 0 -> [toTool historyToolTyped]
   _ -> []

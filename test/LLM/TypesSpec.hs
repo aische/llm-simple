@@ -29,8 +29,8 @@ spec :: Spec
 spec = describe "Types" $ do
   describe "Usage" $ do
     it "emptyUsage has zero tokens" $ do
-      usageInputTokens emptyUsage `shouldBe` 0
-      usageOutputTokens emptyUsage `shouldBe` 0
+      emptyUsage.usageInputTokens `shouldBe` 0
+      emptyUsage.usageOutputTokens `shouldBe` 0
 
     it "addUsage sums token counts" $ do
       let u1 = Usage 10 20 0

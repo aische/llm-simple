@@ -20,8 +20,8 @@ instance AC.HasCodec MoveFileToolArgs where
   codec =
     AC.object "move source to destination" $
       MoveFileToolArgs
-        <$> AC.requiredField "source" "Relative path of the file to move" AC..= _mfSrc
-        <*> AC.requiredField "destination" "Relative destination path (including filename)" AC..= _mfDst
+        <$> AC.requiredField "source" "Relative path of the file to move" AC..= (\x -> x._mfSrc)
+        <*> AC.requiredField "destination" "Relative destination path (including filename)" AC..= (\x -> x._mfDst)
 
 moveFileToolTyped :: FsConfig -> TypedTool ctx MoveFileToolArgs
 moveFileToolTyped cfg =
@@ -36,8 +36,8 @@ moveFileToolTyped cfg =
 
 moveFileExecTyped :: FsConfig -> MoveFileToolArgs -> IO Text
 moveFileExecTyped cfg args = do
-  let src = _mfSrc args
-      dst = _mfDst args
+  let src = args._mfSrc
+      dst = args._mfDst
   srcResolved <- sandboxPath cfg (T.unpack src)
   dstResolved <- sandboxWritePath cfg (T.unpack dst)
   renameFile srcResolved dstResolved

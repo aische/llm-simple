@@ -17,7 +17,7 @@ import LLM.Agent.Types
 -- Observer exceptions are swallowed so observers cannot abort the loop.
 emitEvent :: RuntimeArgs -> GenerateEventDetail -> IO ()
 emitEvent rt detail =
-  void (try (rtOnEvent rt (GenerateEvent (rtGenerationId rt) detail)) :: IO (Either SomeException ()))
+  void (try (rt.rtOnEvent (GenerateEvent rt.rtGenerationId detail)) :: IO (Either SomeException ()))
 
 noEventObserver :: EventObserver
 noEventObserver _ = pure ()

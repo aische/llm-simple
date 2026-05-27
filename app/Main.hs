@@ -121,7 +121,7 @@ instance AC.HasCodec ExampleObject where
   codec =
     AC.object "ExampleObject" $
       ExampleObject
-        <$> AC.requiredField "title" "title of the example" AC..= _title
-        <*> AC.requiredField "content" "content of the example" AC..= _content
-        <*> AC.requiredField "rating" "quality of the example (1..10)" AC..= _rating
-        <*> AC.requiredField "flag" "is the example good?" AC..= _flag
+        <$> AC.requiredField "title" "title of the example" AC..= (\x -> x._title)
+        <*> AC.requiredField "content" "content of the example" AC..= (\x -> x._content)
+        <*> AC.requiredField "rating" "quality of the example (1..10)" AC..= (\x -> x._rating)
+        <*> AC.requiredField "flag" "is the example good?" AC..= (\x -> x._flag)

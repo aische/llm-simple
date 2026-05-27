@@ -29,17 +29,17 @@ maybeThrottle (Just ms) io = threadDelay (ms * 1000) >> io
 mkRequest :: GenRequest -> ModelConfig -> ChatRequest
 mkRequest gr mc =
   ChatRequest
-    { reqModel = mcModel mc,
-      reqConversation = grMessages gr,
-      reqSystem = grSystemPrompt gr,
-      reqMaxTokens = mcMaxTokens mc,
-      reqTemperature = mcTemperature mc,
-      reqTools = grTools gr,
-      reqThinking = mcThinking mc
+    { reqModel = mc.mcModel,
+      reqConversation = gr.grMessages,
+      reqSystem = gr.grSystemPrompt,
+      reqMaxTokens = mc.mcMaxTokens,
+      reqTemperature = mc.mcTemperature,
+      reqTools = gr.grTools,
+      reqThinking = mc.mcThinking
     }
 
 usageWithModelCost :: ModelConfig -> Usage -> Usage
-usageWithModelCost mc u = u {usageTotalCost = estimateCost (mcPricing mc) u}
+usageWithModelCost mc u = u {usageTotalCost = estimateCost mc.mcPricing u}
 
 callWithRetryTimeout ::
   GenRequest ->
@@ -47,9 +47,9 @@ callWithRetryTimeout ::
   IO (Either LLMError a) ->
   IO (Either LLMError a)
 callWithRetryTimeout gr mc invoke =
-  maybeThrottle (mcThrottleDelay mc) $
-    withTimeout (mcRequestTimeout mc) $
-      withRetry (modelRetryPolicy mc) (onLog (grHooks gr) Warn) invoke
+    maybeThrottle mc.mcThrottleDelay $
+    withTimeout mc.mcRequestTimeout $
+      withRetry (modelRetryPolicy mc) (gr.grHooks.onLog Warn) invoke
 
 withModelFallbacks ::
   GenRequest ->
@@ -66,7 +66,7 @@ withModelFallbacks gr models invokePerModel =
         Left $
           maybe GErrAllModelsFailed GErrLLM mLast
     loop (mc : rest) _ = do
-      onLog (grHooks gr) Info (formatTryingModel mc)
+      gr.grHooks.onLog Info (formatTryingModel mc)
       r <- invokePerModel mc
       case r of
         Left Aborted -> pure $ Left GErrAborted
@@ -74,20 +74,20 @@ withModelFallbacks gr models invokePerModel =
           case rest of
             [] -> pure $ Left (GErrLLM err)
             _ -> do
-              onLog (grHooks gr) Warn (formatModelFallback mc err)
+              gr.grHooks.onLog Warn (formatModelFallback mc err)
               loop rest (Just err)
         Right a -> pure $ Right a
 
 formatTryingModel :: ModelConfig -> Text
 formatTryingModel mc =
   "Trying model: "
-    <> mcModel mc
+    <> mc.mcModel
     <> " via "
-    <> gwName (mcGateway mc)
+    <> mc.mcGateway.gwName
 
 formatModelFallback :: ModelConfig -> LLMError -> Text
 formatModelFallback mc err =
   "Falling back from "
-    <> mcModel mc
+    <> mc.mcModel
     <> ": "
     <> T.pack (show err)

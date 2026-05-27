@@ -18,7 +18,7 @@ newtype RemoveFileToolArgs = RemoveFileToolArgs
 instance AC.HasCodec RemoveFileToolArgs where
   codec =
     AC.object "remove a file" $
-      RemoveFileToolArgs <$> AC.requiredField "path" "Relative path of the file to remove" AC..= _rftPath
+      RemoveFileToolArgs <$> AC.requiredField "path" "Relative path of the file to remove" AC..= (\x -> x._rftPath)
 
 removeFileToolTyped :: FsConfig -> TypedTool ctx RemoveFileToolArgs
 removeFileToolTyped cfg =
@@ -33,7 +33,7 @@ removeFileToolTyped cfg =
 
 removeFileExecTyped :: FsConfig -> RemoveFileToolArgs -> IO Text
 removeFileExecTyped cfg args = do
-  let p = _rftPath args
+  let p = args._rftPath
   resolved <- sandboxPath cfg (T.unpack p)
   removeFile resolved
   pure $ "Successfully removed " <> p

@@ -18,7 +18,7 @@ newtype ReadfileToolArgs = ReadfileToolArgs
 instance AC.HasCodec ReadfileToolArgs where
   codec =
     AC.object "read a file" $
-      ReadfileToolArgs <$> AC.requiredField "path" "Relative file path to read" AC..= _rfPath
+      ReadfileToolArgs <$> AC.requiredField "path" "Relative file path to read" AC..= (\x -> x._rfPath)
 
 readfileToolTyped :: FsConfig -> TypedTool ctx ReadfileToolArgs
 readfileToolTyped cfg =
@@ -33,6 +33,6 @@ readfileToolTyped cfg =
 
 readfileExecTyped :: FsConfig -> ReadfileToolArgs -> IO Text
 readfileExecTyped cfg args = do
-  let p = _rfPath args
+  let p = args._rfPath
   resolved <- sandboxPath cfg (T.unpack p)
   TIO.readFile resolved

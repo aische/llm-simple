@@ -75,8 +75,8 @@ spec = describe "DeepSeek thinking mode" $ do
               ]
       case parseOpenAIResponse response of
         Right resp -> do
-          respReasoning resp `shouldBe` Just "Let me think."
-          respText resp `shouldBe` "The answer is 42."
+          resp.respReasoning `shouldBe` Just "Let me think."
+          resp.respText `shouldBe` "The answer is 42."
         Left err -> fail $ show err
 
 sampleRequest :: ChatRequest

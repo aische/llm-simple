@@ -30,7 +30,7 @@ data ModelWithFallbacks = ModelWithFallbacks
   }
 
 mfwToModelConfigs :: ModelWithFallbacks -> [ModelConfig]
-mfwToModelConfigs mwf = mwfModel mwf : mwfFallbacks mwf
+mfwToModelConfigs mwf = mwf.mwfModel : mwf.mwfFallbacks
 
 modelRetryPolicy :: ModelConfig -> RetryPolicyM IO
-modelRetryPolicy mc = limitRetries (mcRetryCount mc) <> fullJitterBackoff (mcJitterBackoff mc * 1000)
+modelRetryPolicy mc = limitRetries mc.mcRetryCount <> fullJitterBackoff (mc.mcJitterBackoff * 1000)

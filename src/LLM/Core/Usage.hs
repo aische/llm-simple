@@ -32,9 +32,9 @@ emptyUsage = Usage {usageInputTokens = 0, usageOutputTokens = 0, usageTotalCost 
 addUsage :: Usage -> Usage -> Usage
 addUsage a b =
   Usage
-    { usageInputTokens = usageInputTokens a + usageInputTokens b,
-      usageOutputTokens = usageOutputTokens a + usageOutputTokens b,
-      usageTotalCost = usageTotalCost a + usageTotalCost b
+    { usageInputTokens = a.usageInputTokens + b.usageInputTokens,
+      usageOutputTokens = a.usageOutputTokens + b.usageOutputTokens,
+      usageTotalCost = a.usageTotalCost + b.usageTotalCost
     }
 
 -- | Pricing in dollars per million tokens
@@ -46,5 +46,5 @@ data PricingInfo = PricingInfo
 
 estimateCost :: PricingInfo -> Usage -> Double
 estimateCost p u =
-  fromIntegral (usageInputTokens u) * pricePerMillionInput p / 1_000_000
-    + fromIntegral (usageOutputTokens u) * pricePerMillionOutput p / 1_000_000
+  fromIntegral u.usageInputTokens * p.pricePerMillionInput / 1_000_000
+    + fromIntegral u.usageOutputTokens * p.pricePerMillionOutput / 1_000_000

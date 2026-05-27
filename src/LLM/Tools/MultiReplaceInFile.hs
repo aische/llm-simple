@@ -21,8 +21,8 @@ instance AC.HasCodec Replacement where
   codec =
     AC.object "Replacement" $
       Replacement
-        <$> AC.requiredField "old" "The text content to be replaced" AC..= _repOld
-        <*> AC.requiredField "new" "The replacement text content" AC..= _repNew
+        <$> AC.requiredField "old" "The text content to be replaced" AC..= (\x -> x._repOld)
+        <*> AC.requiredField "new" "The replacement text content" AC..= (\x -> x._repNew)
 
 data MultiReplaceInFileToolArgs = MultiReplaceInFileToolArgs
   { _mrifPath :: Text,
@@ -36,8 +36,8 @@ instance AC.HasCodec MultiReplaceInFileToolArgs where
   codec =
     AC.object "apply multiple replacements to a file" $
       MultiReplaceInFileToolArgs
-        <$> AC.requiredField "path" "Relative file path to edit" AC..= _mrifPath
-        <*> AC.requiredField "replacements" "List of replacements to apply in order" AC..= _mrifReplacements
+        <$> AC.requiredField "path" "Relative file path to edit" AC..= (\x -> x._mrifPath)
+        <*> AC.requiredField "replacements" "List of replacements to apply in order" AC..= (\x -> x._mrifReplacements)
 
 multiReplaceInFileToolTyped :: FsConfig -> TypedTool ctx MultiReplaceInFileToolArgs
 multiReplaceInFileToolTyped cfg =

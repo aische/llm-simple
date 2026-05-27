@@ -111,10 +111,10 @@ ollamaProviderWith baseUrl baseOpts =
 ollamaBuildBody :: Bool -> ChatRequest -> Value
 ollamaBuildBody stream r =
   object $
-    [ "model" .= reqModel r,
+    [ "model" .= r.reqModel,
       "messages" .= buildMessages defaultMessageEncodeOptions r
     ]
-      ++ ["num_predict" .= reqMaxTokens r]
-      ++ ["temperature" .= t | Just t <- [reqTemperature r]]
-      ++ ["tools" .= map encodeToolDef (reqTools r) | not (null (reqTools r))]
+      ++ ["num_predict" .= r.reqMaxTokens]
+      ++ ["temperature" .= t | Just t <- [r.reqTemperature]]
+      ++ ["tools" .= map encodeToolDef r.reqTools | not (null r.reqTools)]
       ++ ["stream" .= True | stream]

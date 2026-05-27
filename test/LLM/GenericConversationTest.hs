@@ -27,15 +27,15 @@ data GenericConversationTextOps = GenericConversationTextOps
   }
 
 createSpec :: GenericConversationTextOps -> Spec
-createSpec opts = describe (specTitle opts) $ do
+createSpec opts = describe opts.specTitle $ do
   it "generateText" $ do
-    (m, p) <- loadRecordedConversation (filePathGenerated opts)
+    (m, p) <- loadRecordedConversation opts.filePathGenerated
     uuid1 <- generate
-    let provider = toGateway $ mockProvider m (specProvider opts)
+    let provider = toGateway $ mockProvider m opts.specProvider
         modelConf =
           ModelConfig
             { mcGateway = provider,
-              mcModel = T.pack $ modelName opts,
+              mcModel = T.pack opts.modelName,
               mcPricing = PricingInfo {pricePerMillionInput = 0.0, pricePerMillionOutput = 0.0},
               mcMaxTokens = 1024,
               mcTemperature = Nothing,
@@ -70,13 +70,13 @@ createSpec opts = describe (specTitle opts) $ do
     length turns `shouldBe` 8
 
   it "streamText" $ do
-    (m, p) <- loadRecordedConversation (filePathStreamed opts)
+    (m, p) <- loadRecordedConversation opts.filePathStreamed
     uuid1 <- generate
-    let provider = toGateway $ mockProvider m (specProvider opts)
+    let provider = toGateway $ mockProvider m opts.specProvider
         modelConf =
           ModelConfig
             { mcGateway = provider,
-              mcModel = T.pack $ modelName opts,
+              mcModel = T.pack opts.modelName,
               mcPricing = PricingInfo {pricePerMillionInput = 0.0, pricePerMillionOutput = 0.0},
               mcMaxTokens = 1024,
               mcTemperature = Nothing,

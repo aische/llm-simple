@@ -83,10 +83,10 @@ withJsonDump :: FilePath -> Hooks -> Hooks
 withJsonDump dir h =
   h
     { onRequest = \provider body -> do
-        onRequest h provider body
+        h.onRequest provider body
         dumpJson dir provider "request" body,
       onResponse = \provider body -> do
-        onResponse h provider body
+        h.onResponse provider body
         dumpJson dir provider "response" body
     }
 
@@ -103,13 +103,13 @@ dumpJson dir provider label val = do
 safeHooks :: Hooks -> Hooks
 safeHooks h =
   Hooks
-    { onLog = \level msg -> void (try (onLog h level msg) :: IO (Either SomeException ())),
-      onRequest = \p v -> void (try (onRequest h p v) :: IO (Either SomeException ())),
-      onResponse = \p v -> void (try (onResponse h p v) :: IO (Either SomeException ())),
-      onResponseError = \p v -> void (try (onResponseError h p v) :: IO (Either SomeException ())),
-      onToolCall = \p v -> void (try (onToolCall h p v) :: IO (Either SomeException ())),
-      onToolResult = \p v -> void (try (onToolResult h p v) :: IO (Either SomeException ())),
-      onToolError = \p v -> void (try (onToolError h p v) :: IO (Either SomeException ()))
+    { onLog = \level msg -> void (try (h.onLog level msg) :: IO (Either SomeException ())),
+      onRequest = \p v -> void (try (h.onRequest p v) :: IO (Either SomeException ())),
+      onResponse = \p v -> void (try (h.onResponse p v) :: IO (Either SomeException ())),
+      onResponseError = \p v -> void (try (h.onResponseError p v) :: IO (Either SomeException ())),
+      onToolCall = \p v -> void (try (h.onToolCall p v) :: IO (Either SomeException ())),
+      onToolResult = \p v -> void (try (h.onToolResult p v) :: IO (Either SomeException ())),
+      onToolError = \p v -> void (try (h.onToolError p v) :: IO (Either SomeException ()))
     }
 
 debugHooks :: FilePath -> Hooks

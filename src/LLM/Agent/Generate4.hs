@@ -705,7 +705,7 @@ runToolsWithAbortChecks machine partialAcc usage tools ctx toolCalls =
                   case cmdResult of
                     Left _ -> pure (Left GErrAborted)
                     Right m' -> pure (Right (ToolsInterrupted m'))
-                ToolReplyAndCommand txt cmd -> do
+                ToolReplyAndCommand _txt cmd -> do
                   cmdResult <- applyAgentCommand' machine (Just tc) cmd
                   case cmdResult of
                     Left _ -> pure (Left GErrAborted)
@@ -1018,7 +1018,7 @@ runPipe wfs ctx = runWorkflow (Seq wfs) ctx
 
 runParallel :: [Workflow] -> MergePolicy -> WorkflowContext -> IO WorkflowResult
 runParallel wfs policy ctx = do
-  results <- mapM (\wf -> runWorkflow wf ctx) wfs
+  results <- mapM (`runWorkflow` ctx) wfs
   mergeWorkflowResults "" policy results ctx
 
 compileWorkflowToSteps :: Workflow -> ChatStep
@@ -1030,15 +1030,15 @@ compileWorkflowToSteps wf = case wf of
           WInputFromPrior _ -> []
      in buildAgentStep aniAgent aniRt turns [] mempty 0
   Seq wfs ->
-    RunWorkflow (Seq wfs) (\wr -> Done (wr.wrOutput))
+    RunWorkflow (Seq wfs) (\wr -> Done wr.wrOutput)
   Par wfs pol ->
-    RunWorkflow (Par wfs pol) (\wr -> Done (wr.wrOutput))
+    RunWorkflow (Par wfs pol) (\wr -> Done wr.wrOutput)
   Dialog wd ->
-    RunDialog wd.wdSpec (\summary -> Done (Right (dialogSummaryToTextResult summary)))
+    RunDialog wd.wdSpec (Done . Right . dialogSummaryToTextResult)
   Handoff wh ->
-    RunWorkflow (Handoff wh) (\wr -> Done (wr.wrOutput))
+    RunWorkflow (Handoff wh) (\wr -> Done wr.wrOutput)
   Subagent ws ->
-    RunWorkflow (Subagent ws) (\wr -> Done (wr.wrOutput))
+    RunWorkflow (Subagent ws) (\wr -> Done wr.wrOutput)
 
 compileWorkflowToMachine :: Env -> Workflow -> Machine
 compileWorkflowToMachine env wf =
@@ -1333,7 +1333,7 @@ handoffTurns machine spec =
       parentTurns = currentTurnsFromMachine machine
    in case spec.hsContextMode of
         HandoffFullTranscript -> parentTurns ++ base.ssInitialTurns
-        HandoffSummary summary -> [UserTurn summary] ++ base.ssInitialTurns
+        HandoffSummary summary -> UserTurn summary : base.ssInitialTurns
         HandoffWindow n ->
           let dropped = drop (max 0 (length parentTurns - n)) parentTurns
            in dropped ++ base.ssInitialTurns

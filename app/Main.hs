@@ -12,7 +12,7 @@ import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import Heptapod (generate)
 import LLM (ThinkingMode (..), deepSeekGateway, mkFsConfig, ollamaGateway, openAIGateway, toTool)
-import LLM.Agent.Generate (generateText, streamText)
+import LLM.Agent.Generate4 (generateText, streamText)
 import LLM.Agent.GenerateObject (generateObject)
 import LLM.Agent.Types
   ( Agent (..),

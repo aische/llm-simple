@@ -100,7 +100,12 @@ createSpec opts = describe opts.specTitle $ do
           RuntimeArgs
             { rtGenerationId = uuid1,
               rtAbortSignal = Nothing,
-              rtLLMHooks = LLMHooks {onLLMRequest = \_ _ -> pure (), onLLMResponse = \_ _ -> pure (), onLLMResponseError = \_ _ -> pure ()},
+              rtLLMHooks =
+                LLMHooks
+                  { onLLMRequest = \_ _ -> pure (),
+                    onLLMResponse = \_ _ -> pure (),
+                    onLLMResponseError = \_ _ -> pure ()
+                  },
               rtHooks = noHooks,
               rtOnEvent = noEventObserver,
               rtReadonly = False

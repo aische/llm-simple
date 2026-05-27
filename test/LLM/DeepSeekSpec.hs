@@ -12,8 +12,8 @@ import LLM.Core.Types
     ThinkingMode (..),
     ToolCall (..),
     Turn (..),
-    defaultMessageEncodeOptions,
     deepSeekMessageEncodeOptions,
+    defaultMessageEncodeOptions,
   )
 import LLM.Providers.DeepSeek (deepSeekBuildBodyPairs)
 import LLM.Providers.OpenAI (encodeTurn, parseOpenAIResponse)

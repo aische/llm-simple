@@ -47,7 +47,7 @@ callWithRetryTimeout ::
   IO (Either LLMError a) ->
   IO (Either LLMError a)
 callWithRetryTimeout gr mc invoke =
-    maybeThrottle mc.mcThrottleDelay $
+  maybeThrottle mc.mcThrottleDelay $
     withTimeout mc.mcRequestTimeout $
       withRetry (modelRetryPolicy mc) (gr.grHooks.onLog Warn) invoke
 

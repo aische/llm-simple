@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+
 module LLM.GeminiSpec (spec) where
 
 import Data.Aeson (eitherDecodeFileStrict')

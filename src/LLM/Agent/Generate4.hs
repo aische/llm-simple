@@ -7,6 +7,7 @@ module LLM.Agent.Generate4
     EnvId,
     FrameId,
     WorkflowNodeId,
+
     -- * Environment
     Env (..),
     EnvStore (..),
@@ -14,6 +15,7 @@ module LLM.Agent.Generate4
     mkEnv,
     forkEnv,
     lookupEnv,
+
     -- * Frame and machine
     Frame (..),
     ResumePoint (..),
@@ -26,13 +28,16 @@ module LLM.Agent.Generate4
     replaceTopFrame,
     topFrame,
     machineDepth,
+
     -- * ChatStep
     ChatStep (..),
     buildChatStep,
     buildAgentStep,
+
     -- * Interpreter-only steps
     InterpreterStep (..),
     runInterpreterStep,
+
     -- * Step interpreter
     StepOutcome (..),
     runMachine,
@@ -45,6 +50,7 @@ module LLM.Agent.Generate4
     callModel,
     execTools,
     runToolsWithAbortChecks,
+
     -- * Tool results and commands
     ToolOutcome (..),
     AgentCommand (..),
@@ -53,6 +59,7 @@ module LLM.Agent.Generate4
     applyAgentCommand,
     summarizeForParent,
     toolExecuteLegacy,
+
     -- * Subagent, handoff, dialog
     SubagentSpec (..),
     HandoffSpec (..),
@@ -65,6 +72,7 @@ module LLM.Agent.Generate4
     runSubagent,
     runHandoff,
     runDialog,
+
     -- * Static workflow
     Workflow (..),
     AgentNodeInput (..),
@@ -80,8 +88,10 @@ module LLM.Agent.Generate4
     runParallel,
     compileWorkflowToSteps,
     compileWorkflowToMachine,
+
     -- * Events (orchestration extensions)
     OrchestrationEventDetail (..),
+
     -- * Public entry points
     generateText,
     streamText,
@@ -90,9 +100,9 @@ module LLM.Agent.Generate4
   )
 where
 
+import Control.Applicative ((<|>))
 import Control.Concurrent (threadDelay)
 import Control.Exception (SomeException, try)
-import Control.Applicative ((<|>))
 import Control.Monad (foldM)
 import Data.Aeson (Value)
 import Data.Aeson qualified as AE
@@ -516,7 +526,7 @@ runStep machine step = case step of
     if machine.mDepth <= 1
       then StepFinished <$> finishOrFail machine r
       else handleChildDone machine r
-  CallModel{csCurrentTurns, csAccTurns, csUsage, csLoopCount, csEnvId, csOnModelResult} -> do
+  CallModel {csCurrentTurns, csAccTurns, csUsage, csLoopCount, csEnvId, csOnModelResult} -> do
     checkAbort machine csAccTurns csUsage >>= \case
       Left errResult -> StepFinished <$> failGeneration machine errResult
       Right () ->
@@ -533,7 +543,7 @@ runStep machine step = case step of
               Right resp -> do
                 let m' = setTopStep machine (csOnModelResult (Right resp))
                 pure (StepContinue m')
-  ExecTools{csLoopCount, csCalls, csRespText, csReasoning, csEnvId, csCurrentTurns, csAccTurns, csUsage, csOnToolsResult} -> do
+  ExecTools {csLoopCount, csCalls, csRespText, csReasoning, csEnvId, csCurrentTurns, csAccTurns, csUsage, csOnToolsResult} -> do
     let assistantTurn = AssistantTurn csRespText csReasoning csCalls
         accWithAssistant = csAccTurns ++ [assistantTurn]
     checkAbort machine accWithAssistant csUsage >>= \case
@@ -765,7 +775,7 @@ findTool tools tc = go tools
     go [] = Nothing
     go (t : rest) =
       case t.toolDef of
-        ToolDef{toolName} | toolName == tc.tcName -> Just t
+        ToolDef {toolName} | toolName == tc.tcName -> Just t
         _ -> go rest
 
 applyAgentCommand ::
@@ -871,7 +881,8 @@ runSubagent machine spec =
           childStep = buildChatStep genId childId spec.ssInitialTurns [] mempty 0
           childMachine =
             (initialMachine childEnv childStep machine.mConfig)
-              { mEnvStore = store' }
+              { mEnvStore = store'
+              }
       result <- runMachine childMachine
       let pop = popResultFromGenerate spec result
       emitOrchestrationEvent parentEnv.envRt (SubagentFinished (topFrame machine).frId pop)
@@ -994,7 +1005,7 @@ data MergePolicy
   = MergeConcat
   | MergeFirstSuccess
   | MergeWithAgent Agent
-  | MergeCustom (forall m. Monad m => [WorkflowResult] -> m WorkflowResult)
+  | MergeCustom (forall m. (Monad m) => [WorkflowResult] -> m WorkflowResult)
 
 data WorkflowResult = WorkflowResult
   { wrNodeId :: WorkflowNodeId,
@@ -1023,7 +1034,7 @@ runParallel wfs policy ctx = do
 
 compileWorkflowToSteps :: Workflow -> ChatStep
 compileWorkflowToSteps wf = case wf of
-  RunAgent AgentNodeInput{aniAgent, aniRt, aniInput} ->
+  RunAgent AgentNodeInput {aniAgent, aniRt, aniInput} ->
     let turns = case aniInput of
           WInputTurns ts -> ts
           WInputText t -> [UserTurn t]
@@ -1180,15 +1191,15 @@ handleChildDone machine result = case result of
 
 resumeParentStep :: Machine -> PopResult -> ResumePoint -> ChatStep
 resumeParentStep machine pop = \case
-  ResumeAfterSubagent{rpToolCallId} ->
+  ResumeAfterSubagent {rpToolCallId} ->
     let tc = ToolCall rpToolCallId "" AE.Null
         tr = toolResult tc (summarizeForParent pop)
      in case topFrame machine of
-          Frame{frStep = ExecTools{csOnToolsResult, csCalls}} ->
+          Frame {frStep = ExecTools {csOnToolsResult, csCalls}} ->
             let results = map (\c -> if c.tcId == rpToolCallId then tr else toolResult c (summarizeForParent pop)) csCalls
              in csOnToolsResult (Right results)
           _ -> Done (Right (popToTextResult pop))
-  ResumeAfterTools{rpLoopCount, rpCurrentTurns, rpAccTurns, rpUsage} ->
+  ResumeAfterTools {rpLoopCount, rpCurrentTurns, rpAccTurns, rpUsage} ->
     let tf = topFrame machine
      in buildChatStep
           machine.mRootGenerationId
@@ -1197,10 +1208,10 @@ resumeParentStep machine pop = \case
           rpAccTurns
           rpUsage
           (rpLoopCount + 1)
-  ResumeAfterDialog{rpMergeInto} ->
+  ResumeAfterDialog {rpMergeInto} ->
     let tr = toolResult rpMergeInto (summarizeForParent pop)
      in case topFrame machine of
-          Frame{frStep = ExecTools{csOnToolsResult}} ->
+          Frame {frStep = ExecTools {csOnToolsResult}} ->
             csOnToolsResult (Right [tr])
           _ -> Done (Right (popToTextResult pop))
 
@@ -1341,8 +1352,8 @@ handoffTurns machine spec =
 currentTurnsFromMachine :: Machine -> [Turn]
 currentTurnsFromMachine machine =
   case topFrame machine of
-    Frame{frStep = CallModel{csCurrentTurns}} -> csCurrentTurns
-    Frame{frStep = ExecTools{csCurrentTurns}} -> csCurrentTurns
+    Frame {frStep = CallModel {csCurrentTurns}} -> csCurrentTurns
+    Frame {frStep = ExecTools {csCurrentTurns}} -> csCurrentTurns
     _ -> []
 
 dialogLoop ::
@@ -1600,11 +1611,14 @@ dialogRootMachine :: WorkflowContext -> DialogSpec -> IO Machine
 dialogRootMachine ctx spec = do
   let rt = workflowRuntime ctx nilUuid
       env =
-        ( mkEnv spec.dsAgentA spec.dsModelsA rt
+        ( mkEnv
+            spec.dsAgentA
+            spec.dsModelsA
+            rt
             (\a m r t -> generateTextWithFallbacks (createGenRequest a r t) m)
         )
           { envId = 0
-      }
+          }
       step = buildChatStep nilUuid 0 spec.dsSeedTurns [] mempty 0
   pure (initialMachine env step defaultMachineConfig)
 
@@ -1613,11 +1627,14 @@ handoffRootMachine ctx spec = do
   let t = spec.hsTarget
       rt = fromMaybe (workflowRuntime ctx nilUuid) t.ssRtOverrides
       env =
-        ( mkEnv t.ssAgent t.ssModels rt
+        ( mkEnv
+            t.ssAgent
+            t.ssModels
+            rt
             (\a m r t' -> generateTextWithFallbacks (createGenRequest a r t') m)
         )
           { envId = 0
-      }
+          }
       step = buildChatStep rt.rtGenerationId 0 t.ssInitialTurns [] mempty 0
   pure (initialMachine env step defaultMachineConfig)
 
@@ -1625,11 +1642,14 @@ subagentRootMachine :: WorkflowContext -> SubagentSpec -> IO Machine
 subagentRootMachine ctx spec = do
   let rt = fromMaybe (workflowRuntime ctx nilUuid) spec.ssRtOverrides
       env =
-        ( mkEnv spec.ssAgent spec.ssModels rt
+        ( mkEnv
+            spec.ssAgent
+            spec.ssModels
+            rt
             (\a m r t -> generateTextWithFallbacks (createGenRequest a r t) m)
         )
           { envId = 0
-      }
+          }
       step = buildChatStep rt.rtGenerationId 0 spec.ssInitialTurns [] mempty 0
   pure (initialMachine env step defaultMachineConfig)
 

@@ -98,7 +98,7 @@ genericGenerateObject p hooks schema r = do
           pure $ Left $ HttpError status (T.pack $ show respBody)
 
 -- | Convert any LLMProvider instance into a LLMGateway.
--- LLMHooks are not baked in — they are passed at call time via 'ChatEnv'.
+-- LLMHooks are not baked in — they are passed at call time.
 toGateway :: LLMProvider -> LLMGateway
 toGateway p =
   LLMGateway

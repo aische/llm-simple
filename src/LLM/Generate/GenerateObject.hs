@@ -29,6 +29,8 @@ import LLM.Generate.Types
     GenerateResult,
   )
 
+-- | Generate an object.
+-- Tools are not supported, make sure to set grTools = [] in the GenRequest.
 genObject ::
   (GeneratableObject t) =>
   GenRequest ->
@@ -58,6 +60,8 @@ genObjectInternal codec gr models = do
                 u
         AE.Success a -> pure $ Right (a, u)
 
+-- | Generate an object, using the provided schema.
+-- Tools are not supported, make sure to set grTools = [] in the GenRequest.
 genObjectUntyped ::
   GenRequest ->
   ModelWithFallbacks ->

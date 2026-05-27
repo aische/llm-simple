@@ -10,7 +10,7 @@ where
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 
 -- | A cooperative cancellation signal.
--- Create one with 'newAbortSignal', pass it into 'ChatEnv', and call
+-- Create one with 'newAbortSignal', pass it into 'RuntimeArgs' or 'GenRequest', and call
 -- 'abort' from any thread to request cancellation at the next checkpoint.
 newtype AbortSignal = AbortSignal (IORef Bool)
 

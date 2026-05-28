@@ -23,9 +23,9 @@ uTool1 (a, m, r) =
   UTool
     { utToolDef =
         ToolDef
-          { toolName = "uTool1",
-            toolDescription = "uTool1",
-            toolReadonly = True,
+          { toolName = "subagent",
+            toolDescription = "subagent with file system access",
+            toolReadonly = False,
             toolParameters = uTool1Schema
           },
       utToolExecute = const (getUTool1 (a, m, r))

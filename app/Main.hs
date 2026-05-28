@@ -34,7 +34,19 @@ import System.Environment (getEnv)
 import UTool1 (uTool1)
 
 createAgent :: FsConfig -> Agent
-createAgent fsConfig =
+createAgent _fsConfig =
+  Agent
+    { agName = "default",
+      agSystemPrompt = Just "You are a helpful assistant.",
+      agTools =
+        [],
+      agUTools = ["subagent"],
+      agMaxToolRounds = 3,
+      agContextWindow = Nothing
+    }
+
+createAgent2 :: FsConfig -> Agent
+createAgent2 fsConfig =
   Agent
     { agName = "default",
       agSystemPrompt = Just "You are a helpful assistant.",
@@ -75,6 +87,7 @@ main = do
   uuid1 <- generate
   fsConfig <- mkFsConfig "./user-workspace/"
   let agent = createAgent fsConfig
+  let agent2 = createAgent2 fsConfig
   let runtime =
         RuntimeArgs
           { rtGenerationId = uuid1,
@@ -88,7 +101,7 @@ main = do
   let currentConversation = [UserTurn "Summarize all files in the workspace"]
       utoolRegistry =
         Map.fromList
-          [ ("uTool1", uTool1 (agent, models, runtime))
+          [ ("subagent", uTool1 (agent2, models, runtime))
           ]
 
   -- r <- generateText agent models runtime currentConversation

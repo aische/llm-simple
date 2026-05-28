@@ -144,7 +144,7 @@ import LLM.Generate.Generate
   ( generateTextWithFallbacks,
     streamTextWithFallbacks,
   )
-import LLM.Generate.Logger (Hooks, LogLevel, noHooks)
+import LLM.Generate.Logger (Hooks (..), LogLevel (..), noHooks)
 import LLM.Generate.ModelConfig (ModelWithFallbacks)
 import LLM.Generate.Types
   ( GenRequest (..),
@@ -252,6 +252,10 @@ data ResumePoint
         rpToolCallId :: Text
       }
   | ResumeAfterDialog
+      { rpParentFrameId :: FrameId,
+        rpMergeInto :: ToolCall
+      }
+  | ResumeAfterWorkflow
       { rpParentFrameId :: FrameId,
         rpMergeInto :: ToolCall
       }
@@ -750,6 +754,7 @@ data AgentCommand
   = PushSubagent SubagentSpec
   | HandoffTo HandoffSpec
   | PushSteps [ChatStep]
+  | RunWorkflowCommand Workflow
   | PopWith Text
   | RunDialogCommand DialogSpec
   | FailCommand GenerateError
@@ -822,9 +827,24 @@ applyAgentCommand' machine mTc cmd = case cmd of
   PushSubagent spec -> pushSubagentFrame machine mTc spec
   HandoffTo spec -> runHandoff machine spec
   PushSteps steps -> pushStepsFrame machine steps
-  PopWith _summary -> pure (Right machine)
+  RunWorkflowCommand wf -> pushWorkflowFrame machine mTc wf
+  PopWith summary ->
+    case popFrame machine (PopResult summary Nothing mempty []) of
+      Left e -> pure (Left e)
+      Right m' ->
+        case (topFrame m').frResume of
+          Nothing -> pure (Right m')
+          Just rp -> do
+            let nextStep = resumeParentStep m' (PopResult summary Nothing mempty []) rp
+            pure (Right (setTopStep m' nextStep))
   RunDialogCommand spec -> pushDialogFrame machine spec
-  FailCommand _err -> pure (Right machine)
+  FailCommand err ->
+    pure
+      ( Right $
+          setTopStep
+            machine
+            (Done (Left (GenerateErrorResult err [] mempty)))
+      )
 
 summarizeForParent :: PopResult -> Text
 summarizeForParent pop =
@@ -978,10 +998,14 @@ runDialog machine spec =
           topicTurn = UserTurn spec.dsTopic
           initial = spec.dsSeedTurns ++ [topicTurn]
       (transcript, usage) <- dialogLoop dialogMachine envIdA envIdB spec.dsMaxRounds initial mempty 0
-      let summaryText =
-            case spec.dsSummarizer of
-              Nothing -> lastAssistantText transcript
-              Just _agent -> lastAssistantText transcript
+      summaryText <- case spec.dsSummarizer of
+        Nothing -> pure (lastAssistantText transcript)
+        Just summarizerAgent -> do
+          let prompt =
+                "Summarize this dialog transcript:\n"
+                  <> T.intercalate "\n" (map renderTurn transcript)
+          summarizeResult <- generateText machine.mUToolRegistry summarizerAgent spec.dsModelsA spec.dsRt [UserTurn prompt]
+          pure $ either (const (lastAssistantText transcript)) (.gtrText) summarizeResult
       let summary =
             DialogSummary
               { dgsText = summaryText,
@@ -1123,7 +1147,6 @@ generateText utoolRegistry agent models rt initialTurns = do
       env' = env {envId = 0}
       step = buildAgentStep agent rt initialTurns [] emptyUsage 0
       machine = initialMachine env' utoolRegistry step defaultMachineConfig
-  emitEvent rt GenerationStarted
   generateTextMachine machine
 
 streamText ::
@@ -1144,7 +1167,6 @@ streamText utoolRegistry onChunk agent models rt initialTurns = do
       env' = env {envId = 0}
       step = buildAgentStep agent rt initialTurns [] emptyUsage 0
       machine = initialMachine env' utoolRegistry step defaultMachineConfig
-  emitEvent rt GenerationStarted
   generateTextMachine machine
 
 generateTextWorkflow :: Workflow -> WorkflowContext -> IO WorkflowResult
@@ -1165,7 +1187,8 @@ generateTextMachine machine =
 -- ---------------------------------------------------------------------------
 
 emitOrchestrationEvent :: RuntimeArgs -> OrchestrationEventDetail -> IO ()
-emitOrchestrationEvent _rt _detail = pure ()
+emitOrchestrationEvent rt _detail =
+  rt.rtHooks.onLog Debug "orchestration_event"
 
 isAbortedForMachine :: Machine -> IO Bool
 isAbortedForMachine machine =
@@ -1246,6 +1269,12 @@ resumeParentStep machine pop = \case
           Frame {frStep = ExecTools {csOnToolsResult}} ->
             csOnToolsResult (Right [tr])
           _ -> Done (Right (popToTextResult pop))
+  ResumeAfterWorkflow {rpMergeInto} ->
+    let tr = toolResult rpMergeInto (summarizeForParent pop)
+     in case topFrame machine of
+          Frame {frStep = ExecTools {csOnToolsResult}} ->
+            csOnToolsResult (Right [tr])
+          _ -> Done (Right (popToTextResult pop))
 
 popResultFromSuccess :: TranscriptPolicy -> GenerateTextResult -> PopResult
 popResultFromSuccess policy success =
@@ -1254,7 +1283,7 @@ popResultFromSuccess policy success =
       prStructured = Nothing,
       prUsage = success.gtrUsage,
       prNewTurns = case policy of
-        TranscriptIsolated -> success.gtrNewMessages
+        TranscriptIsolated -> []
         TranscriptShared -> success.gtrNewMessages
         TranscriptSummaryOnly -> []
     }
@@ -1361,6 +1390,35 @@ pushDialogFrame machine spec =
       machine' = machine {mNextFrameId = machine.mNextFrameId + 1}
    in pure (pushFrame machine' frame)
 
+pushWorkflowFrame :: Machine -> Maybe ToolCall -> Workflow -> IO (Either MachineError Machine)
+pushWorkflowFrame machine mTc workflow = do
+  case machineTopEnv machine of
+    Nothing -> pure (Left (EnvNotFound 0))
+    Just _parentEnv -> do
+      let tcId = maybe "" (.tcId) mTc
+          parentFrame = topFrame machine
+          tc = ToolCall tcId "run_workflow" AE.Null
+          resume =
+            ResumeAfterWorkflow
+              { rpParentFrameId = parentFrame.frId,
+                rpMergeInto = tc
+              }
+          machineWithResume = updateTopResume machine (Just resume)
+          step =
+            RunWorkflow workflow (\wr -> Done wr.wrOutput)
+          frame =
+            Frame
+              { frId = machineWithResume.mNextFrameId,
+                frEnvId = parentFrame.frEnvId,
+                frStep = step,
+                frResume = Nothing
+              }
+          machine' =
+            machineWithResume
+              { mNextFrameId = machineWithResume.mNextFrameId + 1
+              }
+      pure (pushFrame machine' frame)
+
 dialogSummaryToTextResult :: DialogSummary -> GenerateTextResult
 dialogSummaryToTextResult dgs =
   GenerateTextResult
@@ -1407,9 +1465,12 @@ dialogLoop machine envIdA envIdB maxRounds transcript usage dialogRound
           let turnA = AssistantTurn rA.respText rA.respReasoning []
               uA = usage <> fromMaybe mempty rA.respUsage
               t1 = transcript ++ [turnA]
-          emitOrchestrationEvent
-            (fromMaybe (error "env") (machineTopEnv machine)).envRt
-            (DialogTurn (topFrame machine).frId dialogRound turnA)
+          case machineTopEnv machine of
+            Just topEnv ->
+              emitOrchestrationEvent
+                topEnv.envRt
+                (DialogTurn (topFrame machine).frId dialogRound turnA)
+            Nothing -> pure ()
           respB <- callModel machine envIdB t1
           case respB of
             Left _ -> pure (t1, uA)
@@ -1417,9 +1478,12 @@ dialogLoop machine envIdA envIdB maxRounds transcript usage dialogRound
               let turnB = AssistantTurn rB.respText rB.respReasoning []
                   uB = uA <> fromMaybe mempty rB.respUsage
                   t2 = t1 ++ [turnB]
-              emitOrchestrationEvent
-                (fromMaybe (error "env") (machineTopEnv machine)).envRt
-                (DialogTurn (topFrame machine).frId dialogRound turnB)
+              case machineTopEnv machine of
+                Just topEnv ->
+                  emitOrchestrationEvent
+                    topEnv.envRt
+                    (DialogTurn (topFrame machine).frId dialogRound turnB)
+                Nothing -> pure ()
               dialogLoop machine envIdA envIdB maxRounds t2 uB (dialogRound + 1)
 
 lastAssistantText :: [Turn] -> Text
@@ -1430,6 +1494,13 @@ lastAssistantText =
         _ -> acc
     )
     ""
+
+renderTurn :: Turn -> Text
+renderTurn = \case
+  UserTurn txt -> "user: " <> txt
+  AssistantTurn txt _ _ -> "assistant: " <> txt
+  ToolTurn results ->
+    "tool: " <> T.intercalate "; " [T.pack (show r) | r <- results]
 
 workflowContextFromMachine :: Machine -> IO WorkflowContext
 workflowContextFromMachine machine =
@@ -1526,18 +1597,16 @@ runSeqWorkflow [] _ nodeId =
         wrOutput = Left (GenerateErrorResult GErrAborted [] mempty),
         wrUsage = mempty
       }
-runSeqWorkflow wfs ctx _ =
+runSeqWorkflow (wf0 : rest) ctx _ = do
+  first <- runWorkflowNode wf0 ctx (workflowNodeId wf0)
   foldM
     ( \acc wf -> do
         let ctx' = ctx {wcResults = Map.insert acc.wrNodeId acc ctx.wcResults}
             wfNodeId = workflowNodeId wf
         runWorkflowNode wf ctx' wfNodeId
     )
-    ( WorkflowResult nodeId (Left (GenerateErrorResult GErrAborted [] mempty)) mempty
-    )
-    wfs
-  where
-    nodeId = ""
+    first
+    rest
 
 runAgentNode ::
   AgentNodeInput ->
@@ -1588,8 +1657,10 @@ mergeWorkflowResults nodeId policy results _ctx = do
   let mergedOutput = case policy of
         MergeConcat -> mergeConcat results
         MergeFirstSuccess -> mergeFirstSuccess results
-        MergeWithAgent _agent -> mergeConcat results
-        MergeCustom _f -> error "MergeCustom: supply merge via MergeConcat for now"
+        -- TODO: true reducer-agent merge requires an explicit model/runtime config for reducers.
+        MergeWithAgent _reducerAgent -> mergeConcat results
+        -- TODO: generic rank-n custom merge cannot be safely executed in IO context here.
+        MergeCustom _f -> mergeConcat results
   pure
     WorkflowResult
       { wrNodeId = nodeId,

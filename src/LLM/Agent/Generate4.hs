@@ -566,13 +566,18 @@ runStep machine step = case step of
             emitEvent env.envRt (ToolRoundStarted csLoopCount)
             let toolContext = createToolContext env.envAgent csCurrentTurns csUsage env.envRt
                 tools = getResolvedTools env.envAgent env.envRt
-                utools = map utTool tools
+                legacyUTools = map utTool tools
+                namedUTools = getResolvedUTools machine.mUToolRegistry env.envAgent env.envRt
+                -- UTool registry entries override same-name legacy tools.
+                legacyMap = Map.fromList [(nameOfUTool t, t) | t <- legacyUTools]
+                namedMap = Map.fromList [(nameOfUTool t, t) | t <- namedUTools]
+                allUTools = Map.elems (Map.union namedMap legacyMap)
             runResult <-
               runToolsWithAbortChecks
                 machine
                 accWithAssistant
                 csUsage
-                utools
+                allUTools
                 toolContext
                 csCalls
             case runResult of
@@ -755,6 +760,11 @@ data UTool = UTool
   { utToolDef :: ToolDef,
     utToolExecute :: ToolContext -> Value -> IO ToolOutcome
   }
+
+nameOfUTool :: UTool -> Text
+nameOfUTool utool =
+  case utool.utToolDef of
+    ToolDef {toolName} -> toolName
 
 utTool :: Tool -> UTool
 utTool tool =

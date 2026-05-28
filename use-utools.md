@@ -258,9 +258,9 @@ Fill these before implementation:
     - [ ] fail if requested by `agUTools`
 
 7. **Where registry lives**
-    - [ ] in `Machine`
-    - [x] in `RuntimeArgs`
-    - [ ] explicit parameter on `generateTextWithUTools`
+    - [x] in `Machine`
+    - [ ] in `RuntimeArgs`
+    - [x] explicit parameter on `generateTextWithUTools`
 
 8. **Error type**
     - [ ] reuse existing errors

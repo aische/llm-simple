@@ -51,7 +51,9 @@ module LLM.Agent.Generate4
     execTools,
     runToolsWithAbortChecks,
 
-    -- * Tool results and commands
+    -- * UTool results and commands
+    UTool (..),
+    utTool,
     ToolOutcome (..),
     AgentCommand (..),
     ToolExecute,
@@ -560,12 +562,13 @@ runStep machine step = case step of
             emitEvent env.envRt (ToolRoundStarted csLoopCount)
             let toolContext = createToolContext env.envAgent csCurrentTurns csUsage env.envRt
                 tools = getResolvedTools env.envAgent env.envRt
+                utools = map utTool tools
             runResult <-
               runToolsWithAbortChecks
                 machine
                 accWithAssistant
                 csUsage
-                tools
+                utools
                 toolContext
                 csCalls
             case runResult of
@@ -680,7 +683,7 @@ execTools ::
   Machine ->
   EnvId ->
   ToolContext ->
-  [Tool] ->
+  [UTool] ->
   [ToolCall] ->
   IO (Either GenerateError ToolsRun)
 execTools machine _envId ctx tools toolCalls =
@@ -690,7 +693,7 @@ runToolsWithAbortChecks ::
   Machine ->
   [Turn] ->
   Usage ->
-  [Tool] ->
+  [UTool] ->
   ToolContext ->
   [ToolCall] ->
   IO (Either GenerateError ToolsRun)
@@ -726,7 +729,7 @@ runToolsWithAbortChecks machine partialAcc usage tools ctx toolCalls =
                     Just tr -> go (tr : acc) rest
 
 -- ---------------------------------------------------------------------------
--- Tool results and commands
+-- UTool results and commands
 -- ---------------------------------------------------------------------------
 
 data ToolOutcome
@@ -744,17 +747,29 @@ data AgentCommand
 
 type ToolExecute = ToolContext -> Value -> IO ToolOutcome
 
+data UTool = UTool
+  { utToolDef :: ToolDef,
+    utToolExecute :: ToolContext -> Value -> IO ToolOutcome
+  }
+
+utTool :: Tool -> UTool
+utTool tool =
+  UTool
+    { utToolDef = tool.toolDef,
+      utToolExecute = \ctx val -> ToolReply <$> tool.toolExecute ctx val
+    }
+
 executeToolOutcome ::
   Machine ->
   ToolContext ->
-  Tool ->
+  UTool ->
   ToolCall ->
   IO (Either GenerateError (ToolOutcome, Maybe ToolResult))
 executeToolOutcome _machine ctx tool tc = do
   result <- try (toolExecuteLegacy ctx tc.tcArguments tool)
   case result of
     Left (e :: SomeException) ->
-      let msg = "Tool error: " <> T.pack (show e)
+      let msg = "UTool error: " <> T.pack (show e)
        in pure (Right (ToolReply msg, Just (toolResult tc msg)))
     Right outcome ->
       let mTr = toolOutcomeToResult tc outcome
@@ -766,15 +781,15 @@ toolOutcomeToResult tc = \case
   ToolReplyAndCommand txt _ -> Just (toolResult tc txt)
   ToolCommand _ -> Nothing
 
-toolExecuteLegacy :: ToolContext -> Value -> Tool -> IO ToolOutcome
-toolExecuteLegacy ctx val tool = ToolReply <$> tool.toolExecute ctx val
+toolExecuteLegacy :: ToolContext -> Value -> UTool -> IO ToolOutcome
+toolExecuteLegacy ctx val tool = tool.utToolExecute ctx val
 
-findTool :: [Tool] -> ToolCall -> Maybe Tool
+findTool :: [UTool] -> ToolCall -> Maybe UTool
 findTool tools tc = go tools
   where
     go [] = Nothing
     go (t : rest) =
-      case t.toolDef of
+      case t.utToolDef of
         ToolDef {toolName} | toolName == tc.tcName -> Just t
         _ -> go rest
 

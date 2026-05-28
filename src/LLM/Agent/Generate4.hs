@@ -117,8 +117,7 @@ import Data.Text qualified as T
 import Data.UUID.Types (UUID)
 import LLM.Agent.Events (emitEvent)
 import LLM.Agent.ToolUtils
-  ( createGenRequest,
-    createToolContext,
+  ( createToolContext,
     getResolvedTools,
     windowOffset,
   )
@@ -259,6 +258,7 @@ data ResumePoint
 
 data Machine = Machine
   { mEnvStore :: EnvStore,
+    mUToolRegistry :: UToolRegistry,
     mStack :: NE.NonEmpty Frame,
     mNextFrameId :: FrameId,
     mDepth :: Int,
@@ -291,10 +291,11 @@ defaultMachineConfig =
 
 initialMachine ::
   Env ->
+  UToolRegistry ->
   ChatStep ->
   MachineConfig ->
   Machine
-initialMachine env step config =
+initialMachine env utoolRegistry step config =
   let store =
         EnvStore
           { esNextId = env.envId + 1,
@@ -309,6 +310,7 @@ initialMachine env step config =
           }
    in Machine
         { mEnvStore = store,
+          mUToolRegistry = utoolRegistry,
           mStack = frame0 NE.:| [],
           mNextFrameId = 1,
           mDepth = 1,
@@ -897,7 +899,7 @@ runSubagent machine spec =
           genId = childEnv.envRt.rtGenerationId
           childStep = buildChatStep genId childId spec.ssInitialTurns [] mempty 0
           childMachine =
-            (initialMachine childEnv childStep machine.mConfig)
+            (initialMachine childEnv machine.mUToolRegistry childStep machine.mConfig)
               { mEnvStore = store'
               }
       result <- runMachine childMachine
@@ -1032,6 +1034,7 @@ data WorkflowResult = WorkflowResult
 
 data WorkflowContext = WorkflowContext
   { wcAbortSignal :: Maybe AbortSignal,
+    wcUToolRegistry :: UToolRegistry,
     wcOnEvent :: EventObserver,
     wcHooks :: Hooks,
     wcLLMHooks :: LLMHooks,
@@ -1068,9 +1071,9 @@ compileWorkflowToSteps wf = case wf of
   Subagent ws ->
     RunWorkflow (Subagent ws) (\wr -> Done wr.wrOutput)
 
-compileWorkflowToMachine :: Env -> Workflow -> Machine
-compileWorkflowToMachine env wf =
-  initialMachine env (compileWorkflowToSteps wf) defaultMachineConfig
+compileWorkflowToMachine :: Env -> UToolRegistry -> Workflow -> Machine
+compileWorkflowToMachine env utoolRegistry wf =
+  initialMachine env utoolRegistry (compileWorkflowToSteps wf) defaultMachineConfig
 
 -- ---------------------------------------------------------------------------
 -- Events (orchestration extensions)
@@ -1094,41 +1097,43 @@ data OrchestrationEventDetail
 -- ---------------------------------------------------------------------------
 
 generateText ::
+  UToolRegistry ->
   Agent ->
   ModelWithFallbacks ->
   RuntimeArgs ->
   [Turn] ->
   IO (Either GenerateErrorResult GenerateTextResult)
-generateText agent models rt initialTurns = do
+generateText utoolRegistry agent models rt initialTurns = do
   let env =
         mkEnv
           agent
           models
           rt
-          (\a m r t -> generateTextWithFallbacks (createGenRequest a r t) m)
+          (\a m r t -> generateTextWithFallbacks (createGenRequestU utoolRegistry a r t) m)
       env' = env {envId = 0}
       step = buildAgentStep agent rt initialTurns [] emptyUsage 0
-      machine = initialMachine env' step defaultMachineConfig
+      machine = initialMachine env' utoolRegistry step defaultMachineConfig
   emitEvent rt GenerationStarted
   generateTextMachine machine
 
 streamText ::
+  UToolRegistry ->
   (StreamChunk -> IO ()) ->
   Agent ->
   ModelWithFallbacks ->
   RuntimeArgs ->
   [Turn] ->
   IO (Either GenerateErrorResult GenerateTextResult)
-streamText onChunk agent models rt initialTurns = do
+streamText utoolRegistry onChunk agent models rt initialTurns = do
   let env =
         mkEnv
           agent
           models
           rt
-          (\a m r t -> streamTextWithFallbacks onChunk (createGenRequest a r t) m)
+          (\a m r t -> streamTextWithFallbacks onChunk (createGenRequestU utoolRegistry a r t) m)
       env' = env {envId = 0}
       step = buildAgentStep agent rt initialTurns [] emptyUsage 0
-      machine = initialMachine env' step defaultMachineConfig
+      machine = initialMachine env' utoolRegistry step defaultMachineConfig
   emitEvent rt GenerationStarted
   generateTextMachine machine
 
@@ -1423,6 +1428,7 @@ workflowContextFromMachine machine =
       pure
         WorkflowContext
           { wcAbortSignal = Nothing,
+            wcUToolRegistry = machine.mUToolRegistry,
             wcOnEvent = \_ -> pure (),
             wcHooks = noHooks,
             wcLLMHooks =
@@ -1437,6 +1443,7 @@ workflowContextFromMachine machine =
       pure
         WorkflowContext
           { wcAbortSignal = env.envRt.rtAbortSignal,
+            wcUToolRegistry = machine.mUToolRegistry,
             wcOnEvent = env.envRt.rtOnEvent,
             wcHooks = env.envRt.rtHooks,
             wcLLMHooks = env.envRt.rtLLMHooks,
@@ -1540,7 +1547,7 @@ runAgentNode inp ctx nodeId = do
             rtHooks = ctx.wcHooks,
             rtLLMHooks = ctx.wcLLMHooks
           }
-  out <- generateText inp.aniAgent inp.aniModels rt turns
+  out <- generateText ctx.wcUToolRegistry inp.aniAgent inp.aniModels rt turns
   pure
     WorkflowResult
       { wrNodeId = nodeId,
@@ -1632,12 +1639,12 @@ dialogRootMachine ctx spec = do
             spec.dsAgentA
             spec.dsModelsA
             rt
-            (\a m r t -> generateTextWithFallbacks (createGenRequest a r t) m)
+            (\a m r t -> generateTextWithFallbacks (createGenRequestU ctx.wcUToolRegistry a r t) m)
         )
           { envId = 0
           }
       step = buildChatStep nilUuid 0 spec.dsSeedTurns [] mempty 0
-  pure (initialMachine env step defaultMachineConfig)
+  pure (initialMachine env ctx.wcUToolRegistry step defaultMachineConfig)
 
 handoffRootMachine :: WorkflowContext -> HandoffSpec -> IO Machine
 handoffRootMachine ctx spec = do
@@ -1648,12 +1655,12 @@ handoffRootMachine ctx spec = do
             t.ssAgent
             t.ssModels
             rt
-            (\a m r t' -> generateTextWithFallbacks (createGenRequest a r t') m)
+            (\a m r t' -> generateTextWithFallbacks (createGenRequestU ctx.wcUToolRegistry a r t') m)
         )
           { envId = 0
           }
       step = buildChatStep rt.rtGenerationId 0 t.ssInitialTurns [] mempty 0
-  pure (initialMachine env step defaultMachineConfig)
+  pure (initialMachine env ctx.wcUToolRegistry step defaultMachineConfig)
 
 subagentRootMachine :: WorkflowContext -> SubagentSpec -> IO Machine
 subagentRootMachine ctx spec = do
@@ -1663,12 +1670,12 @@ subagentRootMachine ctx spec = do
             spec.ssAgent
             spec.ssModels
             rt
-            (\a m r t -> generateTextWithFallbacks (createGenRequest a r t) m)
+            (\a m r t -> generateTextWithFallbacks (createGenRequestU ctx.wcUToolRegistry a r t) m)
         )
           { envId = 0
           }
       step = buildChatStep rt.rtGenerationId 0 spec.ssInitialTurns [] mempty 0
-  pure (initialMachine env step defaultMachineConfig)
+  pure (initialMachine env ctx.wcUToolRegistry step defaultMachineConfig)
 
 workflowNodeId :: Workflow -> WorkflowNodeId
 workflowNodeId = \case

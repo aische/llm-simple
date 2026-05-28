@@ -6,6 +6,7 @@ import Autodocodec qualified as AC
 import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Exception (SomeException (SomeException), catch)
 import Data.Aeson (FromJSON)
+import Data.Map qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
@@ -30,6 +31,7 @@ import LLM.Tools.Readdir (readdirToolTyped)
 import LLM.Tools.Readfile (readfileToolTyped)
 import LLM.Tools.Writefile (writefileToolTyped)
 import System.Environment (getEnv)
+import UTool1 (uTool1)
 
 createAgent :: FsConfig -> Agent
 createAgent fsConfig =
@@ -84,9 +86,13 @@ main = do
           }
   -- let currentConversation = [UserTurn "What is the capital of France? Write a poem about it, 4 paragraphs long"]
   let currentConversation = [UserTurn "Summarize all files in the workspace"]
+      utoolRegistry =
+        Map.fromList
+          [ ("uTool1", uTool1 (agent, models, runtime))
+          ]
 
   -- r <- generateText agent models runtime currentConversation
-  r <- streamText onStreamChunk agent models runtime currentConversation
+  r <- streamText utoolRegistry onStreamChunk agent models runtime currentConversation
   print r
 
 -- o <- generateObject agent models runtime currentConversation

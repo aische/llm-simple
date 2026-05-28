@@ -122,6 +122,7 @@ library
 executable llm-simple
     import: opts
     main-is:          Main.hs
+    other-modules:    UTool1
     hs-source-dirs:   app
     build-depends:
         aeson          >=2.0   && <2.3,

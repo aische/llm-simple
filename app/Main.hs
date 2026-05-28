@@ -42,6 +42,7 @@ createAgent fsConfig =
           toTool $ readdirToolTyped fsConfig,
           toTool $ directoryTreeToolTyped fsConfig
         ],
+      agUTools = [],
       agMaxToolRounds = 3,
       agContextWindow = Nothing
     }

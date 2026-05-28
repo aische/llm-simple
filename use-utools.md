@@ -232,8 +232,8 @@ r <- generateTextWithUTools registry agent models runtime conversation
 Fill these before implementation:
 
 1. **Unknown `agUTools` name**
-    - [ ] fail hard
-    - [x] warn and ignore
+    - [x] fail hard
+    - [ ] warn and ignore
 
 2. **Name collision policy (legacy `Tool` vs registered `UTool`)**
     - [x] UTool wins
@@ -254,13 +254,13 @@ Fill these before implementation:
     - [ ] builder registry (`BuildCtx -> UTool`)
 
 6. **Readonly behavior**
-    - [x] filter non-readonly UTools
+    - [x] filter non-readonly UTools (utToolDef.toolReadonly)
     - [ ] fail if requested by `agUTools`
 
 7. **Where registry lives**
     - [x] in `Machine`
     - [ ] in `RuntimeArgs`
-    - [x] explicit parameter on `generateTextWithUTools`
+    - [x] explicit parameter on `generateTextWithUTools` (seed for utools on Machine)
 
 8. **Error type**
     - [ ] reuse existing errors

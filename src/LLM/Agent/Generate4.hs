@@ -120,9 +120,10 @@ import LLM.Agent.ToolUtils
   ( createGenRequest,
     createToolContext,
     getResolvedTools,
+    windowOffset,
   )
 import LLM.Agent.Types
-  ( Agent (agMaxToolRounds),
+  ( Agent (..),
     EventObserver,
     GenerateEventDetail (..),
     RuntimeArgs (..),
@@ -147,7 +148,8 @@ import LLM.Generate.Generate
 import LLM.Generate.Logger (Hooks, LogLevel, noHooks)
 import LLM.Generate.ModelConfig (ModelWithFallbacks)
 import LLM.Generate.Types
-  ( GenerateError (..),
+  ( GenRequest (..),
+    GenerateError (..),
     GenerateErrorResult (..),
     GenerateResult,
     GenerateTextResult (..),
@@ -1693,3 +1695,26 @@ emitOrchestrationEventFromCtx ctx detail =
 failWithMachineError :: Machine -> IO (Either GenerateErrorResult GenerateTextResult)
 failWithMachineError machine =
   failGeneration machine (GenerateErrorResult GErrAborted [] mempty)
+
+type UToolRegistry = Map Text UTool
+
+getResolvedUTools :: UToolRegistry -> Agent -> RuntimeArgs -> [UTool]
+getResolvedUTools utoolRegistry agent rt =
+  let readonly = rt.rtReadonly
+      utools = mapMaybe (`Map.lookup` utoolRegistry) agent.agUTools
+      readonlyUTools = if readonly then filter (\x -> x.utToolDef.toolReadonly) utools else utools
+   in readonlyUTools
+
+createGenRequestU :: UToolRegistry -> Agent -> RuntimeArgs -> [Turn] -> GenRequest
+createGenRequestU utoolRegistry agent rt messages =
+  let offset = windowOffset agent.agContextWindow messages
+      tools = getResolvedTools agent rt
+      utools = getResolvedUTools utoolRegistry agent rt
+   in GenRequest
+        { grSystemPrompt = agent.agSystemPrompt,
+          grTools = map (\x -> x.toolDef) tools ++ map (\x -> x.utToolDef) utools,
+          grMessages = drop offset messages,
+          grAbortSignal = rt.rtAbortSignal,
+          grLLMHooks = rt.rtLLMHooks,
+          grHooks = rt.rtHooks
+        }

@@ -2,19 +2,19 @@
 
 module Main where
 
-import Autodocodec qualified as AC
 import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Exception (SomeException (SomeException), catch)
-import Data.Aeson (FromJSON)
-import Data.Map qualified as Map
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
-import GHC.Generics (Generic)
 import Heptapod (generate)
-import LLM (ThinkingMode (..), deepSeekGateway, mkFsConfig, ollamaGateway, openAIGateway, toTool)
-import LLM.Agent.Generate4 (generateText, streamText)
-import LLM.Agent.GenerateObject (generateObject)
+import LLM (ThinkingMode (..), deepSeekGateway, mkFsConfig, toTool)
+import LLM.Agent.Generate5
+  ( StackRuntime (..),
+    generateText5,
+    streamText5,
+  )
 import LLM.Agent.Types
   ( Agent (..),
     GenerateEvent (..),
@@ -24,32 +24,42 @@ import LLM.Core.Types (LLMHooks (..), Turn (UserTurn))
 import LLM.Core.Usage (PricingInfo (..), Usage)
 import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig (ModelConfig (..), ModelWithFallbacks (..))
-import LLM.Generate.Types (StreamChunk (..))
+import LLM.Generate.Types
+  ( GenerateErrorResult (..),
+    GenerateTextResult (..),
+    StreamChunk (..),
+  )
 import LLM.Tools.DirectoryTree (directoryTreeToolTyped)
 import LLM.Tools.FsConfig (FsConfig)
 import LLM.Tools.Readdir (readdirToolTyped)
 import LLM.Tools.Readfile (readfileToolTyped)
 import LLM.Tools.Writefile (writefileToolTyped)
-import System.Environment (getEnv)
+import System.Environment (getArgs, getEnv)
 import UTool1 (uTool1)
+import UTool2 (uTool2)
 
-createAgent :: FsConfig -> Agent
-createAgent _fsConfig =
+-- | Orchestrator: no legacy tools, only UTools (subagent + workflow).
+createOrchestratorAgent :: Agent
+createOrchestratorAgent =
   Agent
-    { agName = "default",
-      agSystemPrompt = Just "You are a helpful assistant.",
-      agTools =
-        [],
-      agUTools = ["subagent"],
-      agMaxToolRounds = 3,
+    { agName = "orchestrator",
+      agSystemPrompt =
+        Just
+          "You are a helpful assistant. You may delegate work using tools:\n\
+          \- subagent: filesystem-capable child agent for a single task\n\
+          \- run_workflow: parallel workflow (plan+execute sequence and a review branch)",
+      agTools = [],
+      agUTools = ["subagent", "run_workflow"],
+      agMaxToolRounds = 5,
       agContextWindow = Nothing
     }
 
-createAgent2 :: FsConfig -> Agent
-createAgent2 fsConfig =
+-- | Worker agents used inside subagents / workflow nodes (legacy filesystem tools).
+createWorkerAgent :: FsConfig -> Agent
+createWorkerAgent fsConfig =
   Agent
-    { agName = "default",
-      agSystemPrompt = Just "You are a helpful assistant.",
+    { agName = "worker",
+      agSystemPrompt = Just "You are a helpful assistant with filesystem access.",
       agTools =
         [ toTool $ readfileToolTyped fsConfig,
           toTool $ writefileToolTyped fsConfig,
@@ -57,7 +67,7 @@ createAgent2 fsConfig =
           toTool $ directoryTreeToolTyped fsConfig
         ],
       agUTools = [],
-      agMaxToolRounds = 3,
+      agMaxToolRounds = 6,
       agContextWindow = Nothing
     }
 
@@ -66,8 +76,6 @@ model1 apiKey =
   ModelConfig
     { mcGateway = deepSeekGateway apiKey,
       mcModel = "deepseek-v4-flash",
-      -- mcGateway = openAIGateway apiKey,
-      -- mcModel = "gpt-4.1-2025-04-14",
       mcPricing = PricingInfo {pricePerMillionInput = 1.0, pricePerMillionOutput = 5.00},
       mcMaxTokens = 1024,
       mcTemperature = Nothing,
@@ -81,39 +89,110 @@ model1 apiKey =
 main :: IO ()
 main = do
   loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
-  openAIGatewayKey <- getEnv "DEEPSEEK_API_KEY"
-  -- openAIGatewayKey <- getEnv "OPENAI_API_KEY"
-  let models = ModelWithFallbacks (model1 $ T.pack openAIGatewayKey) []
-  uuid1 <- generate
+  apiKey <- T.pack <$> getEnv "DEEPSEEK_API_KEY"
+  let models = ModelWithFallbacks (model1 apiKey) []
+  genId <- generate
   fsConfig <- mkFsConfig "./user-workspace/"
-  let agent = createAgent fsConfig
-  let agent2 = createAgent2 fsConfig
-  let runtime =
+
+  let worker = createWorkerAgent fsConfig
+      orchestrator = createOrchestratorAgent
+      runtime =
         RuntimeArgs
-          { rtGenerationId = uuid1,
+          { rtGenerationId = genId,
             rtAbortSignal = Nothing,
-            rtLLMHooks = LLMHooks {onLLMRequest = \_ _ -> pure (), onLLMResponse = \_ _ -> pure (), onLLMResponseError = \_ _ -> pure ()},
+            rtLLMHooks =
+              LLMHooks
+                { onLLMRequest = \_ _ -> pure (),
+                  onLLMResponse = \_ _ -> pure (),
+                  onLLMResponseError = \_ _ -> pure ()
+                },
             rtHooks = noHooks,
             rtOnEvent = printEvent,
             rtReadonly = False
           }
-  -- let currentConversation = [UserTurn "What is the capital of France? Write a poem about it, 4 paragraphs long"]
-  let currentConversation = [UserTurn "Summarize all files in the workspace"]
-      utoolRegistry =
-        Map.fromList
-          [ ("subagent", uTool1 (agent2, models, runtime))
-          ]
+      stackRuntime =
+        StackRuntime
+          { srUTools =
+              Map.fromList
+                [ ("subagent", uTool1 (worker, models, runtime)),
+                  ("run_workflow", uTool2 (worker, worker, worker, models, runtime))
+                ],
+            srLoopPredicates = Map.empty,
+            srMergeFns = Map.empty
+          }
 
-  -- r <- generateText agent models runtime currentConversation
-  r <- streamText utoolRegistry onStreamChunk agent models runtime currentConversation
-  print r
+  mode <- parseMode <$> getArgs
+  case mode of
+    ModeStream ->
+      demoStreamText5 stackRuntime orchestrator models runtime
+    ModeGenerate ->
+      demoGenerateText5 stackRuntime orchestrator models runtime
+    ModeBoth -> do
+      demoStreamText5 stackRuntime orchestrator models runtime
+      putStrLn ""
+      demoGenerateText5 stackRuntime orchestrator models runtime
 
--- o <- generateObject agent models runtime currentConversation
--- printExampleObject o
+-- ---------------------------------------------------------------------------
+-- Demos
+-- ---------------------------------------------------------------------------
 
-printExampleObject :: Either a (ExampleObject, Usage) -> IO ()
-printExampleObject (Right (o, _)) = print o
-printExampleObject (Left _) = pure ()
+data DemoMode = ModeStream | ModeGenerate | ModeBoth
+
+parseMode :: [String] -> DemoMode
+parseMode = \case
+  ["generate"] -> ModeGenerate
+  ["stream"] -> ModeStream
+  ["both"] -> ModeBoth
+  [] -> ModeStream
+  _ -> ModeStream
+
+-- | Non-streaming run via 'generateText5' (one LLM / one tool per internal step).
+demoGenerateText5 ::
+  StackRuntime ->
+  Agent ->
+  ModelWithFallbacks ->
+  RuntimeArgs ->
+  IO ()
+demoGenerateText5 rt agent models runtime = do
+  putStrLn "=== generateText5 (subagent UTool) ==="
+  let turns =
+        [ UserTurn
+            "Summarize all files in the workspace. \
+            \Use the subagent tool with a clear prompt; do not read files yourself."
+        ]
+  result <- generateText5 rt agent models runtime turns
+  printGenerateResult result
+
+-- | Streaming run via 'streamText5' (workflow UTool returns CmdRunWorkflow).
+demoStreamText5 ::
+  StackRuntime ->
+  Agent ->
+  ModelWithFallbacks ->
+  RuntimeArgs ->
+  IO ()
+demoStreamText5 rt agent models runtime = do
+  putStrLn "=== streamText5 (run_workflow UTool) ==="
+  let turns =
+        [ UserTurn
+            "Process this request with the run_workflow tool (not subagent): \
+            \'List the top-level files in the workspace and suggest one improvement.\'"
+        ]
+  putStrLn "--- streaming ---"
+  result <- streamText5 rt onStreamChunk agent models runtime turns
+  putStrLn ""
+  putStrLn "--- done ---"
+  printGenerateResult result
+
+printGenerateResult :: Either GenerateErrorResult GenerateTextResult -> IO ()
+printGenerateResult = \case
+  Left err -> do
+    putStrLn "Generation failed:"
+    print err
+  Right ok -> do
+    putStrLn "Final text:"
+    TIO.putStrLn ok.gtrText
+    putStrLn "Usage:"
+    print ok.gtrUsage
 
 onStreamChunk :: StreamChunk -> IO ()
 onStreamChunk = \case
@@ -126,22 +205,3 @@ printEvent :: GenerateEvent -> IO ()
 printEvent ev = do
   putStrLn "--------------------------------"
   print ev
-
-data ExampleObject = ExampleObject
-  { _title :: Text,
-    _content :: Text,
-    _rating :: Int,
-    _flag :: Bool
-  }
-  deriving (Show, Generic)
-  deriving (FromJSON) via (AC.Autodocodec ExampleObject)
-
-instance AC.HasCodec ExampleObject where
-  codec :: AC.JSONCodec ExampleObject
-  codec =
-    AC.object "ExampleObject" $
-      ExampleObject
-        <$> AC.requiredField "title" "title of the example" AC..= (\x -> x._title)
-        <*> AC.requiredField "content" "content of the example" AC..= (\x -> x._content)
-        <*> AC.requiredField "rating" "quality of the example (1..10)" AC..= (\x -> x._rating)
-        <*> AC.requiredField "flag" "is the example good?" AC..= (\x -> x._flag)

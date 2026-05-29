@@ -11,33 +11,31 @@ import Data.Aeson.Types (Parser, parseMaybe)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import LLM (ModelWithFallbacks)
-import LLM.Agent.Generate4
-  ( AgentCommand (RunWorkflowCommand),
+import LLM.Agent.Generate5
+  ( AgentCommand (CmdRunWorkflow),
     AgentNodeInput (..),
-    DialogSpec (..),
     MergePolicy (MergeConcat),
     ToolOutcome (ToolCommand),
     UTool (..),
     Workflow (..),
-    WorkflowDialog (..),
     WorkflowInput (WInputFromPrior, WInputText),
   )
 import LLM.Agent.Types (Agent, RuntimeArgs)
-import LLM.Core.Types
-  ( ToolDef (..),
-  )
+import LLM.Core.Types (ToolDef (..))
 
-uTool2 :: (Agent, Agent, Agent, Agent, ModelWithFallbacks, RuntimeArgs) -> UTool
-uTool2 (aAgent, bAgent, cAgent, dAgent, models, runtime) =
+-- | UTool that returns a 'CmdRunWorkflow' command (runs on the same Generate5 stack).
+uTool2 :: (Agent, Agent, Agent, ModelWithFallbacks, RuntimeArgs) -> UTool
+uTool2 (planAgent, executeAgent, reviewAgent, models, runtime) =
   UTool
     { utToolDef =
         ToolDef
-          { toolName = "subagent",
-            toolDescription = "subagent with file system access",
+          { toolName = "run_workflow",
+            toolDescription =
+              "Run a multi-step workflow: sequential plan+execute, in parallel with an independent review branch",
             toolReadonly = False,
             toolParameters = uTool2Schema
           },
-      utToolExecute = const (getUTool2 (aAgent, bAgent, cAgent, dAgent, models, runtime))
+      utToolExec = const (getUTool2 (planAgent, executeAgent, reviewAgent, models, runtime))
     }
 
 uTool2Schema :: Value
@@ -49,53 +47,57 @@ uTool2Schema =
           [ "prompt"
               .= object
                 [ "type" .= ("string" :: Text),
-                  "description" .= ("prompt for the subagent" :: Text)
+                  "description" .= ("user request to process" :: Text)
                 ]
           ],
       "required" .= (["prompt"] :: [Text])
     ]
 
-getUTool2 :: (Agent, Agent, Agent, Agent, ModelWithFallbacks, RuntimeArgs) -> Value -> IO ToolOutcome
-getUTool2 (aAgent, bAgent, cAgent, dAgent, models, runtime) args = do
+getUTool2 ::
+  (Agent, Agent, Agent, ModelWithFallbacks, RuntimeArgs) ->
+  Value ->
+  IO ToolOutcome
+getUTool2 (planAgent, executeAgent, reviewAgent, models, runtime) args = do
   let prompt = fromMaybe "unknown" $ parseMaybe parsePrompt args
-      -- NOTE: RunAgent nodes currently resolve to "run-agent" in workflowNodeId.
-      -- This is a limitation in the orchestration engine when multiple RunAgent nodes coexist.
-      aNodeId = "run-agent"
+      nodePlan = "wf-plan"
+      nodeExecute = "wf-execute"
+      nodeReview = "wf-review"
   pure $
     ToolCommand $
-      RunWorkflowCommand $
-        Par
-          [ Seq
-              [ RunAgent
+      CmdRunWorkflow $
+        WPar
+          [ WSeq
+              [ WRunAgent
                   AgentNodeInput
-                    { aniAgent = aAgent,
+                    { aniAgent = planAgent,
                       aniModels = models,
                       aniRt = runtime,
-                      aniInput = WInputText ("[A] Start the workflow and produce concise plan.\n\nUser request:\n" <> prompt)
+                      aniInput =
+                        WInputText
+                          ( "[Plan] Produce a short plan for the user request.\n\nRequest:\n"
+                              <> prompt
+                          ),
+                      aniNodeId = nodePlan
                     },
-                RunAgent
+                WRunAgent
                   AgentNodeInput
-                    { aniAgent = bAgent,
+                    { aniAgent = executeAgent,
                       aniModels = models,
                       aniRt = runtime,
-                      aniInput = WInputFromPrior aNodeId
+                      aniInput = WInputFromPrior nodePlan,
+                      aniNodeId = nodeExecute
                     }
               ],
-            Dialog
-              WorkflowDialog
-                { wdSpec =
-                    DialogSpec
-                      { dsAgentA = cAgent,
-                        dsAgentB = dAgent,
-                        dsModelsA = models,
-                        dsModelsB = models,
-                        dsRt = runtime,
-                        dsTopic = "[C/D dialog] Review and refine this request: " <> prompt,
-                        dsSeedTurns = [],
-                        dsMaxRounds = 4,
-                        dsSummarizer = Nothing
-                      },
-                  wdNodeId = "node-dialog-cd"
+            WRunAgent
+              AgentNodeInput
+                { aniAgent = reviewAgent,
+                  aniModels = models,
+                  aniRt = runtime,
+                  aniInput =
+                    WInputText
+                      ( "[Review] Critically review this request in 2-3 sentences:\n" <> prompt
+                      ),
+                  aniNodeId = nodeReview
                 }
           ]
           MergeConcat

@@ -11,24 +11,31 @@ import Data.Aeson.Types (Parser, parseMaybe)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import LLM (ModelWithFallbacks)
-import LLM.Agent.Generate4 (AgentCommand (PushSubagent), SubagentSpec (..), ToolOutcome (ToolCommand), TranscriptPolicy (..), UTool (..))
+import LLM.Agent.Generate5
+  ( AgentCommand (CmdPushSubagent),
+    SubagentSpec (..),
+    ToolOutcome (ToolCommand),
+    TranscriptPolicy (..),
+    UTool (..),
+  )
 import LLM.Agent.Types (Agent, RuntimeArgs)
 import LLM.Core.Types
   ( ToolDef (..),
     Turn (UserTurn),
   )
 
+-- | UTool that pushes a child agent frame (Generate5 stack machine).
 uTool1 :: (Agent, ModelWithFallbacks, RuntimeArgs) -> UTool
 uTool1 (a, m, r) =
   UTool
     { utToolDef =
         ToolDef
           { toolName = "subagent",
-            toolDescription = "subagent with file system access",
+            toolDescription = "Delegate a task to a subagent with filesystem tools",
             toolReadonly = False,
             toolParameters = uTool1Schema
           },
-      utToolExecute = const (getUTool1 (a, m, r))
+      utToolExec = const (getUTool1 (a, m, r))
     }
 
 uTool1Schema :: Value
@@ -46,15 +53,12 @@ uTool1Schema =
       "required" .= (["prompt"] :: [Text])
     ]
 
--- | Dummy implementation — in reality you'd call a weather API
 getUTool1 :: (Agent, ModelWithFallbacks, RuntimeArgs) -> Value -> IO ToolOutcome
 getUTool1 (a, m, r) args = do
   let prompt = fromMaybe "unknown" $ parseMaybe parsePrompt args
-  -- error "Age database is currently unavailable"
-  --   pure $ ToolReply "uTool1"
   pure $
     ToolCommand $
-      PushSubagent $
+      CmdPushSubagent $
         SubagentSpec
           { ssAgent = a,
             ssModels = m,

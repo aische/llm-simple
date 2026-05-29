@@ -875,7 +875,7 @@ reduceStep rt st = do
           pure (fmap (\s -> s {stLastStep = Just (classifyStep fr)}) outcome)
 
 runStack :: StackRuntime -> Stack -> IO (ReduceOutcome Stack)
-runStack rt st0 = go st0
+runStack rt = go
   where
     go st = do
       outcome <- reduceStep rt st
@@ -1305,7 +1305,7 @@ startWorkflowChild _rt st fr nid wf =
           Left _err -> failGeneration st [] mempty GErrAborted
           Right st''' -> pure (Stepped st''')
       WSubagent spec _snid -> do
-        let overrides = EnvOverrides (Just spec.ssAgent) (Just spec.ssModels) (spec.ssRtOverrides)
+        let overrides = EnvOverrides (Just spec.ssAgent) (Just spec.ssModels) spec.ssRtOverrides
             (store', childId) = forkEnv parentEnv overrides st.stEnvStore
             childEnv = fromMaybe parentEnv (lookupEnv store' childId)
             genId = childEnv.envRt.rtGenerationId
@@ -1336,7 +1336,7 @@ startWorkflowChild _rt st fr nid wf =
           Right st''' -> pure (Stepped st''')
       WHandoff spec _hnid -> do
         let target = spec.hsTarget
-            overrides = EnvOverrides (Just target.ssAgent) (Just target.ssModels) (target.ssRtOverrides)
+            overrides = EnvOverrides (Just target.ssAgent) (Just target.ssModels) target.ssRtOverrides
             (store', childId) = forkEnv parentEnv overrides st.stEnvStore
             childEnv = fromMaybe parentEnv (lookupEnv store' childId)
             genId = childEnv.envRt.rtGenerationId

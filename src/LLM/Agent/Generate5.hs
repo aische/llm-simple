@@ -102,7 +102,7 @@ import LLM.Generate.ModelConfig (ModelWithFallbacks)
 import LLM.Generate.Types
   ( GenerateError,
     GenerateErrorResult,
-    GenerateTextResult,
+    GenerateTextResult (..),
   )
 
 -- ---------------------------------------------------------------------------
@@ -171,7 +171,7 @@ data StackConfig = StackConfig
     scSharedAbortSignal :: Maybe AbortSignal,
     -- | Global safety net across all frames and nested loops (stage 4+).
     scMaxTotalSteps :: Maybe Int,
-  -- | Global token budget for the whole run (optional).
+    -- | Global token budget for the whole run (optional).
     scMaxTotalUsage :: Maybe Usage
   }
 

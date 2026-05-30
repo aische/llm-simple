@@ -67,6 +67,7 @@ library
         LLM.Agent.Generate3
         LLM.Agent.Generate4
         LLM.Agent.Generate5
+        LLM.Agent.Generate6
         LLM.Agent.GenerateObject
         LLM.Agent.Tools.HistoryTool
         LLM.Agent.ToolUtils

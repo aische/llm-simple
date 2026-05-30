@@ -282,6 +282,9 @@ data Stack = Stack
     stTotalSteps :: Int
   }
 
+instance Show Stack where
+  show st = show st.stLastStep
+
 data StackConfig = StackConfig
   { scMaxStackDepth :: Int,
     scMaxToolRoundsPerFrame :: Maybe Int,
@@ -589,8 +592,12 @@ data LoopSpec = LoopSpec
 
 -- Manual Show: LoopSpec contains Workflow which contains Agent (functions).
 instance Show LoopSpec where
-  show ls = "LoopSpec{nodeId=" <> T.unpack ls.loopNodeId
-    <> ",maxIter=" <> show ls.loopMaxIterations <> "}"
+  show ls =
+    "LoopSpec{nodeId="
+      <> T.unpack ls.loopNodeId
+      <> ",maxIter="
+      <> show ls.loopMaxIterations
+      <> "}"
 
 defaultLoopSpec :: Workflow -> NodeId -> LoopSpec
 defaultLoopSpec body nodeId =
@@ -872,6 +879,7 @@ reduceStep rt st = do
           let fr = topFrame st1
               st2 = st1 {stTotalSteps = st1.stTotalSteps + 1}
           outcome <- reduceFrame rt st2 fr
+          print ("--------------> outcome: ", outcome)
           pure (fmap (\s -> s {stLastStep = Just (classifyStep fr)}) outcome)
 
 runStack :: StackRuntime -> Stack -> IO (ReduceOutcome Stack)

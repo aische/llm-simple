@@ -15,6 +15,7 @@ import LLM.Agent.Generate6
     CID (CID),
     FinalResult (FinalResult),
     Kont,
+    MergePolicy (MergePolicy),
     Prompt (..),
     PromptArgs (..),
     PromptState (PromptStateFinal, PromptStatePending),
@@ -38,6 +39,7 @@ import LLM.Generate.Types
     GenerateTextResult (..),
     StreamChunk (..),
   )
+import LLM.Load.LoadModels (loadModelsOrThrow)
 import LLM.Tools.DirectoryTree (directoryTreeToolTyped)
 import LLM.Tools.FsConfig (FsConfig)
 import LLM.Tools.Readdir (readdirToolTyped)
@@ -130,9 +132,8 @@ llmHooks hooks =
 
 main :: IO ()
 main = do
-  loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
-  apiKey <- T.pack <$> getEnv "CLAUDE_API_KEY"
-  let models = ModelWithFallbacks (model1 apiKey) []
+  (gpt, llama) <- loadModelsOrThrow "./model-catalog.json" ("gpt_4_1", "llama_3_2")
+  let models = ModelWithFallbacks {mwfModel = gpt, mwfFallbacks = [llama]}
   fsConfig <- mkFsConfig "./user-workspace/"
   genId <- generate
   let worker = createWorkerAgent fsConfig
@@ -141,8 +142,11 @@ main = do
       ag2 = AgentWithModels {agent = asker, models = models}
       -- pr = Prompt {agentWithModels = ag, history = [], prompt = "What is the capital of France?"}
       -- step = RunPrompt pr (PromptStatePending [])
-
-      wpr = WSeq (WPrompt ag (Just (CID "1"))) (WPrompt ag2 (Just (CID "2"))) TranscriptPolicy
+      wpr =
+        WSeq
+          (WPrompt ag (Just (CID "1")))
+          (WPrompt ag2 (Just (CID "2")))
+          TranscriptPolicy
       pa = PromptArgs {history = [], prompt = "What is the capital of France?"}
       step = RunWorkflow (WLoop 3 wpr TranscriptPolicy [CID "1", CID "2"]) pa
   fr <- loop rt step []

@@ -95,6 +95,12 @@ library
         LLM.Tools.RemoveFile
         LLM.Tools.CreateDirectory
         LLM.Tools.RemoveDirectory
+
+        LLM.Load.LoadGateways
+        LLM.Load.ModelCatalog
+        LLM.Load.LoadModels
+        LLM.Load.Types
+        LLM.Load.Utils
     other-modules:
         LLM.Core.SSE
     hs-source-dirs:     src
@@ -107,6 +113,7 @@ library
         bytestring     >=0.11  && <0.12,
         containers     ^>=0.6.7,
         directory      >=1.3   && <1.4,
+        dotenv         >=0.9   && <0.13,
         filepath       >=1.4   && <1.6,
         heptapod       >=1.1   && <1.2,
         http-client    >=0.7   && <0.8,

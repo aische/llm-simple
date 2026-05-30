@@ -1,5 +1,7 @@
 module LLM.Agent.Generate6 where
 
+import Data.Map (Map)
+import Data.Map qualified as Map
 import Data.Text (Text)
 import LLM.Agent.ToolUtils (getResolvedTools, windowOffset)
 import LLM.Agent.Types (Agent (..), RuntimeArgs (..), Tool (..))
@@ -17,21 +19,27 @@ data AgentWithModels = AgentWithModels
     models :: ModelWithFallbacks
   }
 
+instance Show AgentWithModels where
+  show AgentWithModels {agent} = "AgentWithModels {agent = " <> show agent.agName <> "}"
+
 data PromptArgs = PromptArgs
   { history :: [Turn],
     prompt :: Text
   }
+  deriving (Show)
 
 data Prompt = Prompt
   { agentWithModels :: AgentWithModels,
     history :: [Turn],
     prompt :: Text
   }
+  deriving (Show)
 
 data PromptState
   = PromptStatePending [Turn]
   | PromptStateFinal FinalResult
   | PromptStateToolCalls PromptToolCalling
+  deriving (Show)
 
 data FinalResult = FinalResult
   { history :: [Turn],
@@ -40,6 +48,11 @@ data FinalResult = FinalResult
     assistantTurn :: Turn,
     text :: Text
   }
+  deriving (Show)
+
+newMessages :: FinalResult -> [Turn]
+newMessages FinalResult {prompt, toolTurns, assistantTurn} =
+  UserTurn prompt : toolTurns ++ [assistantTurn]
 
 data PromptToolCalling = PromptToolCalling
   { toolRounds :: [Turn],
@@ -47,29 +60,41 @@ data PromptToolCalling = PromptToolCalling
     toolCalls :: [ToolCall],
     toolResults :: [ToolResult]
   }
+  deriving (Show)
 
 data Step
   = RunPrompt Prompt PromptState
   | RunWorkflow Workflow PromptArgs
+  deriving (Show)
 
 data Kont
   = KontToolCall Prompt PromptToolCalling ToolCall
   | KontSeq Workflow TranscriptPolicy
   | KontPar1 Workflow PromptArgs MergePolicy
   | KontPar2 FinalResult MergePolicy
+  | KontLoop Int Workflow TranscriptPolicy (Map CID [Turn])
+  | KontUpdate CID
+  deriving (Show)
+
+newtype CID = CID Text
+  deriving (Eq, Ord, Show)
 
 data Workflow
-  = WPrompt AgentWithModels
+  = WPrompt AgentWithModels (Maybe CID)
   | WSeq Workflow Workflow TranscriptPolicy
   | WPar Workflow Workflow MergePolicy
+  | WLoop Int Workflow TranscriptPolicy [CID]
+  deriving (Show)
 
 data TranscriptPolicy = TranscriptPolicy
+  deriving (Show)
 
 transcript :: TranscriptPolicy -> FinalResult -> PromptArgs
 transcript policy result = case policy of
   TranscriptPolicy -> PromptArgs {history = [], prompt = result.text}
 
 data MergePolicy = MergePolicy
+  deriving (Show)
 
 merge :: MergePolicy -> FinalResult -> FinalResult -> FinalResult
 merge policy fr1 fr2 = case policy of
@@ -85,8 +110,16 @@ toPromptArgs FinalResult {history, prompt, toolTurns, assistantTurn, text} = Pro
   where
     messages = history ++ (UserTurn prompt : toolTurns) ++ [assistantTurn]
 
+loop :: RuntimeArgs -> Step -> [Kont] -> IO FinalResult
+loop _rt (RunPrompt _prompt (PromptStateFinal fr)) [] = pure fr
+loop rt step konts = do
+  (nextStep, nextKonts) <- eval rt step konts
+  loop rt nextStep nextKonts
+
 eval :: RuntimeArgs -> Step -> [Kont] -> IO (Step, [Kont])
-eval rt step konts =
+eval rt step konts = do
+  print (show step)
+  print (show konts)
   case step of
     RunPrompt prompt state ->
       let next s = pure (RunPrompt prompt s, konts)
@@ -158,6 +191,17 @@ eval rt step konts =
                 KontPar2 fr policy ->
                   let s = RunPrompt prompt $ PromptStateFinal $ merge policy fr finalResult
                    in pure (s, konts')
+                KontLoop n wf policy m -> do
+                  print n
+                  if n < 1
+                    then
+                      pure (step, konts')
+                    else
+                      let nextArgs = transcript policy finalResult
+                       in pure (RunWorkflow wf nextArgs, KontLoop (n - 1) wf policy m : konts')
+                KontUpdate cid -> do
+                  let konts'' = updateHistory cid (newMessages finalResult) konts' --
+                   in pure (step, konts'')
             PromptStateToolCalls
               PromptToolCalling
                 { toolRounds,
@@ -195,22 +239,52 @@ eval rt step konts =
                        in pure $
                             (RunWorkflow workflow args, k : konts)
     RunWorkflow workflow args -> case workflow of
-      WPrompt a -> do
+      WPrompt a mbcid -> do
+        let h = maybe [] (lookupHistory konts) mbcid
         pure
           ( RunPrompt
               ( Prompt
                   { agentWithModels = a,
-                    history = args.history,
+                    history = args.history ++ h,
                     prompt = args.prompt
                   }
               )
               $ PromptStatePending [],
-            konts
+            maybe konts (\cid -> KontUpdate cid : konts) mbcid
           )
       WSeq workflow1 workflow2 transcriptPolicy -> do
         pure (RunWorkflow workflow1 args, KontSeq workflow2 transcriptPolicy : konts)
       WPar workflow1 workflow2 mergePolicy -> do
         pure (RunWorkflow workflow1 args, KontPar1 workflow2 args mergePolicy : konts)
+      WLoop n workflow1 policy cids -> do
+        let m = Map.fromList [(cid, []) | cid <- cids]
+        pure (RunWorkflow workflow1 args, KontLoop (n - 1) workflow1 policy m : konts)
+
+lookupHistory :: [Kont] -> CID -> [Turn]
+lookupHistory [] _cid = []
+lookupHistory (k : konts) cid = case k of
+  KontLoop _n _wf _policy m ->
+    case Map.lookup cid m of
+      Nothing -> lookupHistory konts cid
+      Just h -> h
+  _ -> lookupHistory konts cid
+
+-- lookupHistory cid [] = []
+-- lookupHistory cid (k : konts) = case k of
+--  KontLoop n wf policy -> if cid == cid then k : lookupHistory cid konts else lookupHistory cid konts
+--  _ -> lookupHistory cid konts
+
+updateHistory :: CID -> [Turn] -> [Kont] -> [Kont]
+updateHistory cid history konts = case konts of
+  [] -> []
+  (k : konts') -> case k of
+    KontLoop n wf policy m ->
+      case Map.lookup cid m of
+        Nothing -> k : updateHistory cid history konts'
+        Just h ->
+          let m' = Map.insert cid (history ++ h) m
+           in KontLoop n wf policy m' : konts'
+    _ -> k : updateHistory cid history konts'
 
 createGenRequest :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
 createGenRequest agent rt messages =

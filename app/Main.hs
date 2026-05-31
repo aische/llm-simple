@@ -157,11 +157,12 @@ main = do
   let _models1 = ModelWithFallbacks {mwfModel = gpt, mwfFallbacks = [gemini, haiku, llama]}
       _models2 = ModelWithFallbacks {mwfModel = haiku, mwfFallbacks = [gemini, gpt, llama]}
       _models3 = ModelWithFallbacks {mwfModel = gemini, mwfFallbacks = [gpt, haiku, llama]}
+      _models4 = ModelWithFallbacks {mwfModel = llama, mwfFallbacks = []}
 
-  ag1 <- mkAgent expert _models3 True
-  ag2 <- mkAgent student _models2 True
-  ag3 <- mkAgent summarizer _models1 True
-  ag4 <- mkAgent worker2 _models2 True
+  ag1 <- mkAgent expert _models4 True
+  ag2 <- mkAgent student _models4 True
+  ag3 <- mkAgent summarizer _models4 True
+  ag4 <- mkAgent worker2 _models4 True
   let workflow1 =
         mkLoop 3 TranscriptPolicy [ag1, ag2] $
           WSeq ag2 ag1 TranscriptPolicy

@@ -6,5 +6,4 @@ data LoadConfigError
   = LoadModelCatalogError Text
   | LoadModelConfigError Text
   | LoadSystemPromptError Text
-  | LoadAgentCatalogError Text
   deriving (Show)

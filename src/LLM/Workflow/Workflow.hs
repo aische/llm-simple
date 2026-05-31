@@ -12,13 +12,12 @@ import LLM.Core
     getToolCalls,
   )
 import LLM.Generate
-  ( GenRequest (..),
-    Hooks (..),
+  ( Hooks (..),
     LogLevel (Debug, Info),
     generateTextWithFallbacks,
     -- streamTextWithFallbacks,
   )
-import LLM.Workflow.ToolUtils (executeTool, getResolvedTools, windowOffset)
+import LLM.Workflow.ToolUtils (executeTool, getResolvedTools, windowOffset, createGenRequest)
 import LLM.Workflow.Types
 
 newMessages :: FinalResult -> [Turn]
@@ -233,19 +232,6 @@ updateHistory cid history konts = case konts of
           let m' = Map.insert cid (history ++ h) m
            in KontLoop n wf policy m' : konts'
     _ -> k : updateHistory cid history konts'
-
-createGenRequest :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
-createGenRequest agent rt messages =
-  let offset = windowOffset agent.agContextWindow messages
-      tools = getResolvedTools agent rt
-   in GenRequest
-        { grSystemPrompt = agent.agSystemPrompt,
-          grTools = map (\x -> x.toolDef) tools,
-          grMessages = drop offset messages,
-          grAbortSignal = rt.rtAbortSignal,
-          grLLMHooks = rt.rtLLMHooks,
-          grHooks = rt.rtHooks
-        }
 
 respToAssistantTurn :: ChatResponse -> (Turn, [ToolCall])
 respToAssistantTurn cr = (AssistantTurn cr.respText cr.respReasoning toolCalls, toolCalls)

@@ -1,4 +1,14 @@
-module LLM.Load.LoadModels where
+module LLM.Load.LoadModels
+  ( ModelConfigMap,
+    loadModelConfigMap,
+    loadModels,
+    loadModel,
+    loadModelsOrThrow,
+    loadModelOrThrow,
+    loadModelsOrThrow_,
+    loadModelOrThrow_,
+  )
+where
 
 import Control.Lens (Each (each), mapMOf)
 import Control.Monad (forM)
@@ -46,6 +56,16 @@ loadModels filePath s = do
   r <- liftEither $ maybe (Left $ LoadModelConfigError "Model not found") Right $ mapMOf each (`Map.lookup` modelConfigMap) s
   pure (r, modelConfigMap, gatewayMap)
 
+loadModel :: FilePath -> Text -> ExceptT LoadConfigError IO (ModelConfig, ModelConfigMap, GatewayMap)
+loadModel filePath modelConfigName = do
+  (modelConfigMap, gatewayMap) <- loadModelConfigMap filePath
+  case Map.lookup modelConfigName modelConfigMap of
+    Nothing -> throwError $ LoadModelConfigError $ "Model not found: " <> modelConfigName
+    Just modelConfig -> pure (modelConfig, modelConfigMap, gatewayMap)
+
+-- | Load models from a json file and throw an error if any model is not found
+--
+-- > (gpt, llama, haiku) <- loadModelsOrThrow "./model-catalog.json" ("gpt_4_1", "llama_3_2", "haiku_4_5")
 loadModelsOrThrow :: (Each s t Text ModelConfig) => FilePath -> s -> IO t
 loadModelsOrThrow filepath s =
   (\(x, _, _) -> x) <$> loadModelsOrThrow_ filepath s
@@ -57,6 +77,7 @@ loadModelsOrThrow_ filePath s = do
     Left err -> error (show err)
     Right result -> pure result
 
+-- | Load a single model from a json file and throw an error if the model is not found
 loadModelOrThrow :: FilePath -> Text -> IO ModelConfig
 loadModelOrThrow filePath modelConfigName = do
   (\(x, _, _) -> x) <$> loadModelOrThrow_ filePath modelConfigName

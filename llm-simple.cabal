@@ -92,12 +92,14 @@ library
         LLM.Tools.CreateDirectory
         LLM.Tools.RemoveDirectory
 
+        LLM.Load
         LLM.Load.LoadGateways
         LLM.Load.ModelCatalog
         LLM.Load.LoadModels
         LLM.Load.Types
         LLM.Load.Utils
 
+        LLM.Workflow
         LLM.Workflow.Types
         LLM.Workflow.Workflow
         LLM.Workflow.ToolUtils

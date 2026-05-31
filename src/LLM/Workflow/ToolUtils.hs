@@ -1,0 +1,207 @@
+module LLM.Workflow.ToolUtils
+  ( createToolContext,
+    getSchema,
+    toTool,
+    filterReadonlyTools,
+    getResolvedTools,
+    windowOffset,
+    createGenRequest,
+    executeTool,
+    toTypedWorkflowTool,
+    workflowToolTyped,
+  )
+where
+
+import Autodocodec qualified as AC
+import Autodocodec.Schema (jsonSchemaVia)
+import Control.Exception (SomeException (..), try)
+import Data.Aeson (FromJSON)
+import Data.Aeson qualified as AE
+import Data.Map qualified as Map
+import Data.Text (Text)
+import Data.Text qualified as T
+import LLM
+  ( GenRequest (..),
+    Hooks (..),
+    ToolCall (..),
+    ToolDef (..),
+    Turn,
+    TypedTool (..),
+  )
+import LLM.Core.Types (Turn (..))
+import LLM.Core.Usage (Usage (..))
+import LLM.Workflow.Tools.HistoryTool (historyToolTyped)
+import LLM.Workflow.Types
+  ( Agent (..),
+    PromptArgs,
+    RuntimeArgs (..),
+    Tool (..),
+    ToolContext (..),
+    ToolMap,
+    ToolOutcome (..),
+    TypedWorkflowTool (..),
+    Workflow,
+  )
+
+-- -- | Execute a single tool call by looking it up in the tool list
+executeTool :: Hooks -> ToolContext -> [Tool] -> ToolCall -> IO ToolOutcome
+executeTool hooks ctx tools tc = case lookup tc.tcName toolMap of
+  Nothing -> pure $ ToolReply ("Unknown tool: " <> tc.tcName)
+  Just exec -> do
+    hooks.onToolCall tc.tcName (AE.toJSON tc.tcArguments)
+    result <- try (exec ctx tc.tcArguments)
+    case result of
+      Right outcome -> pure outcome
+      --  case outcome of
+      --   ToolReply text -> do
+      --     hooks.onToolResult tc.tcName text
+      --     pure $ ToolReply $ toolResult tc text
+      --   ToolWorkflow workflow promptArgs -> do
+      --     hooks.onToolResult tc.tcName "Workflow"
+      --     pure $ ToolWorkflow workflow promptArgs
+      Left (e :: SomeException) -> do
+        hooks.onToolError tc.tcName (T.pack (show e))
+        pure $ ToolReply ("Tool error: " <> T.pack (show e))
+  where
+    toolMap = [(t.toolDef.toolName, t.toolExecute) | t <- tools]
+
+-- -- | Execute all tool calls from a response
+-- executeTools :: Hooks -> ToolContext -> [Tool] -> [ToolCall] -> IO [ToolResult]
+-- executeTools hooks ctx tools = mapM (executeTool hooks ctx tools)
+
+-- -- | Execute tool calls one at a time, checking the abort signal between each.
+-- -- Returns @Left Aborted@ if the signal fires before all calls finish.
+-- executeToolsWithAbort :: Maybe AbortSignal -> Hooks -> ToolContext -> [Tool] -> [ToolCall] -> IO (GenerateResult [ToolResult])
+-- executeToolsWithAbort Nothing hooks ctx tools tcs = Right <$> executeTools hooks ctx tools tcs
+-- executeToolsWithAbort (Just sig) hooks ctx tools tcs = go [] tcs
+--   where
+--     go acc [] = pure (Right (reverse acc))
+--     go acc (tc : rest) = do
+--       aborted <- isAborted sig
+--       if aborted
+--         then pure (Left GErrAborted)
+--         else do
+--           r <- executeTool hooks ctx tools tc
+--           go (r : acc) rest
+
+createToolContext ::
+  Agent ->
+  [Turn] ->
+  Usage ->
+  RuntimeArgs ->
+  ToolContext
+createToolContext agent messages roundUsage rt =
+  ToolContext
+    { tcConversation = messages,
+      tcUsage = roundUsage,
+      tcWindowOffset = windowOffset agent.agContextWindow messages,
+      tcRuntimeArgs = rt
+    }
+
+getSchema :: (AC.HasCodec t, FromJSON t) => tool ToolContext t -> AC.JSONCodec t
+getSchema _ = AC.codec
+
+toTypedWorkflowTool :: (AC.HasCodec t, FromJSON t) => TypedTool ToolContext t -> TypedWorkflowTool ToolContext t
+toTypedWorkflowTool (TypedTool name descr readonly exec) =
+  TypedWorkflowTool
+    { twtName = name,
+      twtDescription = descr,
+      twtReadonly = readonly,
+      twtExecute = \ctx args -> ToolReply <$> exec ctx args
+    }
+
+-- class ToTypedWorkflowTool t a where
+--   toTypedWorkflowTool :: t ToolContext a -> TypedWorkflowTool ToolContext a
+
+class (AC.HasCodec a, FromJSON a) => ToTool t a where
+  toTool :: t ToolContext a -> Tool
+
+instance (AC.HasCodec a, FromJSON a) => ToTool TypedWorkflowTool a where
+  toTool = typedWorkflowToolToTool
+
+instance (AC.HasCodec a, FromJSON a) => ToTool TypedTool a where
+  toTool :: TypedTool ToolContext a -> Tool
+  toTool = typedWorkflowToolToTool . toTypedWorkflowTool
+
+typedWorkflowToolToTool :: (AC.HasCodec t, FromJSON t) => TypedWorkflowTool ToolContext t -> Tool
+typedWorkflowToolToTool t@(TypedWorkflowTool name descr readonly exec) =
+  Tool
+    { toolDef =
+        ToolDef
+          { toolName = name,
+            toolDescription = descr,
+            toolReadonly = readonly,
+            toolParameters = AE.toJSON $ jsonSchemaVia $ getSchema t
+          },
+      toolExecute = \ctx argsvalue ->
+        case AE.fromJSON argsvalue of
+          AE.Error e -> pure $ ToolReply $ "Error: Parsing arguments failed " <> T.pack (show e)
+          AE.Success args -> exec ctx args
+    }
+
+workflowToolTyped :: (AC.HasCodec a) => Text -> Text -> (a -> ctx -> (Workflow, PromptArgs)) -> TypedWorkflowTool ctx a
+workflowToolTyped name description mkWorkflow =
+  TypedWorkflowTool
+    { twtName = name,
+      twtDescription = description,
+      twtReadonly = False,
+      twtExecute = \ctx args -> do
+        let (workflow, promptArgs) = mkWorkflow args ctx
+        pure $ ToolWorkflow workflow promptArgs
+    }
+
+filterReadonlyTools :: Bool -> [Tool] -> [Tool]
+filterReadonlyTools False tools = tools
+filterReadonlyTools True tools = filter (\x -> x.toolDef.toolReadonly) tools
+
+-- | Compute the index where the visible window starts.
+-- The window includes the last @n@ user messages and all turns that follow
+-- each of them (assistant replies, tool rounds, etc.).
+-- Returns 0 (no windowing) when the window is 'Nothing' or the conversation
+-- contains fewer than @n@ user messages.
+windowOffset :: Maybe Int -> [Turn] -> Int
+windowOffset Nothing _ = 0
+windowOffset (Just n) conv = findNthUserFromEnd n conv
+
+-- | Find the index of the Nth 'UserTurn' from the end of a conversation.
+-- Returns 0 if there are fewer than @n@ user messages.
+findNthUserFromEnd :: Int -> [Turn] -> Int
+findNthUserFromEnd 0 _conv = 0
+findNthUserFromEnd n conv = go (length conv - 1) n
+  where
+    go idx remaining
+      | idx < 0 = 0
+      | remaining <= 0 = idx + 1
+      | otherwise = case conv !! idx of
+          UserTurn _ -> go (idx - 1) (remaining - 1)
+          _ -> go (idx - 1) remaining
+
+createGenRequest :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
+createGenRequest agent rt messages =
+  let offset = windowOffset agent.agContextWindow messages
+      tools = getResolvedTools agent rt
+   in GenRequest
+        { grSystemPrompt = agent.agSystemPrompt,
+          grTools = map (\x -> x.toolDef) tools,
+          grMessages = drop offset messages,
+          grAbortSignal = rt.rtAbortSignal,
+          grLLMHooks = rt.rtLLMHooks,
+          grHooks = rt.rtHooks
+        }
+
+getResolvedTools :: Agent -> RuntimeArgs -> [Tool]
+getResolvedTools agent rt = filterReadonlyTools rt.rtReadonly tools ++ getHistoryTool agent
+  where
+    tools = getToolsFromMap rt.rtToolMap agent.agTools
+
+getToolsFromMap :: ToolMap -> [Text] -> [Tool]
+getToolsFromMap toolMap toolNames = toolNames >>= lookupTool
+  where
+    lookupTool name = case Map.lookup name toolMap of
+      Just tool -> [tool]
+      Nothing -> []
+
+getHistoryTool :: Agent -> [Tool]
+getHistoryTool agent = case agent.agContextWindow of
+  Just n | n > 0 -> [toTool $ toTypedWorkflowTool historyToolTyped]
+  _ -> []

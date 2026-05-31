@@ -53,6 +53,7 @@ createSpec opts = describe opts.specTitle $ do
               agTools =
                 [ toTool weatherToolTyped
                 ],
+              agUTools = [],
               agMaxToolRounds = 3,
               agContextWindow = Nothing
             }
@@ -93,6 +94,7 @@ createSpec opts = describe opts.specTitle $ do
             { agName = "test",
               agSystemPrompt = Just systemPrompt,
               agTools = [toTool weatherToolTyped],
+              agUTools = [],
               agMaxToolRounds = 3,
               agContextWindow = Nothing
             }

@@ -111,6 +111,7 @@ data Workflow m i o where
   WSeq :: Workflow m i x -> Workflow m y o -> TranscriptPolicy x y -> Workflow m i o
   WPar :: Workflow m i x -> Workflow m i y -> MergePolicy x y o -> Workflow m i o
   WLift :: (i -> m o) -> Workflow m i o
+  WLiftW :: (i -> m (Workflow m i' o)) -> Workflow m (i, i') o
   WMap :: Workflow m i o -> TranscriptPolicy o o' -> Workflow m i o'
   WLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> [CID] -> Workflow m i o
 

@@ -132,6 +132,9 @@ eval rt (Stack step konts) = do
         pure $ Stack (SWorkflow workflow1 i) (KMap f konts)
       WLoop n wf policy cids ->
         pure $ Stack (SWorkflow wf i) (KLoop (n - 1) wf policy (Map.fromList [(cid, []) | cid <- cids]) konts)
+      WLiftW f -> do
+        wf <- f (fst i)
+        pure $ Stack (SWorkflow wf (snd i)) konts
     SThrow {} -> pure $ Stack step konts
     SReturn o -> case konts of
       KEmpty -> pure $ Stack step konts

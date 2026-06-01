@@ -1,3 +1,4 @@
+{-# LANGUAGE ImpredicativeTypes #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Main where
@@ -33,6 +34,7 @@ import LLM.Workflow.Types
     CID (CID),
     Final (..),
     GenerateEvent (..),
+    GetCid (..),
     Kont,
     Prompt (..),
     PromptArgs (..),
@@ -40,7 +42,7 @@ import LLM.Workflow.Types
     Tool (..),
     ToolContext (..),
     ToolMap,
-    TranscriptPolicy (TranscriptFinalText, TranscriptPolicyFunc),
+    TranscriptPolicy (TranscriptFinalText, TranscriptFinalToPromptArgs, TranscriptPolicyFunc),
     TypedWorkflowTool,
     Workflow (..),
   )
@@ -163,6 +165,8 @@ main = do
   -- ag3 <- mkAgent summarizer _models4 True
   -- ag4 <- mkAgent worker2 _models4 True
   let workflow1 = WMap ag1 TranscriptFinalText
+
+      wf2 = mkLoop 3 TranscriptFinalToPromptArgs [ag1] ag1
   -- mkLoop 3 (TranscriptPolicyFunc id) [ag1, ag2] $
   --   WSeq ag2 ag1 (TranscriptPolicyFunc id)
   -- let workflow2 = WSeq workflow1 ag3 TranscriptFinalText
@@ -176,7 +180,7 @@ main = do
         ]
 
   -- t <- run Nothing toolMap "Which are the best programming languages for AI development? Try to use the subagent tool to gain expert knowledge about the topic." ag4
-  t <- run Nothing toolMap "What is the capital of France?" ag1
+  t <- run Nothing toolMap "What is the capital of France?" wf2
   TIO.putStrLn t
 
 --     -- pr = Prompt {agentWithModels = ag, history = [], prompt = "What is the capital of France?"}
@@ -247,16 +251,15 @@ run abortSignal toolMap prompt wf = do
   pure r.text
 
 mkAgent :: (MonadIO m) => Agent -> ModelWithFallbacks -> Bool -> m (Workflow m PromptArgs Final)
-mkAgent ag models False = pure $ WPrompt (AgentWithModels ag models)
+mkAgent ag models False = pure $ WPrompt (AgentWithModels ag models) Nothing
 mkAgent ag models True = do
-  pure $ WPrompt (AgentWithModels ag models)
+  cid <- CID <$> generate
+  pure $ WPrompt (AgentWithModels ag models) (Just cid)
 
--- mkLoop :: Int -> TranscriptPolicy i o -> [Workflow] -> Workflow -> Workflow
--- mkLoop n policy scope wf = WLoop n wf policy cids
---   where
---     getCid (WPrompt _ag (Just cid)) = [cid]
---     getCid _ = []
---     cids = concatMap getCid scope
+mkLoop :: (MonadIO m, GetCid x) => Int -> TranscriptPolicy o i -> [x] -> Workflow m i o -> Workflow m i o
+mkLoop n policy scope wf = WLoop n wf policy cids
+  where
+    cids = concatMap getCid scope :: [CID]
 
 addTools :: [Tool m] -> ToolMap m -> ToolMap m
 addTools tools toolMap = toolMap <> Map.fromList [(tool.toolDef.toolName, tool) | tool <- tools]

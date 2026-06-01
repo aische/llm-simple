@@ -73,6 +73,9 @@ data Final = Final
     text :: Text
   }
 
+newtype CID = CID {cid :: UUID}
+  deriving (Eq, Ord, Show)
+
 data TranscriptPolicy i o where
   TranscriptPolicyFunc :: (i -> o) -> TranscriptPolicy i o
   TranscriptFinalToPromptArgs :: TranscriptPolicy Final PromptArgs
@@ -86,22 +89,29 @@ transcriptPolicy TranscriptFinalText final = final.text
 type MergePolicy o1 o2 o = o1 -> o2 -> o
 
 data Workflow m i o where
-  WPrompt :: AgentWithModels -> Workflow m PromptArgs Final
+  WPrompt :: AgentWithModels -> Maybe CID -> Workflow m PromptArgs Final
   WPromptO :: (GeneratableObject a) => AgentWithModels -> Workflow m PromptArgs a
   WSeq :: Workflow m i x -> Workflow m y o -> TranscriptPolicy x y -> Workflow m i o
   WPar :: Workflow m i x -> Workflow m i y -> MergePolicy x y o -> Workflow m i o
   WLift :: (i -> m o) -> Workflow m i o
   WMap :: Workflow m i o -> TranscriptPolicy o o' -> Workflow m i o'
-
--- WLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> Workflow m i o
+  WLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> [CID] -> Workflow m i o
 
 data Step m o where
-  SPrompt :: Pending -> Step m Final
+  SPrompt :: Pending -> Maybe CID -> Step m Final
   SPromptO :: (GeneratableObject a) => Pending -> Step m a
   SReturn :: o -> Step m o
   STool :: Pending -> Turn -> ToolCall -> Step m Text
   SThrow :: GenerateError -> Step m o
   SWorkflow :: Workflow m i o -> i -> Step m o
+
+class GetCid a where
+  getCid :: a -> [CID]
+
+instance GetCid (Workflow m i o) where
+  getCid :: forall i' o' m'. Workflow m' i' o' -> [CID]
+  getCid (WPrompt _ag (Just cid)) = [cid]
+  getCid _ = []
 
 -- RunWorkflow :: Workflow m o -> Step m o
 
@@ -112,9 +122,50 @@ data Kont m o r where
   KPar1 :: i -> Workflow m i y -> MergePolicy x y o -> Kont m o r -> Kont m x r
   KPar2 :: x -> MergePolicy x y o -> Kont m o r -> Kont m y r
   KMap :: TranscriptPolicy o o' -> Kont m o' r -> Kont m o r
+  KLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> (Map.Map CID [Turn]) -> Kont m o r -> Kont m o r
+  KUpdateHistory :: CID -> [Turn] -> Kont m o r -> Kont m o r
 
--- KPar :: x -> Workflow m i y -> MergePolicy x y o -> Kont m y r -> Kont m i r
--- KLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> [CID] -> Kont m o r -> Kont m i r
+lookupHistory :: Kont m o r -> CID -> [Turn]
+lookupHistory kont cid = case kont of
+  KEmpty -> []
+  KTool _pending _assistantTurn _toolCalls _toolResults _toolCall k -> lookupHistory k cid
+  KSeq1 _workflow2 _pol k -> lookupHistory k cid
+  KPar1 _i _workflow2 _mergePolicy k -> lookupHistory k cid
+  KPar2 _x _mergePolicy k -> lookupHistory k cid
+  KMap _pol k -> lookupHistory k cid
+  KUpdateHistory _cid _history k -> lookupHistory k cid
+  KLoop _n _workflow _policy cids k ->
+    case Map.lookup cid cids of
+      Nothing -> lookupHistory k cid
+      Just history -> history
+
+updateHistory :: CID -> [Turn] -> Kont m o r -> Kont m o r
+updateHistory cid history kont = case kont of
+  KEmpty -> KEmpty
+  KTool pending assistantTurn toolCalls toolResults toolCall k ->
+    KTool pending assistantTurn toolCalls toolResults toolCall (updateHistory cid history k)
+  KSeq1 workflow2 pol k ->
+    KSeq1 workflow2 pol (updateHistory cid history k)
+  KPar1 i workflow2 mergePolicy k ->
+    KPar1 i workflow2 mergePolicy (updateHistory cid history k)
+  KPar2 x mergePolicy k ->
+    KPar2 x mergePolicy (updateHistory cid history k)
+  KMap pol k ->
+    KMap pol (updateHistory cid history k)
+  KLoop n workflow policy cids k -> case Map.lookup cid cids of
+    Nothing -> KLoop n workflow policy cids (updateHistory cid history k)
+    Just _h -> KLoop n workflow policy (Map.insert cid history cids) k
+  KUpdateHistory c h k ->
+    KUpdateHistory c h (updateHistory cid history k)
+
+-- nextKont :: Kont m o r -> Maybe (Kont m o' r)
+-- nextKont kont = case kont of
+--   KEmpty -> Nothing
+--   KTool _pending _assistantTurn _toolCalls _toolResults _toolCall k -> Just k
+--   KSeq1 _workflow2 _pol k -> Just k
+--   KPar1 _i _workflow2 _mergePolicy k -> Just k
+--   KPar2 _x _mergePolicy k -> Just k
+--   KMap _pol k -> Just k
 
 data Stack m r where
   Stack :: (Step m o) -> (Kont m o r) -> Stack m r
@@ -148,9 +199,6 @@ data AgentWithModels = AgentWithModels
 
 instance Show AgentWithModels where
   show AgentWithModels {agent} = "AgentWithModels {agent = " <> show agent.agName <> "}"
-
-newtype CID = CID UUID
-  deriving (Eq, Ord, Show)
 
 -- * Generation events -------------------------------------------------------
 

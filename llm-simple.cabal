@@ -36,6 +36,8 @@ common opts
         DuplicateRecordFields
         NoFieldSelectors
         StrictData
+        GADTs
+        TypeFamilies
     ghc-options: 
         -Wall 
         -Wunused-imports
@@ -102,6 +104,7 @@ library
         LLM.Workflow
         LLM.Workflow.Types
         LLM.Workflow.Workflow
+        LLM.Workflow.Workflow2
         LLM.Workflow.ToolUtils
         LLM.Workflow.Tools.HistoryTool
 

@@ -10,7 +10,7 @@ import LLM
     GenerateResult,
     ToolCall (..),
     ToolResult (..),
-    Turn (ToolTurn, UserTurn),
+    Turn (..),
     emptyUsage,
     genObject,
     generateTextWithFallbacks,
@@ -33,12 +33,12 @@ import LLM.Workflow.Utils (lookupHistory, mergePolicy, pendingToFinal, pendingTo
 
 callLLM :: (MonadIO m) => RuntimeArgs m -> Pending -> IO (GenerateResult ChatResponse)
 callLLM rt pending = do
-  let messages = pending.prompt.history ++ [UserTurn pending.prompt.prompt] ++ pending.toolRounds
+  let messages = pendingToTurns pending
   generateTextWithFallbacks (createGenRequest pending.prompt.agent.agent rt messages) pending.prompt.agent.models
 
 callLLMO :: (GeneratableObject a, MonadIO m) => RuntimeArgs m -> Pending -> IO (GenerateResult a)
 callLLMO rt pending = do
-  let messages = pending.prompt.history ++ [UserTurn pending.prompt.prompt] ++ pending.toolRounds
+  let messages = pendingToTurns pending
   r <- genObject (createGenRequest pending.prompt.agent.agent rt messages) pending.prompt.agent.models
   case r of
     Left errResult -> pure $ Left errResult.gerError
@@ -102,7 +102,7 @@ eval rt (Stack step konts) = do
           pure $ Stack (RunReturn text) konts
     RunWorkflow workflow i -> case workflow of
       WPrompt a mbcid ->
-        let h = maybe i.history (lookupHistory konts) mbcid -- what happens to i.history?
+        let h = maybe i.history (lookupHistory konts) mbcid
          in let pending = Pending {prompt = Prompt {agent = a, prompt = i.prompt, history = h}, toolRounds = []}
              in pure $ Stack (RunPrompt pending mbcid) konts
       WObject a ->

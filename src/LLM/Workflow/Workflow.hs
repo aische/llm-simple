@@ -2,8 +2,6 @@
 
 module LLM.Workflow.Workflow where
 
--- import Data.Map qualified as Map
-
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Map qualified as Map
 import Data.Text (Text)
@@ -23,23 +21,6 @@ import LLM
   )
 import LLM.Workflow.ToolUtils (createGenRequest, executeTool, getResolvedTools)
 import LLM.Workflow.Types
-
--- import Data.Text qualified as T
--- import LLM.Core
---   ( ChatResponse (..),
---     ToolCall (..),
---     ToolResult (..),
---     Turn (AssistantTurn, ToolTurn, UserTurn),
---     emptyUsage,
---     getToolCalls,
---   )
--- import LLM.Generate
---   ( Hooks (..),
---     LogLevel (Debug, Info),
---     generateTextWithFallbacks,
---     -- streamTextWithFallbacks,
---   )
--- import LLM.Workflow.ToolUtils (executeTool, getResolvedTools, windowOffset, createGenRequest)
 
 respToAssistantTurn :: ChatResponse -> (Turn, [ToolCall])
 respToAssistantTurn cr = (AssistantTurn cr.respText cr.respReasoning toolCalls, toolCalls)
@@ -74,9 +55,6 @@ assistantTurnText _ = ""
 
 pendingHistory :: Pending -> [Turn]
 pendingHistory pending = pending.prompt.history ++ [UserTurn pending.prompt.prompt] ++ pending.toolRounds
-
--- executeTool :: (MonadIO m) => Hooks -> ToolContext -> [Tool] -> ToolCall -> m (ToolOutcome m)
--- executeTool _hooks _ctx _tools _tc = undefined
 
 runWorkflow :: (MonadIO m) => RuntimeArgs m -> Workflow m i o -> i -> m o
 runWorkflow rt workflow i =
@@ -132,10 +110,8 @@ eval rt (Stack step konts) = do
       result <- executeTool rt.rtHooks ctx tools toolCall
       case result of
         ToolWorkflow workflow args -> do
-          liftIO $ print $ "ToolWorkflow: " <> show args
           pure $ Stack (SWorkflow workflow args) konts
         ToolReply text -> do
-          liftIO $ print $ "ToolReply: " <> text
           pure $ Stack (SReturn text) konts
     SWorkflow workflow i -> case workflow of
       WPrompt a mbcid ->
@@ -169,7 +145,6 @@ eval rt (Stack step konts) = do
               [] -> do
                 let pending' = pending {toolRounds = pending.toolRounds ++ [assistantTurn, ToolTurn toolResults']}
                  in do
-                      liftIO $ print $ "SPrompt pending': " <> show pending'
                       pure $ Stack (SPrompt pending' mcid) k
       KSeq1 workflow2 pol k ->
         let o' = transcriptPolicy pol o
@@ -188,48 +163,3 @@ eval rt (Stack step konts) = do
             pure $ Stack (SWorkflow workflow $ transcriptPolicy policy o) (KLoop (n - 1) workflow policy cids k)
       KUpdateHistory cid history k -> do
         pure $ Stack step $ updateHistory cid history k
-
--- _ -> pure $ Stack step konts
-
---   pure (SWorkflow workflow args, KTool pending assistantTurn toolCalls' [] toolCall : konts)
--- pure (STool, KTool pending assistantTurn toolCalls [] : konts)
--- _ -> undefined
-
--- KontToolCall prompt _pcs toolCall ->
---   let tr = ToolResult toolCall.tcId toolCall.tcName text
---   in pure (step, konts')
-
--- lookupHistory :: Kont m o r -> CID -> [Turn]
--- lookupHistory [] _cid = []
--- lookupHistory k cid = case k of
---   KLoop _n _wf _policy _cids k ->
---     case Map.lookup cid _cids of
---       Nothing -> lookupHistory konts cid
---       Just h -> h
---   _ -> lookupHistory konts cid
-
--- updateHistory :: CID -> [Turn] -> [Kont] -> [Kont]
--- updateHistory cid history konts = case konts of
---   [] -> []
---   (k : konts') -> case k of
---     KontLoop n wf policy m ->
---       case Map.lookup cid m of
---         Nothing -> k : updateHistory cid history konts'
---         Just h ->
---           let m' = Map.insert cid (history ++ h) m
---            in KontLoop n wf policy m' : konts'
---     _ -> k : updateHistory cid history konts'
-
--- WPrompt a mbcid -> do
---   let h = maybe [] (lookupHistory konts) mbcid
---   pure
---     ( RunPrompt
---         ( Prompt
---             { agentWithModels = a,
---               history = args.history ++ h,
---               prompt = args.prompt
---             }
---         )
---         $ PromptStatePending [],
---       maybe konts (\cid -> KontUpdate cid : konts) mbcid
---     )

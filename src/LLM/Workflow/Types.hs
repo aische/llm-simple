@@ -150,8 +150,6 @@ instance GetCid (Workflow m i o) where
   getCid (WPrompt _ag (Just cid)) = [cid]
   getCid _ = []
 
--- RunWorkflow :: Workflow m o -> Step m o
-
 data Kont m o r where
   KEmpty :: Kont m o o
   KTool :: Pending -> Maybe CID -> Turn -> [ToolCall] -> [ToolResult] -> ToolCall -> Kont m Final r -> Kont m Text r
@@ -194,15 +192,6 @@ updateHistory cid history kont = case kont of
     Just _h -> KLoop n workflow policy (Map.insert cid history cids) k
   KUpdateHistory c h k ->
     KUpdateHistory c h (updateHistory cid history k)
-
--- nextKont :: Kont m o r -> Maybe (Kont m o' r)
--- nextKont kont = case kont of
---   KEmpty -> Nothing
---   KTool _pending _assistantTurn _toolCalls _toolResults _toolCall k -> Just k
---   KSeq1 _workflow2 _pol k -> Just k
---   KPar1 _i _workflow2 _mergePolicy k -> Just k
---   KPar2 _x _mergePolicy k -> Just k
---   KMap _pol k -> Just k
 
 data Stack m r where
   Stack :: (Step m o) -> (Kont m o r) -> Stack m r

@@ -98,6 +98,15 @@ data MergePolicy o1 o2 o where
   MergePolicyFunc :: (o1 -> o2 -> o) -> MergePolicy o1 o2 o
   MergePolicyFinalToPromptArgs :: MergePolicy Final Final PromptArgs
 
+data LoopContext i o = LoopContext
+  { lcIteration :: Int,
+    lcMaxIterations :: Int,
+    lcInput :: i,
+    lcNextInput :: i,
+    lcOutput :: o,
+    lcOutputs :: [o]
+  }
+
 data Workflow m i o where
   WPrompt :: AgentWithModels -> Maybe CID -> Workflow m PromptArgs Final
   WObject :: (GeneratableObject a) => AgentWithModels -> Workflow m PromptArgs a
@@ -107,6 +116,8 @@ data Workflow m i o where
   WLiftW :: (i -> m (Workflow m i' o)) -> Workflow m (i, i') o
   WMap :: Workflow m i o -> TranscriptPolicy o o' -> Workflow m i o'
   WLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> [CID] -> Workflow m i o
+  -- WLoopWhile :: Int -> Workflow m i o -> TranscriptPolicy o i -> Workflow m (LoopContext i o) d -> TranscriptPolicy d Bool -> [CID] -> Workflow m i o
+  WLoopWhile :: Int -> Workflow m (LoopContext i o) d -> TranscriptPolicy d Bool -> [CID] -> TranscriptPolicy o i -> Workflow m i o -> Workflow m i o
   WCatch :: o -> Workflow m i o -> Workflow m i o
 
 data Step m o where
@@ -125,6 +136,8 @@ data Kont m o r where
   KPar2 :: x -> MergePolicy x y o -> Kont m o r -> Kont m y r
   KMap :: TranscriptPolicy o o' -> Kont m o' r -> Kont m o r
   KLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> (Map.Map CID [Turn]) -> Kont m o r -> Kont m o r
+  KLoopWhile :: Int -> Int -> Workflow m i o -> TranscriptPolicy o i -> Workflow m (LoopContext i o) d -> TranscriptPolicy d Bool -> (Map.Map CID [Turn]) -> i -> [o] -> Kont m o r -> Kont m o r
+  KLoopWhileDecision :: Int -> Int -> Workflow m i o -> TranscriptPolicy o i -> Workflow m (LoopContext i o) d -> TranscriptPolicy d Bool -> (Map.Map CID [Turn]) -> i -> [o] -> o -> Kont m o r -> Kont m d r
   KUpdateHistory :: CID -> [Turn] -> Kont m o r -> Kont m o r
   KCatch :: o -> Kont m o r -> Kont m o r
 

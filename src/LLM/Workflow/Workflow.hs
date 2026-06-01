@@ -20,6 +20,7 @@ import LLM.Workflow.ToolUtils (createGenRequest, executeTool, getResolvedTools)
 import LLM.Workflow.Types
   ( AgentWithModels (agent, models),
     Kont (..),
+    LoopContext (..),
     Pending (..),
     Prompt (Prompt, agent, history, prompt),
     PromptArgs (history, prompt),
@@ -120,6 +121,11 @@ eval rt (Stack step konts) = do
         pure $ Stack (RunWorkflow workflow1 i) (KMap f konts)
       WLoop n wf policy cids ->
         pure $ Stack (RunWorkflow wf i) (KLoop (n - 1) wf policy (Map.fromList [(cid, []) | cid <- cids]) konts)
+      WLoopWhile maxIterations decider decisionPolicy cids policy wf ->
+        pure $
+          Stack
+            (RunWorkflow wf i)
+            (KLoopWhile maxIterations 1 wf policy decider decisionPolicy (Map.fromList [(cid, []) | cid <- cids]) i [] konts)
       WLiftW f -> do
         wf <- f (fst i)
         pure $ Stack (RunWorkflow wf (snd i)) konts
@@ -159,6 +165,33 @@ eval rt (Stack step konts) = do
             pure $ Stack (RunReturn o) k
           else
             pure $ Stack (RunWorkflow workflow $ transcriptPolicy policy o) (KLoop (n - 1) workflow policy cids k)
+      KLoopWhile maxIterations iteration workflow policy decider decisionPolicy cids currentInput outputsRev k -> do
+        if iteration >= maxIterations
+          then pure $ Stack (RunReturn o) k
+          else do
+            let nextInput = transcriptPolicy policy o
+                outputsRev' = o : outputsRev
+                ctx =
+                  LoopContext
+                    { lcIteration = iteration,
+                      lcMaxIterations = maxIterations,
+                      lcInput = currentInput,
+                      lcNextInput = nextInput,
+                      lcOutput = o,
+                      lcOutputs = reverse outputsRev'
+                    }
+            pure $
+              Stack
+                (RunWorkflow decider ctx)
+                (KLoopWhileDecision maxIterations iteration workflow policy decider decisionPolicy cids nextInput outputsRev' o k)
+      KLoopWhileDecision maxIterations iteration workflow policy decider decisionPolicy cids nextInput outputsRev lastOutput k ->
+        if transcriptPolicy decisionPolicy o
+          then
+            pure $
+              Stack
+                (RunWorkflow workflow nextInput)
+                (KLoopWhile maxIterations (iteration + 1) workflow policy decider decisionPolicy cids nextInput outputsRev k)
+          else pure $ Stack (RunReturn lastOutput) k
       KUpdateHistory cid history k -> do
         pure $ Stack step $ updateHistory cid history k
       KCatch r k ->

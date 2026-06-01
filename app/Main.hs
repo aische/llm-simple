@@ -37,6 +37,7 @@ import LLM.Workflow.Types
     GenerateEvent (..),
     GetCid (..),
     Kont,
+    LoopContext (..),
     Prompt (..),
     PromptArgs (..),
     RuntimeArgs (..),
@@ -173,6 +174,12 @@ main = do
             (WCatch (emptyFinal "error: student unavailable") ag2)
             TranscriptFinalToPromptArgs
 
+  -- let decider = WPrompt (AgentWithModels expert _models2 True) Nothing
+  --     workflow2 =
+  --       mkLoopWhile 3 TranscriptFinalToPromptArgs decider decisionPolicy [ag1, ag2] TranscriptFinalToPromptArgs $
+  --         workflow1
+  -- (LoopContext {lcIteration = 0, lcMaxIterations = 3, lcInput = PromptArgs {history = [], prompt = "Ask the expert about the topic: "}, lcNextInput = PromptArgs {history = [], prompt = "Ask the expert about the topic: "}, lcOutput = emptyFinal "error: expert unavailable", lcOutputs = []}) TranscriptFinalToPromptArgs (WCatch (emptyFinal "error: expert unavailable") ag1) (WCatch (emptyFinal "error: student unavailable") ag2) TranscriptFinalToPromptArgs
+
   toolMap <-
     fsTools "./user-workspace/"
       <&> addTools
@@ -252,6 +259,11 @@ mkAgent ag models True = do
 
 mkLoop :: (MonadIO m, GetCid x) => Int -> TranscriptPolicy o i -> [x] -> Workflow m i o -> Workflow m i o
 mkLoop n policy scope wf = WLoop n wf policy cids
+  where
+    cids = concatMap getCid scope :: [CID]
+
+mkLoopWhile :: (MonadIO m, GetCid x) => Int -> TranscriptPolicy o i -> Workflow m (LoopContext i o) d -> TranscriptPolicy d Bool -> [x] -> Workflow m i o -> Workflow m i o
+mkLoopWhile maxIterations bodyPolicy decider decisionPolicy scope = WLoopWhile maxIterations decider decisionPolicy cids bodyPolicy
   where
     cids = concatMap getCid scope :: [CID]
 

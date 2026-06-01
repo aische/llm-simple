@@ -89,6 +89,14 @@ lookupHistory kont cid = case kont of
     case Map.lookup cid cids of
       Nothing -> lookupHistory k cid
       Just history -> history
+  KLoopWhile _maxIterations _iteration _workflow _policy _decider _decisionPolicy cids _currentInput _outputsRev k ->
+    case Map.lookup cid cids of
+      Nothing -> lookupHistory k cid
+      Just history -> history
+  KLoopWhileDecision _maxIterations _iteration _workflow _policy _decider _decisionPolicy cids _nextInput _outputsRev _lastOutput k ->
+    case Map.lookup cid cids of
+      Nothing -> lookupHistory k cid
+      Just history -> history
   KCatch _o k -> lookupHistory k cid
 
 updateHistory :: CID -> [Turn] -> Kont m o r -> Kont m o r
@@ -107,6 +115,12 @@ updateHistory cid history kont = case kont of
   KLoop n workflow pol cids k -> case Map.lookup cid cids of
     Nothing -> KLoop n workflow pol cids (updateHistory cid history k)
     Just _h -> KLoop n workflow pol (Map.insert cid history cids) k
+  KLoopWhile maxIterations iteration workflow pol decider decisionPolicy cids currentInput outputsRev k -> case Map.lookup cid cids of
+    Nothing -> KLoopWhile maxIterations iteration workflow pol decider decisionPolicy cids currentInput outputsRev (updateHistory cid history k)
+    Just _h -> KLoopWhile maxIterations iteration workflow pol decider decisionPolicy (Map.insert cid history cids) currentInput outputsRev k
+  KLoopWhileDecision maxIterations iteration workflow pol decider decisionPolicy cids nextInput outputsRev lastOutput k -> case Map.lookup cid cids of
+    Nothing -> KLoopWhileDecision maxIterations iteration workflow pol decider decisionPolicy cids nextInput outputsRev lastOutput (updateHistory cid history k)
+    Just _h -> KLoopWhileDecision maxIterations iteration workflow pol decider decisionPolicy (Map.insert cid history cids) nextInput outputsRev lastOutput k
   KUpdateHistory c h k ->
     KUpdateHistory c h (updateHistory cid history k)
   KCatch o k -> KCatch o (updateHistory cid history k)
@@ -122,6 +136,8 @@ stackSize kont = case kont of
   KLoop _n _workflow _policy _cids k -> 1 + stackSize k
   KUpdateHistory _cid _history k -> 1 + stackSize k
   KCatch _o k -> 1 + stackSize k
+  KLoopWhile _maxIterations _iteration _workflow _policy _decider _decisionPolicy _cids _currentInput _outputsRev k -> 1 + stackSize k
+  KLoopWhileDecision _maxIterations _iteration _workflow _policy _decider _decisionPolicy _cids _nextInput _outputsRev _lastOutput k -> 1 + stackSize k
 
 -- * Show functions for debugging -------------------------------------------
 
@@ -147,6 +163,10 @@ showKont kont =
     KPar1 _i _workflow2 _mergePolicy k -> "KPar1" : showKont k
     KPar2 _x _mergePolicy k -> "KPar2" : showKont k
     KMap _pol k -> "KMap" : showKont k
+    KLoopWhile _maxIterations iteration _workflow _policy _decider _decisionPolicy _cids _currentInput _outputsRev k ->
+      "KLoopWhile " <> T.pack (show iteration) <> "/" <> T.pack (show _maxIterations) : showKont k
+    KLoopWhileDecision _maxIterations iteration _workflow _policy _decider _decisionPolicy _cids _nextInput _outputsRev _lastOutput k ->
+      "KLoopWhileDecision " <> T.pack (show iteration) <> "/" <> T.pack (show _maxIterations) : showKont k
     KLoop _n _workflow _policy _cids k -> "KLoop " <> T.pack (show _n) : showKont k
     KUpdateHistory cid _history k -> "KUpdateHistory " <> T.pack (show cid) : showKont k
     KCatch _o k -> "KCatch" : showKont k

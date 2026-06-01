@@ -11,6 +11,7 @@ module LLM.Workflow
     Step (..),
     Kont (..),
     CID (..),
+    LoopContext (..),
     Workflow (..),
     AgentWithModels (..),
     ToolOutcome (..),

@@ -163,15 +163,10 @@ main = do
 
   ag1 <- mkAgent student _models1 True
   ag2 <- mkAgent expert _models2 True
-  -- ag2 <- mkAgent student _models4 True
-  -- ag3 <- mkAgent summarizer _models4 True
-  ag4 <- mkAgent worker2 _models4 True
+  ag3 <- mkAgent worker2 _models4 True
   let workflow1 =
         mkLoop 1 TranscriptFinalToPromptArgs [ag1, ag2] $
           WSeq ag1 ag2 TranscriptFinalToPromptArgs
-  -- mkLoop 3 (TranscriptPolicyFunc id) [ag1, ag2] $
-  --   WSeq ag2 ag1 (TranscriptPolicyFunc id)
-  -- let workflow2 = WSeq workflow1 ag3 TranscriptFinalText
   toolMap <-
     fsTools "./user-workspace/"
       <&> addTools
@@ -181,22 +176,9 @@ main = do
                 (WMap workflow1 TranscriptSummaryText, PromptArgs {history = [], prompt = "Ask the expert about the topic: " <> args.prompt})
         ]
 
-  -- t <- run Nothing toolMap "Which are the best programming languages for AI development? Try to use the subagent tool to gain expert knowledge about the topic." ag4
   let p1 = "Which are the best programming languages for AI development? Try to use the subagent tool to gain expert knowledge about the topic."
-  t <- run Nothing toolMap p1 ag4
+  t <- run Nothing toolMap p1 ag3
   TIO.putStrLn t
-
---     -- pr = Prompt {agentWithModels = ag, history = [], prompt = "What is the capital of France?"}
---     -- step = RunPrompt pr (PromptStatePending [])
---     wpr =
---       WSeq
---         (WPrompt ag (Just (CID "1")))
---         (WPrompt ag2 (Just (CID "2")))
---         TranscriptPolicy
---     pa = PromptArgs {history = [], prompt = "What is the capital of France?"}
---     step = RunWorkflow (WLoop 3 wpr TranscriptPolicy [CID "1", CID "2"]) pa
--- fr <- loop rt step []
--- print fr
 
 -- ---------------------------------------------------------------------------
 -- Demos
@@ -249,7 +231,6 @@ run abortSignal toolMap prompt wf = do
             rtReadonly = False,
             rtToolMap = toolMap
           }
-  -- r <- loop rt (RunWorkflow wf (PromptArgs {history = [], prompt})) []
   r <- runWorkflow rt wf (PromptArgs {history = [], prompt})
   pure r.text
 

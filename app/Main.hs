@@ -163,7 +163,7 @@ main = do
 
   ag1 <- mkAgent student _models1 True
   ag2 <- mkAgent expert _models2 True
-  _ag3 <- mkAgent worker2 _models4 True
+  ag3 <- mkAgent worker2 _models4 True
   ag4 <- mkAgent worker1 _models4 True
   let workflow1 =
         mkLoop 1 TranscriptFinalToPromptArgs [ag1, ag2] $
@@ -177,11 +177,12 @@ main = do
                 (WMap workflow1 TranscriptSummaryText, PromptArgs {history = [], prompt = "Ask the expert about the topic: " <> args.prompt})
         ]
 
-  -- let p1 = "Which are the best programming languages for AI development? Try to use the subagent tool to gain expert knowledge about the topic."
-  -- t <- run Nothing toolMap p1 ag3
-  let p1 = "are there any files in the current directory?"
-  t <- run Nothing toolMap p1 ag4
+  let p1 = "Which are the best programming languages for AI development? Try to use the subagent tool to gain expert knowledge about the topic."
+  t <- run Nothing toolMap p1 ag3
   TIO.putStrLn t
+  let p2 = "are there any files in the current directory?"
+  t2 <- run Nothing toolMap p2 ag4
+  TIO.putStrLn t2
 
 -- ---------------------------------------------------------------------------
 -- Demos

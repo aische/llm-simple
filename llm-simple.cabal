@@ -106,6 +106,7 @@ library
         LLM.Workflow.Types
         LLM.Workflow.Workflow
         LLM.Workflow.ToolUtils
+        LLM.Workflow.Utils
         LLM.Workflow.Tools.HistoryTool
 
     other-modules:

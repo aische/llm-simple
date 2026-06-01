@@ -1,0 +1,116 @@
+module LLM.Workflow.Utils where
+
+import Data.Map qualified as Map
+import Data.Text (Text)
+import Data.Text qualified as T
+import LLM (getToolCalls)
+import LLM.Core.Types
+  ( ChatResponse (..),
+    ToolCall,
+    ToolResult (trName),
+    Turn (AssistantTurn, ToolTurn, UserTurn),
+  )
+import LLM.Workflow.Types
+  ( CID,
+    Final (..),
+    Kont (..),
+    Pending (prompt, toolRounds),
+    Prompt (history, prompt),
+    PromptArgs (PromptArgs, history, prompt),
+    Step (..),
+    TranscriptPolicy (..),
+  )
+
+-- * Conversation mapping functions -----------------------------------------
+
+pendingToFinal :: Pending -> Text -> Turn -> Final
+pendingToFinal pending text assistantTurn =
+  Final
+    { prompt = pending.prompt,
+      history = pending.prompt.history,
+      newMessages = [UserTurn pending.prompt.prompt] ++ pending.toolRounds ++ [assistantTurn],
+      text = text
+    }
+
+pendingToTurns :: Pending -> [Turn]
+pendingToTurns pending = pending.prompt.history ++ [UserTurn pending.prompt.prompt] ++ pending.toolRounds
+
+respToAssistantTurn :: ChatResponse -> (Text, Turn, [ToolCall])
+respToAssistantTurn cr = (cr.respText, AssistantTurn cr.respText cr.respReasoning toolCalls, toolCalls)
+  where
+    toolCalls = getToolCalls cr
+
+-- * Transcript policy functions --------------------------------------------
+
+transcriptPolicy :: TranscriptPolicy i o -> i -> o
+transcriptPolicy (TranscriptPolicyFunc f) i = f i
+transcriptPolicy TranscriptFinalToPromptArgs final = PromptArgs {history = [], prompt = final.text}
+transcriptPolicy TranscriptFinalText final = final.text
+transcriptPolicy TranscriptSummaryText final = "Summary: " <> showTurnsAsText allMessages
+  where
+    allMessages = final.history ++ final.newMessages
+
+-- * Lookup and update history functions ------------------------------------
+
+lookupHistory :: Kont m o r -> CID -> [Turn]
+lookupHistory kont cid = case kont of
+  KEmpty -> []
+  KTool _pending _mcid _assistantTurn _toolCalls _toolResults _toolCall k -> lookupHistory k cid
+  KSeq1 _workflow2 _pol k -> lookupHistory k cid
+  KPar1 _i _workflow2 _mergePolicy k -> lookupHistory k cid
+  KPar2 _x _mergePolicy k -> lookupHistory k cid
+  KMap _pol k -> lookupHistory k cid
+  KUpdateHistory _cid _history k -> lookupHistory k cid
+  KLoop _n _workflow _policy cids k ->
+    case Map.lookup cid cids of
+      Nothing -> lookupHistory k cid
+      Just history -> history
+
+updateHistory :: CID -> [Turn] -> Kont m o r -> Kont m o r
+updateHistory cid history kont = case kont of
+  KEmpty -> KEmpty
+  KTool pending mcid assistantTurn toolCalls toolResults toolCall k ->
+    KTool pending mcid assistantTurn toolCalls toolResults toolCall (updateHistory cid history k)
+  KSeq1 workflow2 pol k ->
+    KSeq1 workflow2 pol (updateHistory cid history k)
+  KPar1 i workflow2 mergePolicy k ->
+    KPar1 i workflow2 mergePolicy (updateHistory cid history k)
+  KPar2 x mergePolicy k ->
+    KPar2 x mergePolicy (updateHistory cid history k)
+  KMap pol k ->
+    KMap pol (updateHistory cid history k)
+  KLoop n workflow policy cids k -> case Map.lookup cid cids of
+    Nothing -> KLoop n workflow policy cids (updateHistory cid history k)
+    Just _h -> KLoop n workflow policy (Map.insert cid history cids) k
+  KUpdateHistory c h k ->
+    KUpdateHistory c h (updateHistory cid history k)
+
+-- * Show functions for debugging -------------------------------------------
+
+showStep :: Step m o -> Text
+showStep = \case
+  RunPrompt _pending _mcid -> "RunPrompt "
+  RunObject _pending -> "RunObject"
+  RunReturn _o -> "RunReturn"
+  RunTool _pending _assistantTurn _toolCall -> "RunTool "
+  RunThrow _err -> "RunThrow " <> T.pack (show _err)
+  RunWorkflow _workflow _i -> "RunWorkflow "
+
+showKont :: Kont m o r -> Text
+showKont = \case
+  KEmpty -> "KEmpty"
+  KTool _pending _mcid _assistantTurn _toolCalls _toolResults _toolCall k -> "KTool " <> showKont k
+  KSeq1 _workflow2 _pol k -> "KSeq1 " <> showKont k
+  KPar1 _i _workflow2 _mergePolicy k -> "KPar1 " <> showKont k
+  KPar2 _x _mergePolicy k -> "KPar2 " <> showKont k
+  KMap _pol k -> "KMap " <> showKont k
+  KLoop _n _workflow _policy _cids k -> "KLoop " <> showKont k
+  KUpdateHistory _cid _history k -> "KUpdateHistory " <> showKont k
+
+showTurnsAsText :: [Turn] -> Text
+showTurnsAsText turns = T.unlines (map showTurn turns)
+  where
+    showTurn turn = case turn of
+      UserTurn text -> "User: " <> text
+      AssistantTurn text _ _ -> "Assistant: " <> text
+      ToolTurn toolResults -> "Tool: " <> T.unwords (map (\x -> x.trName) toolResults)

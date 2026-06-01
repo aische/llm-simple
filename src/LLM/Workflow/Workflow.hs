@@ -2,7 +2,6 @@ module LLM.Workflow.Workflow where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Map qualified as Map
-import Data.Text (Text)
 import Data.Text.IO qualified as TIO
 import LLM
   ( ChatResponse (..),
@@ -11,19 +10,26 @@ import LLM
     GenerateResult,
     ToolCall (..),
     ToolResult (..),
-    Turn (AssistantTurn, ToolTurn, UserTurn),
+    Turn (ToolTurn, UserTurn),
     emptyUsage,
     genObject,
     generateTextWithFallbacks,
-    getToolCalls,
   )
 import LLM.Workflow.ToolUtils (createGenRequest, executeTool, getResolvedTools)
 import LLM.Workflow.Types
-
-respToAssistantTurn :: ChatResponse -> (Turn, [ToolCall])
-respToAssistantTurn cr = (AssistantTurn cr.respText cr.respReasoning toolCalls, toolCalls)
-  where
-    toolCalls = getToolCalls cr
+  ( AgentWithModels (agent, models),
+    Kont (..),
+    Pending (..),
+    Prompt (Prompt, agent, history, prompt),
+    PromptArgs (history, prompt),
+    RuntimeArgs (rtHooks),
+    Stack (..),
+    Step (..),
+    ToolContext (..),
+    ToolOutcome (ToolReply, ToolWorkflow),
+    Workflow (..),
+  )
+import LLM.Workflow.Utils (lookupHistory, pendingToFinal, pendingToTurns, respToAssistantTurn, showKont, showStep, transcriptPolicy, updateHistory)
 
 callLLM :: (MonadIO m) => RuntimeArgs m -> Pending -> IO (GenerateResult ChatResponse)
 callLLM rt pending = do
@@ -38,25 +44,9 @@ callLLMO rt pending = do
     Left errResult -> pure $ Left errResult.gerError
     Right (value, _usage) -> pure $ Right value
 
-mkFinal :: Pending -> Turn -> Final
-mkFinal pending assistantTurn =
-  Final
-    { prompt = pending.prompt,
-      history = pending.prompt.history,
-      newMessages = [UserTurn pending.prompt.prompt] ++ pending.toolRounds ++ [assistantTurn],
-      text = assistantTurnText assistantTurn
-    }
-
-assistantTurnText :: Turn -> Text
-assistantTurnText (AssistantTurn text _ _) = text
-assistantTurnText _ = ""
-
-pendingHistory :: Pending -> [Turn]
-pendingHistory pending = pending.prompt.history ++ [UserTurn pending.prompt.prompt] ++ pending.toolRounds
-
 runWorkflow :: (MonadIO m) => RuntimeArgs m -> Workflow m i o -> i -> m o
 runWorkflow rt workflow i =
-  loop rt (Stack (SWorkflow workflow i) KEmpty)
+  loop rt (Stack (RunWorkflow workflow i) KEmpty)
 
 loop :: (MonadIO m) => RuntimeArgs m -> Stack m o -> m o
 loop rt stack = do
@@ -64,8 +54,8 @@ loop rt stack = do
   maybe (loop rt stack') pure $ isDone stack'
 
 isDone :: Stack m r -> Maybe r
-isDone (Stack (SReturn o) KEmpty) = Just o
-isDone (Stack (SThrow err) _) = error $ show err
+isDone (Stack (RunReturn o) KEmpty) = Just o
+isDone (Stack (RunThrow err) _) = error $ show err
 isDone (Stack _ _) = Nothing
 
 eval :: (MonadIO m) => RuntimeArgs m -> Stack m o -> m (Stack m o)
@@ -73,30 +63,30 @@ eval rt (Stack step konts) = do
   _ <- liftIO $ TIO.putStrLn $ "eval: " <> showStep step
   _ <- liftIO $ TIO.putStrLn $ "konts: " <> showKont konts
   case step of
-    SPromptO pending -> do
+    RunObject pending -> do
       result <- liftIO (callLLMO rt pending)
       case result of
-        Left err -> pure $ Stack (SThrow err) konts
-        Right value -> pure $ Stack (SReturn value) konts
-    SPrompt pending mcid -> do
+        Left err -> pure $ Stack (RunThrow err) konts
+        Right value -> pure $ Stack (RunReturn value) konts
+    RunPrompt pending mcid -> do
       result <- liftIO (callLLM rt pending)
       case result of
-        Left err -> pure $ Stack (SThrow err) konts
+        Left err -> pure $ Stack (RunThrow err) konts
         Right resp -> do
-          let (assistantTurn, toolCalls) = respToAssistantTurn resp
+          let (text, assistantTurn, toolCalls) = respToAssistantTurn resp
           case toolCalls of
             [] ->
-              let h = pendingHistory pending ++ [assistantTurn]
+              let h = pendingToTurns pending ++ [assistantTurn]
                in pure $
                     Stack
-                      (SReturn $ mkFinal pending assistantTurn)
+                      (RunReturn $ pendingToFinal pending text assistantTurn)
                       (maybe konts (\cid -> KUpdateHistory cid h konts) mcid)
             (toolCall : toolCalls') ->
               pure $
                 Stack
-                  (STool pending assistantTurn toolCall)
+                  (RunTool pending assistantTurn toolCall)
                   (KTool pending mcid assistantTurn toolCalls' [] toolCall konts)
-    STool pending assistantTurn toolCall -> do
+    RunTool pending assistantTurn toolCall -> do
       let ctx =
             ToolContext
               { tcConversation = pending.prompt.history ++ pending.toolRounds ++ [assistantTurn],
@@ -108,33 +98,33 @@ eval rt (Stack step konts) = do
       result <- executeTool rt.rtHooks ctx tools toolCall
       case result of
         ToolWorkflow workflow args -> do
-          pure $ Stack (SWorkflow workflow args) konts
+          pure $ Stack (RunWorkflow workflow args) konts
         ToolReply text -> do
-          pure $ Stack (SReturn text) konts
-    SWorkflow workflow i -> case workflow of
+          pure $ Stack (RunReturn text) konts
+    RunWorkflow workflow i -> case workflow of
       WPrompt a mbcid ->
         let h = maybe i.history (lookupHistory konts) mbcid -- what happens to i.history?
          in let pending = Pending {prompt = Prompt {agent = a, prompt = i.prompt, history = h}, toolRounds = []}
-             in pure $ Stack (SPrompt pending mbcid) konts
-      WPromptO a ->
+             in pure $ Stack (RunPrompt pending mbcid) konts
+      WObject a ->
         let pending = Pending {prompt = Prompt {agent = a, prompt = i.prompt, history = i.history}, toolRounds = []}
-         in pure $ Stack (SPromptO pending) konts
+         in pure $ Stack (RunObject pending) konts
       WSeq workflow1 workflow2 pol ->
-        pure $ Stack (SWorkflow workflow1 i) (KSeq1 workflow2 pol konts)
+        pure $ Stack (RunWorkflow workflow1 i) (KSeq1 workflow2 pol konts)
       WPar workflow1 workflow2 mergePolicy ->
-        pure $ Stack (SWorkflow workflow1 i) (KPar1 i workflow2 mergePolicy konts)
+        pure $ Stack (RunWorkflow workflow1 i) (KPar1 i workflow2 mergePolicy konts)
       WLift f -> do
         o <- f i
-        pure $ Stack (SReturn o) konts
+        pure $ Stack (RunReturn o) konts
       WMap workflow1 f ->
-        pure $ Stack (SWorkflow workflow1 i) (KMap f konts)
+        pure $ Stack (RunWorkflow workflow1 i) (KMap f konts)
       WLoop n wf policy cids ->
-        pure $ Stack (SWorkflow wf i) (KLoop (n - 1) wf policy (Map.fromList [(cid, []) | cid <- cids]) konts)
+        pure $ Stack (RunWorkflow wf i) (KLoop (n - 1) wf policy (Map.fromList [(cid, []) | cid <- cids]) konts)
       WLiftW f -> do
         wf <- f (fst i)
-        pure $ Stack (SWorkflow wf (snd i)) konts
-    SThrow {} -> pure $ Stack step konts
-    SReturn o -> case konts of
+        pure $ Stack (RunWorkflow wf (snd i)) konts
+    RunThrow {} -> pure $ Stack step konts
+    RunReturn o -> case konts of
       KEmpty -> pure $ Stack step konts
       KTool pending mcid assistantTurn toolCalls toolResults toolCall k ->
         let tr = ToolResult toolCall.tcId toolCall.tcName o
@@ -142,25 +132,25 @@ eval rt (Stack step konts) = do
          in case toolCalls of
               (toolCall' : toolCalls') ->
                 pure $
-                  Stack (STool pending assistantTurn toolCall') (KTool pending mcid assistantTurn toolCalls' toolResults' toolCall' k)
+                  Stack (RunTool pending assistantTurn toolCall') (KTool pending mcid assistantTurn toolCalls' toolResults' toolCall' k)
               [] -> do
                 let pending' = pending {toolRounds = pending.toolRounds ++ [assistantTurn, ToolTurn toolResults']}
                  in do
-                      pure $ Stack (SPrompt pending' mcid) k
+                      pure $ Stack (RunPrompt pending' mcid) k
       KSeq1 workflow2 pol k ->
         let o' = transcriptPolicy pol o
-         in pure $ Stack (SWorkflow workflow2 o') k
+         in pure $ Stack (RunWorkflow workflow2 o') k
       KPar1 i workflow2 mergePolicy k ->
-        pure $ Stack (SWorkflow workflow2 i) (KPar2 o mergePolicy k)
+        pure $ Stack (RunWorkflow workflow2 i) (KPar2 o mergePolicy k)
       KPar2 x mergePolicy k ->
-        pure $ Stack (SReturn $ mergePolicy x o) k
+        pure $ Stack (RunReturn $ mergePolicy x o) k
       KMap pol k ->
-        pure $ Stack (SReturn $ transcriptPolicy pol o) k
+        pure $ Stack (RunReturn $ transcriptPolicy pol o) k
       KLoop n workflow policy cids k ->
         if n < 1
           then
-            pure $ Stack (SReturn o) k
+            pure $ Stack (RunReturn o) k
           else
-            pure $ Stack (SWorkflow workflow $ transcriptPolicy policy o) (KLoop (n - 1) workflow policy cids k)
+            pure $ Stack (RunWorkflow workflow $ transcriptPolicy policy o) (KLoop (n - 1) workflow policy cids k)
       KUpdateHistory cid history k -> do
         pure $ Stack step $ updateHistory cid history k

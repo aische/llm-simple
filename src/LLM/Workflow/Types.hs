@@ -3,7 +3,6 @@ module LLM.Workflow.Types where
 import Data.Aeson (Value)
 import Data.Map qualified as Map
 import Data.Text (Text)
-import Data.Text qualified as T
 import Data.UUID.Types (UUID)
 import LLM.Core.Abort (AbortSignal)
 import LLM.Core.Types
@@ -87,27 +86,11 @@ data TranscriptPolicy i o where
   TranscriptFinalText :: TranscriptPolicy Final Text
   TranscriptSummaryText :: TranscriptPolicy Final Text
 
-transcriptPolicy :: TranscriptPolicy i o -> i -> o
-transcriptPolicy (TranscriptPolicyFunc f) i = f i
-transcriptPolicy TranscriptFinalToPromptArgs final = PromptArgs {history = [], prompt = final.text}
-transcriptPolicy TranscriptFinalText final = final.text
-transcriptPolicy TranscriptSummaryText final = "Summary: " <> showTurnsAsText allMessages
-  where
-    allMessages = final.history ++ final.newMessages
-
-showTurnsAsText :: [Turn] -> Text
-showTurnsAsText turns = T.unlines (map showTurn turns)
-  where
-    showTurn turn = case turn of
-      UserTurn text -> "User: " <> text
-      AssistantTurn text _ _ -> "Assistant: " <> text
-      ToolTurn toolResults -> "Tool: " <> T.unwords (map (\x -> x.trName) toolResults)
-
 type MergePolicy o1 o2 o = o1 -> o2 -> o
 
 data Workflow m i o where
   WPrompt :: AgentWithModels -> Maybe CID -> Workflow m PromptArgs Final
-  WPromptO :: (GeneratableObject a) => AgentWithModels -> Workflow m PromptArgs a
+  WObject :: (GeneratableObject a) => AgentWithModels -> Workflow m PromptArgs a
   WSeq :: Workflow m i x -> Workflow m y o -> TranscriptPolicy x y -> Workflow m i o
   WPar :: Workflow m i x -> Workflow m i y -> MergePolicy x y o -> Workflow m i o
   WLift :: (i -> m o) -> Workflow m i o
@@ -116,32 +99,12 @@ data Workflow m i o where
   WLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> [CID] -> Workflow m i o
 
 data Step m o where
-  SPrompt :: Pending -> Maybe CID -> Step m Final
-  SPromptO :: (GeneratableObject a) => Pending -> Step m a
-  SReturn :: o -> Step m o
-  STool :: Pending -> Turn -> ToolCall -> Step m Text
-  SThrow :: GenerateError -> Step m o
-  SWorkflow :: Workflow m i o -> i -> Step m o
-
-showStep :: Step m o -> Text
-showStep = \case
-  SPrompt _pending _mcid -> "SPrompt "
-  SPromptO _pending -> "SPromptO"
-  SReturn _o -> "SReturn"
-  STool _pending _assistantTurn _toolCall -> "STool "
-  SThrow _err -> "SThrow " <> T.pack (show _err)
-  SWorkflow _workflow _i -> "SWorkflow "
-
-showKont :: Kont m o r -> Text
-showKont = \case
-  KEmpty -> "KEmpty"
-  KTool _pending _mcid _assistantTurn _toolCalls _toolResults _toolCall k -> "KTool " <> showKont k
-  KSeq1 _workflow2 _pol k -> "KSeq1 " <> showKont k
-  KPar1 _i _workflow2 _mergePolicy k -> "KPar1 " <> showKont k
-  KPar2 _x _mergePolicy k -> "KPar2 " <> showKont k
-  KMap _pol k -> "KMap " <> showKont k
-  KLoop _n _workflow _policy _cids k -> "KLoop " <> showKont k
-  KUpdateHistory _cid _history k -> "KUpdateHistory " <> showKont k
+  RunPrompt :: Pending -> Maybe CID -> Step m Final
+  RunObject :: (GeneratableObject a) => Pending -> Step m a
+  RunReturn :: o -> Step m o
+  RunTool :: Pending -> Turn -> ToolCall -> Step m Text
+  RunThrow :: GenerateError -> Step m o
+  RunWorkflow :: Workflow m i o -> i -> Step m o
 
 class GetCid a where
   getCid :: a -> [CID]
@@ -160,39 +123,6 @@ data Kont m o r where
   KMap :: TranscriptPolicy o o' -> Kont m o' r -> Kont m o r
   KLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> (Map.Map CID [Turn]) -> Kont m o r -> Kont m o r
   KUpdateHistory :: CID -> [Turn] -> Kont m o r -> Kont m o r
-
-lookupHistory :: Kont m o r -> CID -> [Turn]
-lookupHistory kont cid = case kont of
-  KEmpty -> []
-  KTool _pending _mcid _assistantTurn _toolCalls _toolResults _toolCall k -> lookupHistory k cid
-  KSeq1 _workflow2 _pol k -> lookupHistory k cid
-  KPar1 _i _workflow2 _mergePolicy k -> lookupHistory k cid
-  KPar2 _x _mergePolicy k -> lookupHistory k cid
-  KMap _pol k -> lookupHistory k cid
-  KUpdateHistory _cid _history k -> lookupHistory k cid
-  KLoop _n _workflow _policy cids k ->
-    case Map.lookup cid cids of
-      Nothing -> lookupHistory k cid
-      Just history -> history
-
-updateHistory :: CID -> [Turn] -> Kont m o r -> Kont m o r
-updateHistory cid history kont = case kont of
-  KEmpty -> KEmpty
-  KTool pending mcid assistantTurn toolCalls toolResults toolCall k ->
-    KTool pending mcid assistantTurn toolCalls toolResults toolCall (updateHistory cid history k)
-  KSeq1 workflow2 pol k ->
-    KSeq1 workflow2 pol (updateHistory cid history k)
-  KPar1 i workflow2 mergePolicy k ->
-    KPar1 i workflow2 mergePolicy (updateHistory cid history k)
-  KPar2 x mergePolicy k ->
-    KPar2 x mergePolicy (updateHistory cid history k)
-  KMap pol k ->
-    KMap pol (updateHistory cid history k)
-  KLoop n workflow policy cids k -> case Map.lookup cid cids of
-    Nothing -> KLoop n workflow policy cids (updateHistory cid history k)
-    Just _h -> KLoop n workflow policy (Map.insert cid history cids) k
-  KUpdateHistory c h k ->
-    KUpdateHistory c h (updateHistory cid history k)
 
 data Stack m r where
   Stack :: (Step m o) -> (Kont m o r) -> Stack m r

@@ -86,7 +86,9 @@ data TranscriptPolicy i o where
   TranscriptFinalText :: TranscriptPolicy Final Text
   TranscriptSummaryText :: TranscriptPolicy Final Text
 
-type MergePolicy o1 o2 o = o1 -> o2 -> o
+data MergePolicy o1 o2 o where
+  MergePolicyFunc :: (o1 -> o2 -> o) -> MergePolicy o1 o2 o
+  MergePolicyFinalToPromptArgs :: MergePolicy Final Final PromptArgs
 
 data Workflow m i o where
   WPrompt :: AgentWithModels -> Maybe CID -> Workflow m PromptArgs Final

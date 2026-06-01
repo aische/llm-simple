@@ -29,7 +29,7 @@ import LLM.Workflow.Types
     ToolOutcome (ToolReply, ToolWorkflow),
     Workflow (..),
   )
-import LLM.Workflow.Utils (lookupHistory, pendingToFinal, pendingToTurns, respToAssistantTurn, showKont, showStep, transcriptPolicy, updateHistory)
+import LLM.Workflow.Utils (lookupHistory, mergePolicy, pendingToFinal, pendingToTurns, respToAssistantTurn, showKont, showStep, transcriptPolicy, updateHistory)
 
 callLLM :: (MonadIO m) => RuntimeArgs m -> Pending -> IO (GenerateResult ChatResponse)
 callLLM rt pending = do
@@ -111,8 +111,8 @@ eval rt (Stack step konts) = do
          in pure $ Stack (RunObject pending) konts
       WSeq workflow1 workflow2 pol ->
         pure $ Stack (RunWorkflow workflow1 i) (KSeq1 workflow2 pol konts)
-      WPar workflow1 workflow2 mergePolicy ->
-        pure $ Stack (RunWorkflow workflow1 i) (KPar1 i workflow2 mergePolicy konts)
+      WPar workflow1 workflow2 pol ->
+        pure $ Stack (RunWorkflow workflow1 i) (KPar1 i workflow2 pol konts)
       WLift f -> do
         o <- f i
         pure $ Stack (RunReturn o) konts
@@ -140,10 +140,10 @@ eval rt (Stack step konts) = do
       KSeq1 workflow2 pol k ->
         let o' = transcriptPolicy pol o
          in pure $ Stack (RunWorkflow workflow2 o') k
-      KPar1 i workflow2 mergePolicy k ->
-        pure $ Stack (RunWorkflow workflow2 i) (KPar2 o mergePolicy k)
-      KPar2 x mergePolicy k ->
-        pure $ Stack (RunReturn $ mergePolicy x o) k
+      KPar1 i workflow2 pol k ->
+        pure $ Stack (RunWorkflow workflow2 i) (KPar2 o pol k)
+      KPar2 x pol k ->
+        pure $ Stack (RunReturn $ mergePolicy pol x o) k
       KMap pol k ->
         pure $ Stack (RunReturn $ transcriptPolicy pol o) k
       KLoop n workflow policy cids k ->

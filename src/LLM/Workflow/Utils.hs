@@ -14,6 +14,7 @@ import LLM.Workflow.Types
   ( CID,
     Final (..),
     Kont (..),
+    MergePolicy (..),
     Pending (prompt, toolRounds),
     Prompt (history, prompt),
     PromptArgs (PromptArgs, history, prompt),
@@ -50,6 +51,10 @@ transcriptPolicy TranscriptSummaryText final = "Summary: " <> showTurnsAsText al
   where
     allMessages = final.history ++ final.newMessages
 
+mergePolicy :: MergePolicy o1 o2 o -> o1 -> o2 -> o
+mergePolicy (MergePolicyFunc f) o1 o2 = f o1 o2
+mergePolicy MergePolicyFinalToPromptArgs final1 final2 = PromptArgs {history = [], prompt = final1.text <> "\n\n\n" <> final2.text}
+
 -- * Lookup and update history functions ------------------------------------
 
 lookupHistory :: Kont m o r -> CID -> [Turn]
@@ -73,15 +78,15 @@ updateHistory cid history kont = case kont of
     KTool pending mcid assistantTurn toolCalls toolResults toolCall (updateHistory cid history k)
   KSeq1 workflow2 pol k ->
     KSeq1 workflow2 pol (updateHistory cid history k)
-  KPar1 i workflow2 mergePolicy k ->
-    KPar1 i workflow2 mergePolicy (updateHistory cid history k)
-  KPar2 x mergePolicy k ->
-    KPar2 x mergePolicy (updateHistory cid history k)
+  KPar1 i workflow2 pol k ->
+    KPar1 i workflow2 pol (updateHistory cid history k)
+  KPar2 x pol k ->
+    KPar2 x pol (updateHistory cid history k)
   KMap pol k ->
     KMap pol (updateHistory cid history k)
-  KLoop n workflow policy cids k -> case Map.lookup cid cids of
-    Nothing -> KLoop n workflow policy cids (updateHistory cid history k)
-    Just _h -> KLoop n workflow policy (Map.insert cid history cids) k
+  KLoop n workflow pol cids k -> case Map.lookup cid cids of
+    Nothing -> KLoop n workflow pol cids (updateHistory cid history k)
+    Just _h -> KLoop n workflow pol (Map.insert cid history cids) k
   KUpdateHistory c h k ->
     KUpdateHistory c h (updateHistory cid history k)
 

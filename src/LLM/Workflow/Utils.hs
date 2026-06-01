@@ -111,6 +111,18 @@ updateHistory cid history kont = case kont of
     KUpdateHistory c h (updateHistory cid history k)
   KCatch o k -> KCatch o (updateHistory cid history k)
 
+stackSize :: Kont m o r -> Int
+stackSize kont = case kont of
+  KEmpty -> 0
+  KTool _pending _mcid _assistantTurn _toolCalls _toolResults _toolCall k -> 1 + stackSize k
+  KSeq1 _workflow2 _pol k -> 1 + stackSize k
+  KPar1 _i _workflow2 _mergePolicy k -> 1 + stackSize k
+  KPar2 _x _mergePolicy k -> 1 + stackSize k
+  KMap _pol k -> 1 + stackSize k
+  KLoop _n _workflow _policy _cids k -> 1 + stackSize k
+  KUpdateHistory _cid _history k -> 1 + stackSize k
+  KCatch _o k -> 1 + stackSize k
+
 -- * Show functions for debugging -------------------------------------------
 
 showAgent :: Pending -> Text
@@ -118,7 +130,7 @@ showAgent pending = pending.prompt.agent.agent.agName
 
 showStep :: Step m o -> Text
 showStep step =
-  "| " <> case step of
+  case step of
     RunPrompt pending _mcid -> "RunPrompt " <> showAgent pending
     RunObject pending -> "RunObject " <> showAgent pending
     RunReturn _o -> "RunReturn"
@@ -126,15 +138,15 @@ showStep step =
     RunThrow _err -> "RunThrow " <> T.pack (show _err)
     RunWorkflow _workflow _i -> "RunWorkflow"
 
-showKont :: Kont m o r -> Text
+showKont :: Kont m o r -> [Text]
 showKont kont =
-  " | " <> case kont of
-    KEmpty -> ""
-    KTool pending _mcid _assistantTurn _toolCalls _toolResults toolCall k -> "KTool " <> toolCall.tcName <> " (" <> showAgent pending <> ")" <> showKont k
-    KSeq1 _workflow2 _pol k -> "KSeq1" <> showKont k
-    KPar1 _i _workflow2 _mergePolicy k -> "KPar1 " <> showKont k
-    KPar2 _x _mergePolicy k -> "KPar2" <> showKont k
-    KMap _pol k -> "KMap" <> showKont k
-    KLoop _n _workflow _policy _cids k -> "KLoop " <> T.pack (show _n) <> showKont k
-    KUpdateHistory cid _history k -> "KUpdateHistory " <> T.pack (show cid) <> showKont k
-    KCatch _o k -> "KCatch " <> showKont k
+  case kont of
+    KEmpty -> []
+    KTool pending _mcid _assistantTurn _toolCalls _toolResults toolCall k -> "KTool " <> toolCall.tcName <> " (" <> showAgent pending <> ")" : showKont k
+    KSeq1 _workflow2 _pol k -> "KSeq1" : showKont k
+    KPar1 _i _workflow2 _mergePolicy k -> "KPar1" : showKont k
+    KPar2 _x _mergePolicy k -> "KPar2" : showKont k
+    KMap _pol k -> "KMap" : showKont k
+    KLoop _n _workflow _policy _cids k -> "KLoop " <> T.pack (show _n) : showKont k
+    KUpdateHistory cid _history k -> "KUpdateHistory " <> T.pack (show cid) : showKont k
+    KCatch _o k -> "KCatch" : showKont k

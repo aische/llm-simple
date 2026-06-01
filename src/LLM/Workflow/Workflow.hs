@@ -2,6 +2,7 @@ module LLM.Workflow.Workflow where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Map qualified as Map
+import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import LLM
   ( ChatResponse (..),
@@ -29,7 +30,7 @@ import LLM.Workflow.Types
     ToolOutcome (ToolReply, ToolWorkflow),
     Workflow (..),
   )
-import LLM.Workflow.Utils (lookupHistory, mergePolicy, pendingToFinal, pendingToTurns, respToAssistantTurn, showKont, showStep, transcriptPolicy, updateHistory)
+import LLM.Workflow.Utils (lookupHistory, mergePolicy, pendingToFinal, pendingToTurns, respToAssistantTurn, showKont, showStep, stackSize, transcriptPolicy, updateHistory)
 
 callLLM :: (MonadIO m) => RuntimeArgs m -> Pending -> IO (GenerateResult ChatResponse)
 callLLM rt pending = do
@@ -60,7 +61,7 @@ isDone (Stack _ _) = Nothing
 
 eval :: (MonadIO m) => RuntimeArgs m -> Stack m o -> m (Stack m o)
 eval rt (Stack step konts) = do
-  _ <- liftIO $ TIO.putStrLn $ showStep step <> showKont konts
+  _ <- liftIO $ TIO.putStrLn $ T.replicate (stackSize konts) " " <> showStep step <> T.unwords (map (" : " <>) (showKont konts))
   case step of
     RunObject pending -> do
       result <- liftIO (callLLMO rt pending)

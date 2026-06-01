@@ -3,6 +3,7 @@ module LLM.Workflow.Types where
 import Data.Aeson (Value)
 import Data.Map qualified as Map
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.UUID.Types (UUID)
 import LLM.Core.Abort (AbortSignal)
 import LLM.Core.Types
@@ -61,10 +62,14 @@ data Prompt = Prompt
     history :: [Turn]
   }
 
+instance Show Prompt where
+  show Prompt {agent, prompt, history} = "Prompt {agent = " <> show agent <> ", prompt = " <> show prompt <> ", history = " <> show history <> "}"
+
 data Pending = Pending
   { prompt :: Prompt,
     toolRounds :: [Turn]
   }
+  deriving (Show)
 
 data Final = Final
   { prompt :: Prompt,
@@ -80,11 +85,23 @@ data TranscriptPolicy i o where
   TranscriptPolicyFunc :: (i -> o) -> TranscriptPolicy i o
   TranscriptFinalToPromptArgs :: TranscriptPolicy Final PromptArgs
   TranscriptFinalText :: TranscriptPolicy Final Text
+  TranscriptSummaryText :: TranscriptPolicy Final Text
 
 transcriptPolicy :: TranscriptPolicy i o -> i -> o
 transcriptPolicy (TranscriptPolicyFunc f) i = f i
 transcriptPolicy TranscriptFinalToPromptArgs final = PromptArgs {history = [], prompt = final.text}
 transcriptPolicy TranscriptFinalText final = final.text
+transcriptPolicy TranscriptSummaryText final = "Summary: " <> showTurnsAsText allMessages
+  where
+    allMessages = final.history ++ final.newMessages
+
+showTurnsAsText :: [Turn] -> Text
+showTurnsAsText turns = T.unlines (map showTurn turns)
+  where
+    showTurn turn = case turn of
+      UserTurn text -> "User: " <> text
+      AssistantTurn text _ _ -> "Assistant: " <> text
+      ToolTurn toolResults -> "Tool: " <> T.unwords (map (\x -> x.trName) toolResults)
 
 type MergePolicy o1 o2 o = o1 -> o2 -> o
 
@@ -105,6 +122,26 @@ data Step m o where
   SThrow :: GenerateError -> Step m o
   SWorkflow :: Workflow m i o -> i -> Step m o
 
+showStep :: Step m o -> Text
+showStep = \case
+  SPrompt _pending _mcid -> "SPrompt "
+  SPromptO _pending -> "SPromptO"
+  SReturn _o -> "SReturn"
+  STool _pending _assistantTurn _toolCall -> "STool "
+  SThrow _err -> "SThrow " <> T.pack (show _err)
+  SWorkflow _workflow _i -> "SWorkflow "
+
+showKont :: Kont m o r -> Text
+showKont = \case
+  KEmpty -> "KEmpty"
+  KTool _pending _mcid _assistantTurn _toolCalls _toolResults _toolCall k -> "KTool " <> showKont k
+  KSeq1 _workflow2 _pol k -> "KSeq1 " <> showKont k
+  KPar1 _i _workflow2 _mergePolicy k -> "KPar1 " <> showKont k
+  KPar2 _x _mergePolicy k -> "KPar2 " <> showKont k
+  KMap _pol k -> "KMap " <> showKont k
+  KLoop _n _workflow _policy _cids k -> "KLoop " <> showKont k
+  KUpdateHistory _cid _history k -> "KUpdateHistory " <> showKont k
+
 class GetCid a where
   getCid :: a -> [CID]
 
@@ -117,7 +154,7 @@ instance GetCid (Workflow m i o) where
 
 data Kont m o r where
   KEmpty :: Kont m o o
-  KTool :: Pending -> Turn -> [ToolCall] -> [ToolResult] -> ToolCall -> Kont m Final r -> Kont m Text r
+  KTool :: Pending -> Maybe CID -> Turn -> [ToolCall] -> [ToolResult] -> ToolCall -> Kont m Final r -> Kont m Text r
   KSeq1 :: Workflow m y o -> TranscriptPolicy x y -> Kont m o r -> Kont m x r
   KPar1 :: i -> Workflow m i y -> MergePolicy x y o -> Kont m o r -> Kont m x r
   KPar2 :: x -> MergePolicy x y o -> Kont m o r -> Kont m y r
@@ -128,7 +165,7 @@ data Kont m o r where
 lookupHistory :: Kont m o r -> CID -> [Turn]
 lookupHistory kont cid = case kont of
   KEmpty -> []
-  KTool _pending _assistantTurn _toolCalls _toolResults _toolCall k -> lookupHistory k cid
+  KTool _pending _mcid _assistantTurn _toolCalls _toolResults _toolCall k -> lookupHistory k cid
   KSeq1 _workflow2 _pol k -> lookupHistory k cid
   KPar1 _i _workflow2 _mergePolicy k -> lookupHistory k cid
   KPar2 _x _mergePolicy k -> lookupHistory k cid
@@ -142,8 +179,8 @@ lookupHistory kont cid = case kont of
 updateHistory :: CID -> [Turn] -> Kont m o r -> Kont m o r
 updateHistory cid history kont = case kont of
   KEmpty -> KEmpty
-  KTool pending assistantTurn toolCalls toolResults toolCall k ->
-    KTool pending assistantTurn toolCalls toolResults toolCall (updateHistory cid history k)
+  KTool pending mcid assistantTurn toolCalls toolResults toolCall k ->
+    KTool pending mcid assistantTurn toolCalls toolResults toolCall (updateHistory cid history k)
   KSeq1 workflow2 pol k ->
     KSeq1 workflow2 pol (updateHistory cid history k)
   KPar1 i workflow2 mergePolicy k ->

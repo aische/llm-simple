@@ -42,7 +42,7 @@ import LLM.Workflow.Types
     Tool (..),
     ToolContext (..),
     ToolMap,
-    TranscriptPolicy (TranscriptFinalText, TranscriptFinalToPromptArgs, TranscriptPolicyFunc),
+    TranscriptPolicy (TranscriptFinalText, TranscriptFinalToPromptArgs, TranscriptPolicyFunc, TranscriptSummaryText),
     TypedWorkflowTool,
     Workflow (..),
   )
@@ -89,6 +89,7 @@ worker2 =
   Agent
     { agName = "worker2",
       agSystemPrompt = Just "You are a friedly assistant who helps the user with their tasks and questions.",
+      -- agTools = [],
       agTools = ["subagent"],
       agMaxToolRounds = 6,
       agContextWindow = Nothing
@@ -150,25 +151,23 @@ subagent = workflowToolTyped
 
 main :: IO ()
 main = do
-  (gpt, llama, haiku, gemini) <-
+  (_gpt, llama, haiku, gemini, mistral) <-
     loadModelsOrThrow
       "./model-catalog.json"
-      ("gpt_4_1", "llama_3_2", "haiku_4_5", "gemini_2_5_flash")
+      ("gpt_4_1", "llama_3_2", "haiku_4_5", "gemini_2_5_flash", "mistral")
 
-  let _models1 = ModelWithFallbacks {mwfModel = gpt, mwfFallbacks = [gemini, haiku, llama]}
-      _models2 = ModelWithFallbacks {mwfModel = haiku, mwfFallbacks = [gemini, gpt, llama]}
-      _models3 = ModelWithFallbacks {mwfModel = gemini, mwfFallbacks = [gpt, haiku, llama]}
-      _models4 = ModelWithFallbacks {mwfModel = llama, mwfFallbacks = []}
+  let _models1 = ModelWithFallbacks {mwfModel = llama, mwfFallbacks = []}
+      _models2 = ModelWithFallbacks {mwfModel = mistral, mwfFallbacks = []}
+      _models3 = ModelWithFallbacks {mwfModel = gemini, mwfFallbacks = []}
+      _models4 = ModelWithFallbacks {mwfModel = haiku, mwfFallbacks = []}
 
-  ag1 <- mkAgent expert _models4 True
-  ag2 <- mkAgent expert _models4 True
+  ag1 <- mkAgent student _models1 True
+  ag2 <- mkAgent expert _models2 True
   -- ag2 <- mkAgent student _models4 True
   -- ag3 <- mkAgent summarizer _models4 True
-  -- ag4 <- mkAgent worker2 _models4 True
-  let workflow1 = WMap (WSeq ag1 ag2 TranscriptFinalToPromptArgs) TranscriptFinalText
-
-      wf2 =
-        mkLoop 3 TranscriptFinalToPromptArgs [ag1, ag2] $
+  ag4 <- mkAgent worker2 _models4 True
+  let workflow1 =
+        mkLoop 1 TranscriptFinalToPromptArgs [ag1, ag2] $
           WSeq ag1 ag2 TranscriptFinalToPromptArgs
   -- mkLoop 3 (TranscriptPolicyFunc id) [ag1, ag2] $
   --   WSeq ag2 ag1 (TranscriptPolicyFunc id)
@@ -179,11 +178,12 @@ main = do
         [ typedWorkflowToolToTool $
             subagent "subagent" "Use this tool to gain expert knowledge about a topic. Provide a topic." $
               \args _ctx ->
-                (workflow1, PromptArgs {history = [], prompt = "Ask the expert about the topic: " <> args.prompt})
+                (WMap workflow1 TranscriptSummaryText, PromptArgs {history = [], prompt = "Ask the expert about the topic: " <> args.prompt})
         ]
 
   -- t <- run Nothing toolMap "Which are the best programming languages for AI development? Try to use the subagent tool to gain expert knowledge about the topic." ag4
-  t <- run Nothing toolMap "What is the capital of France?" wf2
+  let p1 = "Which are the best programming languages for AI development? Try to use the subagent tool to gain expert knowledge about the topic."
+  t <- run Nothing toolMap p1 ag4
   TIO.putStrLn t
 
 --     -- pr = Prompt {agentWithModels = ag, history = [], prompt = "What is the capital of France?"}

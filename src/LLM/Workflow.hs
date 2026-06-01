@@ -6,8 +6,6 @@ module LLM.Workflow
     GenerateEvent (..),
     GenerateEventDetail (..),
     EventObserver,
-    TranscriptPolicy (..),
-    MergePolicy (..),
     PromptArgs (..),
     Prompt (..),
     Step (..),

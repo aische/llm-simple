@@ -1,12 +1,13 @@
 module LLM.Workflow.Tools.HistoryTool where
 
 import Autodocodec qualified as AC
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Aeson (FromJSON)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
-import LLM.Core.Types (ToolCall (tcName), ToolResult (trContent, trName), Turn (..), TypedTool (..))
-import LLM.Workflow.Types (ToolContext (..))
+import LLM.Core.Types (ToolCall (tcName), ToolResult (trContent, trName), Turn (..))
+import LLM.Workflow.Types (ToolContext (..), ToolOutcome (ToolReply), TypedWorkflowTool (..))
 
 newtype HistoryToolArgs = HistoryToolArgs
   { _historyChunk :: Int
@@ -20,7 +21,7 @@ instance AC.HasCodec HistoryToolArgs where
     AC.object "get conversation history" $
       HistoryToolArgs <$> AC.requiredField "chunk" "0 = most recent hidden chunk, 1 = the one before that, etc." AC..= (\x -> x._historyChunk)
 
-getHistoryExecTyped :: ToolContext -> HistoryToolArgs -> IO Text
+getHistoryExecTyped :: (MonadIO m) => ToolContext m -> HistoryToolArgs -> m Text
 getHistoryExecTyped ctx args = do
   let chunkIdx = args._historyChunk
       hidden = take ctx.tcWindowOffset ctx.tcConversation
@@ -35,16 +36,16 @@ getHistoryExecTyped ctx args = do
         then pure "(no more history)"
         else pure $ formatChunk (chunks !! chunkIdx)
 
-historyToolTyped :: TypedTool ToolContext HistoryToolArgs
+historyToolTyped :: (MonadIO m) => TypedWorkflowTool m (ToolContext m) HistoryToolArgs
 historyToolTyped =
-  TypedTool
-    { ttoolName = "get_history",
-      ttoolDescription =
+  TypedWorkflowTool
+    { twtName = "get_history",
+      twtDescription =
         "Retrieve earlier conversation history that is not in your current context window. "
           <> "Pass chunk=0 for the most recent hidden history, chunk=1 for the one before that, etc. "
           <> "Returns an empty result when there is no more history.",
-      ttoolReadonly = True,
-      ttoolExecute = getHistoryExecTyped
+      twtReadonly = True,
+      twtExecute = \ctx args -> ToolReply <$> getHistoryExecTyped ctx args
     }
 
 -- | Count the number of 'UserTurn's in a conversation.

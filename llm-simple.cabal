@@ -38,6 +38,7 @@ common opts
         StrictData
         GADTs
         TypeFamilies
+        ScopedTypeVariables
     ghc-options: 
         -Wall 
         -Wunused-imports

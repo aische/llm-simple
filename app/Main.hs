@@ -5,6 +5,7 @@ module Main where
 import Autodocodec qualified as AC
 import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Exception (SomeException (SomeException), catch)
+import Control.Monad.IO.Class (MonadIO)
 import Data.Aeson (FromJSON)
 import Data.Functor ((<&>))
 import Data.Map.Strict qualified as Map
@@ -14,7 +15,6 @@ import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import Heptapod (generate)
 import LLM (AbortSignal, Hooks (..), ThinkingMode (..), claudeGateway, deepSeekGateway, defaultDebugHooks, mkFsConfig)
-import LLM.Agent.Types (ToolContext (..))
 import LLM.Core.Types (LLMHooks (..), ToolDef (..), Turn (UserTurn))
 import LLM.Core.Usage (PricingInfo (..), Usage)
 import LLM.Generate.Logger (noHooks)
@@ -25,30 +25,29 @@ import LLM.Generate.Types
     StreamChunk (..),
   )
 import LLM.Load.LoadModels (loadModelsOrThrow)
-import LLM.Workflow.ToolUtils (toTool, workflowToolTyped)
+import LLM.Workflow.ToolUtils (toTool, toTypedWorkflowTool, typedWorkflowToolToTool, workflowToolTyped)
 import LLM.Workflow.Tools.FsTools (fsTools)
 import LLM.Workflow.Types
   ( Agent (..),
     AgentWithModels (..),
     CID (CID),
-    FinalResult (..),
+    Final (..),
     GenerateEvent (..),
     Kont,
-    MergePolicy (MergePolicy),
     Prompt (..),
     PromptArgs (..),
-    PromptState (PromptStateFinal, PromptStatePending),
     RuntimeArgs (..),
-    Step (RunPrompt, RunWorkflow),
     Tool (..),
+    ToolContext (..),
     ToolMap,
-    TranscriptPolicy (TranscriptPolicy, TranscriptSummaryOnly),
+    TranscriptPolicy (TranscriptFinalText, TranscriptPolicyFunc),
     TypedWorkflowTool,
     Workflow (..),
   )
 import LLM.Workflow.Workflow
   ( eval,
     loop,
+    runWorkflow,
   )
 import System.Environment (getArgs, getEnv)
 
@@ -144,8 +143,8 @@ instance AC.HasCodec SubagentArgs where
     AC.object "precise prompt for the subagent" $
       SubagentArgs <$> AC.requiredField "prompt" "a precise prompt for the subagent" AC..= (\x -> x.prompt)
 
-subagent :: Text -> Text -> (SubagentArgs -> ctx -> (Workflow, PromptArgs)) -> TypedWorkflowTool ctx SubagentArgs
-subagent = workflowToolTyped @SubagentArgs
+subagent :: (MonadIO m) => Text -> Text -> (SubagentArgs -> ToolContext m -> (Workflow m PromptArgs Text, PromptArgs)) -> TypedWorkflowTool m (ToolContext m) SubagentArgs
+subagent = workflowToolTyped
 
 main :: IO ()
 main = do
@@ -160,23 +159,24 @@ main = do
       _models4 = ModelWithFallbacks {mwfModel = llama, mwfFallbacks = []}
 
   ag1 <- mkAgent expert _models4 True
-  ag2 <- mkAgent student _models4 True
-  ag3 <- mkAgent summarizer _models4 True
-  ag4 <- mkAgent worker2 _models4 True
-  let workflow1 =
-        mkLoop 3 TranscriptPolicy [ag1, ag2] $
-          WSeq ag2 ag1 TranscriptPolicy
-  let workflow2 = WSeq workflow1 ag3 TranscriptSummaryOnly
+  -- ag2 <- mkAgent student _models4 True
+  -- ag3 <- mkAgent summarizer _models4 True
+  -- ag4 <- mkAgent worker2 _models4 True
+  let workflow1 = WMap ag1 TranscriptFinalText
+  -- mkLoop 3 (TranscriptPolicyFunc id) [ag1, ag2] $
+  --   WSeq ag2 ag1 (TranscriptPolicyFunc id)
+  -- let workflow2 = WSeq workflow1 ag3 TranscriptFinalText
   toolMap <-
     fsTools "./user-workspace/"
       <&> addTools
-        [ toTool $
+        [ typedWorkflowToolToTool $
             subagent "subagent" "Use this tool to gain expert knowledge about a topic. Provide a topic." $
               \args _ctx ->
-                (workflow2, PromptArgs {history = [], prompt = "Ask the expert about the topic: " <> args.prompt})
+                (workflow1, PromptArgs {history = [], prompt = "Ask the expert about the topic: " <> args.prompt})
         ]
 
-  t <- run Nothing toolMap "Which are the best programming languages for AI development? Try to use the subagent tool to gain expert knowledge about the topic." ag4
+  -- t <- run Nothing toolMap "Which are the best programming languages for AI development? Try to use the subagent tool to gain expert knowledge about the topic." ag4
+  t <- run Nothing toolMap "What is the capital of France?" ag1
   TIO.putStrLn t
 
 --     -- pr = Prompt {agentWithModels = ag, history = [], prompt = "What is the capital of France?"}
@@ -226,7 +226,7 @@ llmHooks hooks =
       onLLMResponseError = hooks.onResponseError
     }
 
-run :: Maybe AbortSignal -> ToolMap -> Text -> Workflow -> IO Text
+run :: (MonadIO m) => Maybe AbortSignal -> ToolMap m -> Text -> Workflow m PromptArgs Final -> m Text
 run abortSignal toolMap prompt wf = do
   genId <- generate
   let rt =
@@ -242,20 +242,21 @@ run abortSignal toolMap prompt wf = do
             rtReadonly = False,
             rtToolMap = toolMap
           }
-  r <- loop rt (RunWorkflow wf (PromptArgs {history = [], prompt})) []
+  -- r <- loop rt (RunWorkflow wf (PromptArgs {history = [], prompt})) []
+  r <- runWorkflow rt wf (PromptArgs {history = [], prompt})
   pure r.text
 
-mkAgent :: Agent -> ModelWithFallbacks -> Bool -> IO Workflow
-mkAgent ag models False = pure $ WPrompt (AgentWithModels ag models) Nothing
+mkAgent :: (MonadIO m) => Agent -> ModelWithFallbacks -> Bool -> m (Workflow m PromptArgs Final)
+mkAgent ag models False = pure $ WPrompt (AgentWithModels ag models)
 mkAgent ag models True = do
-  WPrompt (AgentWithModels ag models) . Just . CID <$> generate
+  pure $ WPrompt (AgentWithModels ag models)
 
-mkLoop :: Int -> TranscriptPolicy -> [Workflow] -> Workflow -> Workflow
-mkLoop n policy scope wf = WLoop n wf policy cids
-  where
-    getCid (WPrompt _ag (Just cid)) = [cid]
-    getCid _ = []
-    cids = concatMap getCid scope
+-- mkLoop :: Int -> TranscriptPolicy i o -> [Workflow] -> Workflow -> Workflow
+-- mkLoop n policy scope wf = WLoop n wf policy cids
+--   where
+--     getCid (WPrompt _ag (Just cid)) = [cid]
+--     getCid _ = []
+--     cids = concatMap getCid scope
 
-addTools :: [Tool] -> ToolMap -> ToolMap
+addTools :: [Tool m] -> ToolMap m -> ToolMap m
 addTools tools toolMap = toolMap <> Map.fromList [(tool.toolDef.toolName, tool) | tool <- tools]

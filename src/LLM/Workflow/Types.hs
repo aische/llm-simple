@@ -1,7 +1,6 @@
 module LLM.Workflow.Types where
 
 import Data.Aeson (Value)
-import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
 import Data.UUID.Types (UUID)
@@ -28,22 +27,22 @@ data Agent = Agent
   }
 
 -- | Runtime arguments
-data RuntimeArgs = RuntimeArgs
+data RuntimeArgs m = RuntimeArgs
   { rtGenerationId :: UUID,
     rtAbortSignal :: Maybe AbortSignal,
     rtLLMHooks :: LLMHooks,
     rtHooks :: Hooks,
     rtOnEvent :: EventObserver,
     rtReadonly :: Bool,
-    rtToolMap :: ToolMap
+    rtToolMap :: ToolMap m
   }
 
 -- | A tool: its definition (sent to the model) paired with its implementation.
 -- 'toolExecute' receives a 'ToolContext' (full conversation + usage) and
 -- the JSON arguments from the model.
-data Tool = Tool
+data Tool m = Tool
   { toolDef :: ToolDef,
-    toolExecute :: ToolContext -> Value -> IO (ToolOutcome IO)
+    toolExecute :: ToolContext m -> Value -> m (ToolOutcome m)
   }
 
 data ToolOutcome m
@@ -74,15 +73,15 @@ data Final = Final
     text :: Text
   }
 
-data TranscriptPolicy2 i o where
-  TranscriptPolicy2 :: (i -> o) -> TranscriptPolicy2 i o
-  TranscriptFinalText :: TranscriptPolicy2 Final PromptArgs
+data TranscriptPolicy i o where
+  TranscriptPolicyFunc :: (i -> o) -> TranscriptPolicy i o
+  TranscriptFinalToPromptArgs :: TranscriptPolicy Final PromptArgs
+  TranscriptFinalText :: TranscriptPolicy Final Text
 
-transcriptPolicy2 :: TranscriptPolicy2 i o -> i -> o
-transcriptPolicy2 (TranscriptPolicy2 f) i = f i
-transcriptPolicy2 TranscriptFinalText final = PromptArgs {history = [], prompt = final.text}
-
-type TranscriptPolicy i o = i -> o
+transcriptPolicy :: TranscriptPolicy i o -> i -> o
+transcriptPolicy (TranscriptPolicyFunc f) i = f i
+transcriptPolicy TranscriptFinalToPromptArgs final = PromptArgs {history = [], prompt = final.text}
+transcriptPolicy TranscriptFinalText final = final.text
 
 type MergePolicy o1 o2 o = o1 -> o2 -> o
 
@@ -124,13 +123,13 @@ data TypedWorkflowTool m c a = TypedWorkflowTool
   { twtName :: Text,
     twtDescription :: Text,
     twtReadonly :: Bool,
-    twtExecute :: c -> a -> IO (ToolOutcome m)
+    twtExecute :: c -> a -> m (ToolOutcome m)
   }
 
-type ToolMap = Map.Map Text Tool
+type ToolMap m = Map.Map Text (Tool m)
 
 -- | Context passed to tool implementations during execution.
-data ToolContext = ToolContext
+data ToolContext m = ToolContext
   { -- | Full conversation history (not windowed), one message per turn
     tcConversation :: [Turn],
     -- | Accumulated token usage so far
@@ -139,7 +138,7 @@ data ToolContext = ToolContext
     -- Everything before this index is hidden from the model.
     -- A @get_history@ tool can use this to serve paginated history.
     tcWindowOffset :: Int,
-    tcRuntimeArgs :: RuntimeArgs
+    tcRuntimeArgs :: RuntimeArgs m
   }
 
 data AgentWithModels = AgentWithModels

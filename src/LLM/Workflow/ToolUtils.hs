@@ -9,12 +9,13 @@ module LLM.Workflow.ToolUtils
     executeTool,
     toTypedWorkflowTool,
     workflowToolTyped,
+    typedWorkflowToolToTool,
   )
 where
 
 import Autodocodec qualified as AC
 import Autodocodec.Schema (jsonSchemaVia)
-import Control.Exception (SomeException (..), try)
+import Control.Exception (SomeException (..))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Aeson (FromJSON)
 import Data.Aeson qualified as AE
@@ -31,7 +32,7 @@ import LLM
   )
 import LLM.Core.Types (Turn (..))
 import LLM.Core.Usage (Usage (..))
-import LLM.Workflow.Tools.HistoryTool (HistoryToolArgs (HistoryToolArgs), historyToolTyped)
+import LLM.Workflow.Tools.HistoryTool (historyToolTyped)
 import LLM.Workflow.Types
   ( Agent (..),
     PromptArgs,
@@ -45,12 +46,13 @@ import LLM.Workflow.Types
   )
 
 -- -- | Execute a single tool call by looking it up in the tool list
-executeTool :: Hooks -> ToolContext -> [Tool] -> ToolCall -> IO (ToolOutcome m)
+executeTool :: (MonadIO m) => Hooks -> ToolContext m -> [Tool m] -> ToolCall -> m (ToolOutcome m)
 executeTool hooks ctx tools tc = case lookup tc.tcName toolMap of
   Nothing -> pure $ ToolReply ("Unknown tool: " <> tc.tcName)
   Just exec -> do
-    hooks.onToolCall tc.tcName (AE.toJSON tc.tcArguments)
-    result <- liftIO $ try (exec ctx tc.tcArguments)
+    liftIO $ hooks.onToolCall tc.tcName (AE.toJSON tc.tcArguments)
+    -- result <- try (exec ctx tc.tcArguments)
+    result <- Right <$> exec ctx tc.tcArguments
     case result of
       Right outcome -> pure outcome
       --  case outcome of
@@ -61,7 +63,7 @@ executeTool hooks ctx tools tc = case lookup tc.tcName toolMap of
       --     hooks.onToolResult tc.tcName "Workflow"
       --     pure $ ToolWorkflow workflow promptArgs
       Left (e :: SomeException) -> do
-        hooks.onToolError tc.tcName (T.pack (show e))
+        liftIO $ hooks.onToolError tc.tcName (T.pack (show e))
         pure $ ToolReply ("Tool error: " <> T.pack (show e))
   where
     toolMap = [(t.toolDef.toolName, t.toolExecute) | t <- tools]
@@ -89,8 +91,8 @@ createToolContext ::
   Agent ->
   [Turn] ->
   Usage ->
-  RuntimeArgs ->
-  ToolContext
+  RuntimeArgs m ->
+  ToolContext m
 createToolContext agent messages roundUsage rt =
   ToolContext
     { tcConversation = messages,
@@ -99,32 +101,26 @@ createToolContext agent messages roundUsage rt =
       tcRuntimeArgs = rt
     }
 
-getSchema :: (AC.HasCodec t, FromJSON t) => tool ToolContext t -> AC.JSONCodec t
+getSchema :: (AC.HasCodec t, FromJSON t, MonadIO m) => tool (ToolContext m) t -> AC.JSONCodec t
 getSchema _ = AC.codec
 
-toTypedWorkflowTool :: (AC.HasCodec t, FromJSON t) => TypedTool ToolContext t -> TypedWorkflowTool m ToolContext t
+toTypedWorkflowTool :: (AC.HasCodec t, FromJSON t, MonadIO m) => TypedTool (ToolContext m) t -> TypedWorkflowTool m (ToolContext m) t
 toTypedWorkflowTool (TypedTool name descr readonly exec) =
   TypedWorkflowTool
     { twtName = name,
       twtDescription = descr,
       twtReadonly = readonly,
-      twtExecute = \ctx args -> ToolReply <$> exec ctx args
+      twtExecute = \ctx args -> ToolReply <$> liftIO (exec ctx args)
     }
 
--- class ToTypedWorkflowTool t a where
---   toTypedWorkflowTool :: t ToolContext a -> TypedWorkflowTool ToolContext a
-
 class (AC.HasCodec a, FromJSON a) => ToTool t a where
-  toTool :: t ToolContext a -> Tool
-
-instance (AC.HasCodec a, FromJSON a) => ToTool (TypedWorkflowTool IO) a where
-  toTool = typedWorkflowToolToTool
+  toTool :: (MonadIO m) => t (ToolContext m) a -> Tool m
 
 instance (AC.HasCodec a, FromJSON a) => ToTool TypedTool a where
-  toTool :: TypedTool ToolContext a -> Tool
+  toTool :: (MonadIO m) => TypedTool (ToolContext m) a -> Tool m
   toTool = typedWorkflowToolToTool . toTypedWorkflowTool
 
-typedWorkflowToolToTool :: (AC.HasCodec t, FromJSON t) => TypedWorkflowTool IO ToolContext t -> Tool
+typedWorkflowToolToTool :: (AC.HasCodec t, FromJSON t, MonadIO m) => TypedWorkflowTool m (ToolContext m) t -> Tool m
 typedWorkflowToolToTool t@(TypedWorkflowTool name descr readonly exec) =
   Tool
     { toolDef =
@@ -140,7 +136,7 @@ typedWorkflowToolToTool t@(TypedWorkflowTool name descr readonly exec) =
           AE.Success args -> exec ctx args
     }
 
-workflowToolTyped :: (AC.HasCodec a) => Text -> Text -> (a -> ctx -> (Workflow IO PromptArgs Text, PromptArgs)) -> TypedWorkflowTool IO ctx a
+workflowToolTyped :: (AC.HasCodec a, Monad m) => Text -> Text -> (a -> ctx -> (Workflow m PromptArgs Text, PromptArgs)) -> TypedWorkflowTool m ctx a
 workflowToolTyped name description mkWorkflow =
   TypedWorkflowTool
     { twtName = name,
@@ -151,7 +147,7 @@ workflowToolTyped name description mkWorkflow =
         pure $ ToolWorkflow workflow promptArgs
     }
 
-filterReadonlyTools :: Bool -> [Tool] -> [Tool]
+filterReadonlyTools :: Bool -> [Tool m] -> [Tool m]
 filterReadonlyTools False tools = tools
 filterReadonlyTools True tools = filter (\x -> x.toolDef.toolReadonly) tools
 
@@ -177,7 +173,7 @@ findNthUserFromEnd n conv = go (length conv - 1) n
           UserTurn _ -> go (idx - 1) (remaining - 1)
           _ -> go (idx - 1) remaining
 
-createGenRequest :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
+createGenRequest :: (MonadIO m) => Agent -> RuntimeArgs m -> [Turn] -> GenRequest
 createGenRequest agent rt messages =
   let offset = windowOffset agent.agContextWindow messages
       tools = getResolvedTools agent rt
@@ -190,19 +186,19 @@ createGenRequest agent rt messages =
           grHooks = rt.rtHooks
         }
 
-getResolvedTools :: Agent -> RuntimeArgs -> [Tool]
+getResolvedTools :: (MonadIO m) => Agent -> RuntimeArgs m -> [Tool m]
 getResolvedTools agent rt = filterReadonlyTools rt.rtReadonly tools ++ getHistoryTool agent
   where
     tools = getToolsFromMap rt.rtToolMap agent.agTools
 
-getToolsFromMap :: ToolMap -> [Text] -> [Tool]
+getToolsFromMap :: ToolMap m -> [Text] -> [Tool m]
 getToolsFromMap toolMap toolNames = toolNames >>= lookupTool
   where
     lookupTool name = case Map.lookup name toolMap of
       Just tool -> [tool]
       Nothing -> []
 
-getHistoryTool :: Agent -> [Tool]
+getHistoryTool :: (MonadIO m) => Agent -> [Tool m]
 getHistoryTool agent = case agent.agContextWindow of
-  Just n | n > 0 -> [toTool @(TypedWorkflowTool IO) $ toTypedWorkflowTool historyToolTyped]
+  Just n | n > 0 -> [typedWorkflowToolToTool historyToolTyped]
   _ -> []

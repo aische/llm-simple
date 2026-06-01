@@ -15,8 +15,9 @@ import LLM.Tools.ReplaceInFile (replaceInFileToolTyped)
 import LLM.Tools.Writefile (writefileToolTyped)
 import LLM.Workflow.ToolUtils (toTool)
 import LLM.Workflow.Types (ToolMap)
+import Control.Monad.IO.Class (MonadIO)
 
-fsTools :: FilePath -> IO ToolMap
+fsTools :: (MonadIO m) => FilePath -> IO (ToolMap m)
 fsTools filePath = do
   cfg <- mkFsConfig filePath
   pure $

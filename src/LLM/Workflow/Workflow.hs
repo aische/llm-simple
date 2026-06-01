@@ -9,10 +9,8 @@ import Data.Text (Text)
 import LLM
   ( ChatResponse (..),
     GeneratableObject,
-    GenerateError (..),
     GenerateErrorResult (..),
     GenerateResult,
-    Hooks (..),
     ToolCall (..),
     ToolResult (..),
     Turn (AssistantTurn, UserTurn),
@@ -46,12 +44,12 @@ respToAssistantTurn cr = (AssistantTurn cr.respText cr.respReasoning toolCalls, 
   where
     toolCalls = getToolCalls cr
 
-callLLM :: RuntimeArgs -> Pending -> IO (GenerateResult ChatResponse)
+callLLM :: (MonadIO m) => RuntimeArgs m -> Pending -> IO (GenerateResult ChatResponse)
 callLLM rt pending = do
   let messages = pending.prompt.history ++ [UserTurn pending.prompt.prompt] ++ pending.toolRounds
   generateTextWithFallbacks (createGenRequest pending.prompt.agent.agent rt messages) pending.prompt.agent.models
 
-callLLMO :: (GeneratableObject a) => RuntimeArgs -> Pending -> IO (GenerateResult a)
+callLLMO :: (GeneratableObject a, MonadIO m) => RuntimeArgs m -> Pending -> IO (GenerateResult a)
 callLLMO rt pending = do
   let messages = pending.prompt.history ++ [UserTurn pending.prompt.prompt] ++ pending.toolRounds
   r <- genObject (createGenRequest pending.prompt.agent.agent rt messages) pending.prompt.agent.models
@@ -75,11 +73,11 @@ assistantTurnText _ = ""
 -- executeTool :: (MonadIO m) => Hooks -> ToolContext -> [Tool] -> ToolCall -> m (ToolOutcome m)
 -- executeTool _hooks _ctx _tools _tc = undefined
 
-runWorkflow :: (MonadIO m) => RuntimeArgs -> Workflow m i o -> i -> m o
+runWorkflow :: (MonadIO m) => RuntimeArgs m -> Workflow m i o -> i -> m o
 runWorkflow rt workflow i =
   loop rt (Stack (SWorkflow workflow i) KEmpty)
 
-loop :: (MonadIO m) => RuntimeArgs -> Stack m o -> m o
+loop :: (MonadIO m) => RuntimeArgs m -> Stack m o -> m o
 loop rt stack = do
   stack' <- eval rt stack --
   maybe (loop rt stack') pure $ isDone stack'
@@ -88,7 +86,7 @@ isDone :: Stack m r -> Maybe r
 isDone (Stack (SReturn o) KEmpty) = Just o
 isDone (Stack _ _) = Nothing
 
-eval :: (MonadIO m) => RuntimeArgs -> Stack m o -> m (Stack m o)
+eval :: (MonadIO m) => RuntimeArgs m -> Stack m o -> m (Stack m o)
 eval rt (Stack step konts) = case step of
   SPromptO pending -> do
     result <- liftIO (callLLMO rt pending)
@@ -118,7 +116,7 @@ eval rt (Stack step konts) = case step of
               tcRuntimeArgs = rt
             }
         tools = getResolvedTools pending.prompt.agent.agent rt
-    result <- liftIO $ executeTool rt.rtHooks ctx tools toolCall
+    result <- executeTool rt.rtHooks ctx tools toolCall
     case result of
       ToolWorkflow workflow args -> pure $ Stack (SWorkflow workflow args) konts
       ToolReply text -> pure $ Stack (SReturn text) konts
@@ -129,8 +127,8 @@ eval rt (Stack step konts) = case step of
     WPromptO a ->
       let pending = Pending {prompt = Prompt {agent = a, prompt = i.prompt, history = i.history}, toolRounds = []}
        in pure $ Stack (SPromptO pending) konts
-    WSeq workflow1 workflow2 transcriptPolicy ->
-      pure $ Stack (SWorkflow workflow1 i) (KSeq1 workflow2 transcriptPolicy konts)
+    WSeq workflow1 workflow2 pol ->
+      pure $ Stack (SWorkflow workflow1 i) (KSeq1 workflow2 pol konts)
     WPar workflow1 workflow2 mergePolicy ->
       pure $ Stack (SWorkflow workflow1 i) (KPar1 i workflow2 mergePolicy konts)
     WLift f -> do
@@ -149,15 +147,15 @@ eval rt (Stack step konts) = case step of
               pure $
                 Stack (STool pending assistantTurn toolCall') (KTool pending assistantTurn toolCalls' toolResults' toolCall' k)
             [] -> pure $ Stack (SReturn $ mkFinal pending assistantTurn) k
-    KSeq1 workflow2 transcriptPolicy k ->
-      let o' = transcriptPolicy o
+    KSeq1 workflow2 pol k ->
+      let o' = transcriptPolicy pol o
        in pure $ Stack (SWorkflow workflow2 o') k
     KPar1 i workflow2 mergePolicy k ->
       pure $ Stack (SWorkflow workflow2 i) (KPar2 o mergePolicy k)
     KPar2 x mergePolicy k ->
       pure $ Stack (SReturn $ mergePolicy x o) k
-    KMap f k ->
-      pure $ Stack (SReturn $ f o) k
+    KMap pol k ->
+      pure $ Stack (SReturn $ transcriptPolicy pol o) k
 
 -- _ -> pure $ Stack step konts
 

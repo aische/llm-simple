@@ -6,17 +6,19 @@ import Data.Text qualified as T
 import LLM (getToolCalls)
 import LLM.Core.Types
   ( ChatResponse (..),
-    ToolCall,
-    ToolResult (trName),
+    ToolCall (..),
+    ToolResult (..),
     Turn (AssistantTurn, ToolTurn, UserTurn),
   )
 import LLM.Workflow.Types
-  ( CID,
+  ( Agent (..),
+    AgentWithModels (..),
+    CID,
     Final (..),
     Kont (..),
     MergePolicy (..),
     Pending (prompt, toolRounds),
-    Prompt (history, prompt),
+    Prompt (..),
     PromptArgs (PromptArgs, history, prompt),
     Step (..),
     TranscriptPolicy (..),
@@ -36,6 +38,14 @@ pendingToFinal pending text assistantTurn =
 pendingToTurns :: Pending -> [Turn]
 pendingToTurns pending = pending.prompt.history ++ [UserTurn pending.prompt.prompt] ++ pending.toolRounds
 
+turnsToConversationText :: [Turn] -> Text
+turnsToConversationText turns = T.unlines (map showTurn turns)
+  where
+    showTurn turn = case turn of
+      UserTurn text -> "User: " <> text <> "\n"
+      AssistantTurn text _ _ -> "Assistant: " <> text <> "\n"
+      ToolTurn toolResults -> "Tool: " <> T.unwords (map (\x -> x.trName) toolResults) <> "\n"
+
 respToAssistantTurn :: ChatResponse -> (Text, Turn, [ToolCall])
 respToAssistantTurn cr = (cr.respText, AssistantTurn cr.respText cr.respReasoning toolCalls, toolCalls)
   where
@@ -47,7 +57,7 @@ transcriptPolicy :: TranscriptPolicy i o -> i -> o
 transcriptPolicy (TranscriptPolicyFunc f) i = f i
 transcriptPolicy TranscriptFinalToPromptArgs final = PromptArgs {history = [], prompt = final.text}
 transcriptPolicy TranscriptFinalText final = final.text
-transcriptPolicy TranscriptSummaryText final = "Summary: " <> showTurnsAsText allMessages
+transcriptPolicy TranscriptSummaryText final = "Summary: " <> turnsToConversationText allMessages
   where
     allMessages = final.history ++ final.newMessages
 
@@ -92,30 +102,27 @@ updateHistory cid history kont = case kont of
 
 -- * Show functions for debugging -------------------------------------------
 
+showAgent :: Pending -> Text
+showAgent pending = pending.prompt.agent.agent.agName
+
 showStep :: Step m o -> Text
-showStep = \case
-  RunPrompt _pending _mcid -> "RunPrompt "
-  RunObject _pending -> "RunObject"
-  RunReturn _o -> "RunReturn"
-  RunTool _pending _assistantTurn _toolCall -> "RunTool "
-  RunThrow _err -> "RunThrow " <> T.pack (show _err)
-  RunWorkflow _workflow _i -> "RunWorkflow "
+showStep step =
+  "| " <> case step of
+    RunPrompt pending _mcid -> "RunPrompt " <> showAgent pending
+    RunObject pending -> "RunObject " <> showAgent pending
+    RunReturn _o -> "RunReturn"
+    RunTool _pending _assistantTurn toolCall -> "RunTool " <> toolCall.tcName
+    RunThrow _err -> "RunThrow " <> T.pack (show _err)
+    RunWorkflow _workflow _i -> "RunWorkflow"
 
 showKont :: Kont m o r -> Text
-showKont = \case
-  KEmpty -> "KEmpty"
-  KTool _pending _mcid _assistantTurn _toolCalls _toolResults _toolCall k -> "KTool " <> showKont k
-  KSeq1 _workflow2 _pol k -> "KSeq1 " <> showKont k
-  KPar1 _i _workflow2 _mergePolicy k -> "KPar1 " <> showKont k
-  KPar2 _x _mergePolicy k -> "KPar2 " <> showKont k
-  KMap _pol k -> "KMap " <> showKont k
-  KLoop _n _workflow _policy _cids k -> "KLoop " <> showKont k
-  KUpdateHistory _cid _history k -> "KUpdateHistory " <> showKont k
-
-showTurnsAsText :: [Turn] -> Text
-showTurnsAsText turns = T.unlines (map showTurn turns)
-  where
-    showTurn turn = case turn of
-      UserTurn text -> "User: " <> text
-      AssistantTurn text _ _ -> "Assistant: " <> text
-      ToolTurn toolResults -> "Tool: " <> T.unwords (map (\x -> x.trName) toolResults)
+showKont kont =
+  " | " <> case kont of
+    KEmpty -> ""
+    KTool pending _mcid _assistantTurn _toolCalls _toolResults toolCall k -> "KTool " <> toolCall.tcName <> " (" <> showAgent pending <> ")" <> showKont k
+    KSeq1 _workflow2 _pol k -> "KSeq1" <> showKont k
+    KPar1 _i _workflow2 _mergePolicy k -> "KPar1 " <> showKont k
+    KPar2 _x _mergePolicy k -> "KPar2" <> showKont k
+    KMap _pol k -> "KMap" <> showKont k
+    KLoop _n _workflow _policy _cids k -> "KLoop " <> T.pack (show _n) <> showKont k
+    KUpdateHistory cid _history k -> "KUpdateHistory " <> T.pack (show cid) <> showKont k

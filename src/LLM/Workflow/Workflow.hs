@@ -60,8 +60,7 @@ isDone (Stack _ _) = Nothing
 
 eval :: (MonadIO m) => RuntimeArgs m -> Stack m o -> m (Stack m o)
 eval rt (Stack step konts) = do
-  _ <- liftIO $ TIO.putStrLn $ "eval: " <> showStep step
-  _ <- liftIO $ TIO.putStrLn $ "konts: " <> showKont konts
+  _ <- liftIO $ TIO.putStrLn $ showStep step <> showKont konts
   case step of
     RunObject pending -> do
       result <- liftIO (callLLMO rt pending)

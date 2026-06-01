@@ -55,7 +55,7 @@ loop rt stack = do
 
 isDone :: Stack m r -> Maybe r
 isDone (Stack (RunReturn o) KEmpty) = Just o
-isDone (Stack (RunThrow err) _) = error $ show err
+isDone (Stack (RunThrow err) KEmpty) = error $ show err
 isDone (Stack _ _) = Nothing
 
 eval :: (MonadIO m) => RuntimeArgs m -> Stack m o -> m (Stack m o)
@@ -122,7 +122,14 @@ eval rt (Stack step konts) = do
       WLiftW f -> do
         wf <- f (fst i)
         pure $ Stack (RunWorkflow wf (snd i)) konts
-    RunThrow {} -> pure $ Stack step konts
+      WCatch o wf ->
+        pure $ Stack (RunWorkflow wf i) (KCatch o konts)
+    RunThrow {} ->
+      case konts of
+        KCatch o k ->
+          pure $ Stack (RunReturn o) k
+        _ ->
+          pure $ Stack step konts
     RunReturn o -> case konts of
       KEmpty -> pure $ Stack step konts
       KTool pending mcid assistantTurn toolCalls toolResults toolCall k ->
@@ -153,3 +160,5 @@ eval rt (Stack step konts) = do
             pure $ Stack (RunWorkflow workflow $ transcriptPolicy policy o) (KLoop (n - 1) workflow policy cids k)
       KUpdateHistory cid history k -> do
         pure $ Stack step $ updateHistory cid history k
+      KCatch r k ->
+        pure $ Stack (RunReturn r) k

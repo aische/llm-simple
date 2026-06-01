@@ -29,7 +29,7 @@ import LLM.Workflow.Types
 pendingToFinal :: Pending -> Text -> Turn -> Final
 pendingToFinal pending text assistantTurn =
   Final
-    { prompt = pending.prompt,
+    { prompt = Just pending.prompt,
       history = pending.prompt.history,
       newMessages = [UserTurn pending.prompt.prompt] ++ pending.toolRounds ++ [assistantTurn],
       text = text
@@ -50,6 +50,15 @@ respToAssistantTurn :: ChatResponse -> (Text, Turn, [ToolCall])
 respToAssistantTurn cr = (cr.respText, AssistantTurn cr.respText cr.respReasoning toolCalls, toolCalls)
   where
     toolCalls = getToolCalls cr
+
+emptyFinal :: Text -> Final
+emptyFinal text =
+  Final
+    { prompt = Nothing,
+      history = [],
+      newMessages = [],
+      text = text
+    }
 
 -- * Transcript policy functions --------------------------------------------
 
@@ -80,6 +89,7 @@ lookupHistory kont cid = case kont of
     case Map.lookup cid cids of
       Nothing -> lookupHistory k cid
       Just history -> history
+  KCatch _o k -> lookupHistory k cid
 
 updateHistory :: CID -> [Turn] -> Kont m o r -> Kont m o r
 updateHistory cid history kont = case kont of
@@ -99,6 +109,7 @@ updateHistory cid history kont = case kont of
     Just _h -> KLoop n workflow pol (Map.insert cid history cids) k
   KUpdateHistory c h k ->
     KUpdateHistory c h (updateHistory cid history k)
+  KCatch o k -> KCatch o (updateHistory cid history k)
 
 -- * Show functions for debugging -------------------------------------------
 
@@ -126,3 +137,4 @@ showKont kont =
     KMap _pol k -> "KMap" <> showKont k
     KLoop _n _workflow _policy _cids k -> "KLoop " <> T.pack (show _n) <> showKont k
     KUpdateHistory cid _history k -> "KUpdateHistory " <> T.pack (show cid) <> showKont k
+    KCatch _o k -> "KCatch " <> showKont k

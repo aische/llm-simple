@@ -26,6 +26,7 @@ import LLM.Generate.Types
     StreamChunk (..),
   )
 import LLM.Load.LoadModels (loadModelsOrThrow)
+import LLM.Workflow (emptyFinal)
 import LLM.Workflow.ToolUtils (toTool, toTypedWorkflowTool, typedWorkflowToolToTool, workflowToolTyped)
 import LLM.Workflow.Tools.FsTools (fsTools)
 import LLM.Workflow.Types
@@ -166,8 +167,12 @@ main = do
   ag3 <- mkAgent worker2 _models4 True
   ag4 <- mkAgent worker1 _models4 True
   let workflow1 =
-        mkLoop 1 TranscriptFinalToPromptArgs [ag1, ag2] $
-          WSeq ag1 ag2 TranscriptFinalToPromptArgs
+        mkLoop 3 TranscriptFinalToPromptArgs [ag1, ag2] $
+          WSeq
+            (WCatch (emptyFinal "error: expert unavailable") ag1)
+            (WCatch (emptyFinal "error: student unavailable") ag2)
+            TranscriptFinalToPromptArgs
+
   toolMap <-
     fsTools "./user-workspace/"
       <&> addTools
@@ -180,9 +185,10 @@ main = do
   let p1 = "Which are the best programming languages for AI development? Try to use the subagent tool to gain expert knowledge about the topic."
   t <- run Nothing toolMap p1 ag3
   TIO.putStrLn t
-  let p2 = "are there any files in the current directory?"
-  t2 <- run Nothing toolMap p2 ag4
-  TIO.putStrLn t2
+
+-- let p2 = "are there any files in the current directory?"
+-- t2 <- run Nothing toolMap p2 ag4
+-- TIO.putStrLn t2
 
 -- ---------------------------------------------------------------------------
 -- Demos

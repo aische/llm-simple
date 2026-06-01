@@ -71,7 +71,7 @@ data Pending = Pending
   deriving (Show)
 
 data Final = Final
-  { prompt :: Prompt,
+  { prompt :: Maybe Prompt,
     history :: [Turn],
     newMessages :: [Turn],
     text :: Text
@@ -79,6 +79,14 @@ data Final = Final
 
 newtype CID = CID {cid :: UUID}
   deriving (Eq, Ord, Show)
+
+class GetCid a where
+  getCid :: a -> [CID]
+
+instance GetCid (Workflow m i o) where
+  getCid :: forall i' o' m'. Workflow m' i' o' -> [CID]
+  getCid (WPrompt _ag (Just cid)) = [cid]
+  getCid _ = []
 
 data TranscriptPolicy i o where
   TranscriptPolicyFunc :: (i -> o) -> TranscriptPolicy i o
@@ -99,6 +107,7 @@ data Workflow m i o where
   WLiftW :: (i -> m (Workflow m i' o)) -> Workflow m (i, i') o
   WMap :: Workflow m i o -> TranscriptPolicy o o' -> Workflow m i o'
   WLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> [CID] -> Workflow m i o
+  WCatch :: o -> Workflow m i o -> Workflow m i o
 
 data Step m o where
   RunPrompt :: Pending -> Maybe CID -> Step m Final
@@ -107,14 +116,6 @@ data Step m o where
   RunTool :: Pending -> Turn -> ToolCall -> Step m Text
   RunThrow :: GenerateError -> Step m o
   RunWorkflow :: Workflow m i o -> i -> Step m o
-
-class GetCid a where
-  getCid :: a -> [CID]
-
-instance GetCid (Workflow m i o) where
-  getCid :: forall i' o' m'. Workflow m' i' o' -> [CID]
-  getCid (WPrompt _ag (Just cid)) = [cid]
-  getCid _ = []
 
 data Kont m o r where
   KEmpty :: Kont m o o
@@ -125,6 +126,7 @@ data Kont m o r where
   KMap :: TranscriptPolicy o o' -> Kont m o' r -> Kont m o r
   KLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> (Map.Map CID [Turn]) -> Kont m o r -> Kont m o r
   KUpdateHistory :: CID -> [Turn] -> Kont m o r -> Kont m o r
+  KCatch :: o -> Kont m o r -> Kont m o r
 
 data Stack m r where
   Stack :: (Step m o) -> (Kont m o r) -> Stack m r

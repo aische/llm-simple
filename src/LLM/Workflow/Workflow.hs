@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
-
 module LLM.Workflow.Workflow where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -115,7 +113,7 @@ eval rt (Stack step konts) = do
           pure $ Stack (SReturn text) konts
     SWorkflow workflow i -> case workflow of
       WPrompt a mbcid ->
-        let h = maybe [] (lookupHistory konts) mbcid -- what happens to i.history?
+        let h = maybe i.history (lookupHistory konts) mbcid -- what happens to i.history?
          in let pending = Pending {prompt = Prompt {agent = a, prompt = i.prompt, history = h}, toolRounds = []}
              in pure $ Stack (SPrompt pending mbcid) konts
       WPromptO a ->

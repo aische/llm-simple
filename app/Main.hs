@@ -165,7 +165,7 @@ main = do
   ag1 <- mkAgent student _models1 True
   ag2 <- mkAgent expert _models2 True
   ag3 <- mkAgent worker2 _models4 True
-  ag4 <- mkAgent worker1 _models4 True
+  _ag4 <- mkAgent worker1 _models4 True
   let workflow1 =
         mkLoop 3 TranscriptFinalToPromptArgs [ag1, ag2] $
           WSeq

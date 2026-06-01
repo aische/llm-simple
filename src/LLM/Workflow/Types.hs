@@ -1,28 +1,4 @@
-module LLM.Workflow.Types
-  ( Agent (..),
-    RuntimeArgs (..),
-    Tool (..),
-    ToolContext (..),
-    GenerateEvent (..),
-    GenerateEventDetail (..),
-    EventObserver,
-    TranscriptPolicy (..),
-    MergePolicy (..),
-    FinalResult (..),
-    PromptArgs (..),
-    Prompt (..),
-    PromptState (..),
-    Step (..),
-    Kont (..),
-    CID (..),
-    Workflow (..),
-    AgentWithModels (..),
-    PromptToolCalling (..),
-    ToolOutcome (..),
-    TypedWorkflowTool (..),
-    ToolMap,
-  )
-where
+module LLM.Workflow.Types where
 
 import Data.Aeson (Value)
 import Data.Map (Map)
@@ -40,7 +16,7 @@ import LLM.Core.Types
 import LLM.Core.Usage (Usage)
 import LLM.Generate (ModelWithFallbacks)
 import LLM.Generate.Logger (Hooks)
-import LLM.Generate.Types (GenerateError, GenerateErrorResult, GenerateTextResult)
+import LLM.Generate.Types (GeneratableObject, GenerateError, GenerateErrorResult, GenerateTextResult)
 
 -- | Agent configuration
 data Agent = Agent
@@ -67,18 +43,88 @@ data RuntimeArgs = RuntimeArgs
 -- the JSON arguments from the model.
 data Tool = Tool
   { toolDef :: ToolDef,
-    toolExecute :: ToolContext -> Value -> IO ToolOutcome
+    toolExecute :: ToolContext -> Value -> IO (ToolOutcome IO)
   }
 
-data ToolOutcome
+data ToolOutcome m
   = ToolReply Text
-  | ToolWorkflow Workflow PromptArgs
+  | ToolWorkflow (Workflow m PromptArgs Text) PromptArgs
 
-data TypedWorkflowTool c a = TypedWorkflowTool
+data PromptArgs = PromptArgs
+  { history :: [Turn],
+    prompt :: Text
+  }
+  deriving (Show)
+
+data Prompt = Prompt
+  { agent :: AgentWithModels,
+    prompt :: Text,
+    history :: [Turn]
+  }
+
+data Pending = Pending
+  { prompt :: Prompt,
+    toolRounds :: [Turn]
+  }
+
+data Final = Final
+  { prompt :: Prompt,
+    history :: [Turn],
+    newMessages :: [Turn],
+    text :: Text
+  }
+
+data TranscriptPolicy2 i o where
+  TranscriptPolicy2 :: (i -> o) -> TranscriptPolicy2 i o
+  TranscriptFinalText :: TranscriptPolicy2 Final PromptArgs
+
+transcriptPolicy2 :: TranscriptPolicy2 i o -> i -> o
+transcriptPolicy2 (TranscriptPolicy2 f) i = f i
+transcriptPolicy2 TranscriptFinalText final = PromptArgs {history = [], prompt = final.text}
+
+type TranscriptPolicy i o = i -> o
+
+type MergePolicy o1 o2 o = o1 -> o2 -> o
+
+data Workflow m i o where
+  WPrompt :: AgentWithModels -> Workflow m PromptArgs Final
+  WPromptO :: (GeneratableObject a) => AgentWithModels -> Workflow m PromptArgs a
+  WSeq :: Workflow m i x -> Workflow m y o -> TranscriptPolicy x y -> Workflow m i o
+  WPar :: Workflow m i x -> Workflow m i y -> MergePolicy x y o -> Workflow m i o
+  WLift :: (i -> m o) -> Workflow m i o
+  WMap :: Workflow m i o -> TranscriptPolicy o o' -> Workflow m i o'
+
+-- WLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> Workflow m i o
+
+data Step m o where
+  SPrompt :: Pending -> Step m Final
+  SPromptO :: (GeneratableObject a) => Pending -> Step m a
+  SReturn :: o -> Step m o
+  STool :: Pending -> Turn -> ToolCall -> Step m Text
+  SThrow :: GenerateError -> Step m o
+  SWorkflow :: Workflow m i o -> i -> Step m o
+
+-- RunWorkflow :: Workflow m o -> Step m o
+
+data Kont m o r where
+  KEmpty :: Kont m o o
+  KTool :: Pending -> Turn -> [ToolCall] -> [ToolResult] -> ToolCall -> Kont m Final r -> Kont m Text r
+  KSeq1 :: Workflow m y o -> TranscriptPolicy x y -> Kont m o r -> Kont m x r
+  KPar1 :: i -> Workflow m i y -> MergePolicy x y o -> Kont m o r -> Kont m x r
+  KPar2 :: x -> MergePolicy x y o -> Kont m o r -> Kont m y r
+  KMap :: TranscriptPolicy o o' -> Kont m o' r -> Kont m o r
+
+-- KPar :: x -> Workflow m i y -> MergePolicy x y o -> Kont m y r -> Kont m i r
+-- KLoop :: Int -> Workflow m i o -> TranscriptPolicy o i -> [CID] -> Kont m o r -> Kont m i r
+
+data Stack m r where
+  Stack :: (Step m o) -> (Kont m o r) -> Stack m r
+
+data TypedWorkflowTool m c a = TypedWorkflowTool
   { twtName :: Text,
     twtDescription :: Text,
     twtReadonly :: Bool,
-    twtExecute :: c -> a -> IO ToolOutcome
+    twtExecute :: c -> a -> IO (ToolOutcome m)
   }
 
 type ToolMap = Map.Map Text Tool
@@ -104,73 +150,8 @@ data AgentWithModels = AgentWithModels
 instance Show AgentWithModels where
   show AgentWithModels {agent} = "AgentWithModels {agent = " <> show agent.agName <> "}"
 
-data PromptArgs = PromptArgs
-  { history :: [Turn],
-    prompt :: Text
-  }
-  deriving (Show)
-
-data Prompt = Prompt
-  { agentWithModels :: AgentWithModels,
-    history :: [Turn],
-    prompt :: Text
-  }
-  deriving (Show)
-
-data PromptState
-  = PromptStatePending [Turn]
-  | PromptStateFinal FinalResult
-  | PromptStateToolCalls PromptToolCalling
-  deriving (Show)
-
-data FinalResult = FinalResult
-  { history :: [Turn],
-    prompt :: Text,
-    toolTurns :: [Turn],
-    assistantTurn :: Turn,
-    text :: Text
-  }
-  deriving (Show)
-
-data PromptToolCalling = PromptToolCalling
-  { toolRounds :: [Turn],
-    answer :: Turn,
-    toolCalls :: [ToolCall],
-    toolResults :: [ToolResult]
-  }
-  deriving (Show)
-
-data Step
-  = RunPrompt Prompt PromptState
-  | RunWorkflow Workflow PromptArgs
-  deriving (Show)
-
-data Kont
-  = KontToolCall Prompt PromptToolCalling ToolCall
-  | KontSeq Workflow TranscriptPolicy
-  | KontPar1 Workflow PromptArgs MergePolicy
-  | KontPar2 FinalResult MergePolicy
-  | KontLoop Int Workflow TranscriptPolicy (Map CID [Turn])
-  | KontUpdate CID
-  deriving (Show)
-
 newtype CID = CID UUID
   deriving (Eq, Ord, Show)
-
-data Workflow
-  = WPrompt AgentWithModels (Maybe CID)
-  | WSeq Workflow Workflow TranscriptPolicy
-  | WPar Workflow Workflow MergePolicy
-  | WLoop Int Workflow TranscriptPolicy [CID]
-  deriving (Show)
-
-data TranscriptPolicy
-  = TranscriptPolicy
-  | TranscriptSummaryOnly
-  deriving (Show)
-
-data MergePolicy = MergePolicy
-  deriving (Show)
 
 -- * Generation events -------------------------------------------------------
 

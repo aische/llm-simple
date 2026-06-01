@@ -161,12 +161,15 @@ main = do
       _models4 = ModelWithFallbacks {mwfModel = llama, mwfFallbacks = []}
 
   ag1 <- mkAgent expert _models4 True
+  ag2 <- mkAgent expert _models4 True
   -- ag2 <- mkAgent student _models4 True
   -- ag3 <- mkAgent summarizer _models4 True
   -- ag4 <- mkAgent worker2 _models4 True
-  let workflow1 = WMap ag1 TranscriptFinalText
+  let workflow1 = WMap (WSeq ag1 ag2 TranscriptFinalToPromptArgs) TranscriptFinalText
 
-      wf2 = mkLoop 3 TranscriptFinalToPromptArgs [ag1] ag1
+      wf2 =
+        mkLoop 3 TranscriptFinalToPromptArgs [ag1, ag2] $
+          WSeq ag1 ag2 TranscriptFinalToPromptArgs
   -- mkLoop 3 (TranscriptPolicyFunc id) [ag1, ag2] $
   --   WSeq ag2 ag1 (TranscriptPolicyFunc id)
   -- let workflow2 = WSeq workflow1 ag3 TranscriptFinalText

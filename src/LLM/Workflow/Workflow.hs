@@ -71,6 +71,9 @@ assistantTurnText :: Turn -> Text
 assistantTurnText (AssistantTurn text _ _) = text
 assistantTurnText _ = ""
 
+pendingHistory :: Pending -> [Turn]
+pendingHistory pending = pending.prompt.history ++ [UserTurn pending.prompt.prompt] ++ pending.toolRounds
+
 -- executeTool :: (MonadIO m) => Hooks -> ToolContext -> [Tool] -> ToolCall -> m (ToolOutcome m)
 -- executeTool _hooks _ctx _tools _tc = undefined
 
@@ -102,7 +105,11 @@ eval rt (Stack step konts) = case step of
         let (assistantTurn, toolCalls) = respToAssistantTurn resp
         case toolCalls of
           [] ->
-            pure $ Stack (SReturn $ mkFinal pending assistantTurn) (maybe konts (\cid -> KUpdateHistory cid [assistantTurn] konts) mcid)
+            let h = pendingHistory pending ++ [assistantTurn]
+             in pure $
+                  Stack
+                    (SReturn $ mkFinal pending assistantTurn)
+                    (maybe konts (\cid -> KUpdateHistory cid h konts) mcid)
           (toolCall : toolCalls') ->
             pure $
               Stack
@@ -166,7 +173,8 @@ eval rt (Stack step konts) = case step of
           pure $ Stack (SReturn o) k
         else
           pure $ Stack (SWorkflow workflow $ transcriptPolicy policy o) (KLoop (n - 1) workflow policy cids k)
-    KUpdateHistory cid history k ->
+    KUpdateHistory cid history k -> do
+      liftIO $ print $ "Updating history for " <> show cid <> " with " <> show history
       pure $ Stack step $ updateHistory cid history k
 
 -- _ -> pure $ Stack step konts

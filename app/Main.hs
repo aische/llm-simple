@@ -68,14 +68,74 @@ main = do
       _models3 = ModelWithFallbacks {mwfModel = gemini, mwfFallbacks = []}
       _models4 = ModelWithFallbacks {mwfModel = haiku, mwfFallbacks = [gpt, gemini, deepseek]}
 
-  toolMap <- fsTools "/Users/daniel/Desktop/hask-llm-data/"
   let wf1 = buildWf1Workflow (_models4, _models1)
       p1 =
         "Audit the project in the current workspace: identify correctness, safety, and maintainability risks, \
         \with actionable recommendations and a concise final report."
-  (t, usage) <- run Nothing toolMap p1 wf1
+
+  toolMap <-
+    fsTools "/Users/daniel/Desktop/hask-llm-data/"
+      <&> addTools
+        [ typedWorkflowToolToTool $
+            subagent "subagent" "Use this tool to gain expert knowledge about a topic. Provide a topic." $
+              \args _ctx ->
+                (WMap wf1 TranscriptSummaryText, PromptArgs {history = [], prompt = "Ask the expert about the topic: " <> args.prompt})
+        ]
+  let orchestrator = WPrompt (AgentWithModels orchestratorAgent _models4) Nothing
+  (t, usage) <- run Nothing toolMap p1 orchestrator
   TIO.putStrLn t
   TIO.putStrLn $ "Usage: " <> T.pack (show usage)
+
+orchestratorAgent :: Agent
+orchestratorAgent =
+  Agent
+    { agName = "orchestrator",
+      agSystemPrompt =
+        Just
+          "You are a helpful assistant. You may delegate work using tools:\n\
+          \- subagent: filesystem-capable child agent for a single task",
+      agTools = ["subagent"],
+      agMaxToolRounds = 5,
+      agContextWindow = Nothing
+    }
+
+-- ---------------------------------------------------------------------------
+-- utils - move them to separate files later
+-- ---------------------------------------------------------------------------
+
+mkAgent :: (MonadIO m) => Agent -> ModelWithFallbacks -> Bool -> m (Workflow m PromptArgs Final)
+mkAgent ag models False = pure $ WPrompt (AgentWithModels ag models) Nothing
+mkAgent ag models True = do
+  cid <- CID <$> generate
+  pure $ WPrompt (AgentWithModels ag models) (Just cid)
+
+mkLoop :: (MonadIO m, GetCid x) => Int -> TranscriptPolicy o i -> [x] -> Workflow m i o -> Workflow m i o
+mkLoop n policy scope wf = WLoop n wf policy cids
+  where
+    cids = concatMap getCid scope :: [CID]
+
+mkLoopWhile :: (MonadIO m, GetCid x) => Int -> TranscriptPolicy o i -> Workflow m (LoopContext i o) d -> TranscriptPolicy d Bool -> [x] -> Workflow m i o -> Workflow m i o
+mkLoopWhile maxIterations bodyPolicy decider decisionPolicy scope = WLoopWhile maxIterations decider decisionPolicy cids bodyPolicy
+  where
+    cids = concatMap getCid scope :: [CID]
+
+addTools :: [Tool m] -> ToolMap m -> ToolMap m
+addTools tools toolMap = toolMap <> Map.fromList [(tool.toolDef.toolName, tool) | tool <- tools]
+
+newtype SubagentArgs = SubagentArgs
+  { prompt :: Text
+  }
+  deriving (Generic)
+  deriving (FromJSON) via (AC.Autodocodec SubagentArgs)
+
+instance AC.HasCodec SubagentArgs where
+  codec :: AC.JSONCodec SubagentArgs
+  codec =
+    AC.object "precise prompt for the subagent" $
+      SubagentArgs <$> AC.requiredField "prompt" "a precise prompt for the subagent" AC..= (\x -> x.prompt)
+
+subagent :: (MonadIO m) => Text -> Text -> (SubagentArgs -> ToolContext m -> (Workflow m PromptArgs Text, PromptArgs)) -> TypedWorkflowTool m (ToolContext m) SubagentArgs
+subagent = workflowToolTyped
 
 printGenerateResult :: Either GenerateErrorResult GenerateTextResult -> IO ()
 printGenerateResult = \case
@@ -128,22 +188,3 @@ run abortSignal toolMap prompt wf = do
   case r of
     (Left err, usage) -> pure ("Error: " <> T.pack (show err), usage)
     (Right final, usage) -> pure (final.text, usage)
-
-mkAgent :: (MonadIO m) => Agent -> ModelWithFallbacks -> Bool -> m (Workflow m PromptArgs Final)
-mkAgent ag models False = pure $ WPrompt (AgentWithModels ag models) Nothing
-mkAgent ag models True = do
-  cid <- CID <$> generate
-  pure $ WPrompt (AgentWithModels ag models) (Just cid)
-
-mkLoop :: (MonadIO m, GetCid x) => Int -> TranscriptPolicy o i -> [x] -> Workflow m i o -> Workflow m i o
-mkLoop n policy scope wf = WLoop n wf policy cids
-  where
-    cids = concatMap getCid scope :: [CID]
-
-mkLoopWhile :: (MonadIO m, GetCid x) => Int -> TranscriptPolicy o i -> Workflow m (LoopContext i o) d -> TranscriptPolicy d Bool -> [x] -> Workflow m i o -> Workflow m i o
-mkLoopWhile maxIterations bodyPolicy decider decisionPolicy scope = WLoopWhile maxIterations decider decisionPolicy cids bodyPolicy
-  where
-    cids = concatMap getCid scope :: [CID]
-
-addTools :: [Tool m] -> ToolMap m -> ToolMap m
-addTools tools toolMap = toolMap <> Map.fromList [(tool.toolDef.toolName, tool) | tool <- tools]

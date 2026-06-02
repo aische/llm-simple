@@ -42,7 +42,7 @@ data RuntimeArgs m = RuntimeArgs
 -- the JSON arguments from the model.
 data Tool m = Tool
   { toolDef :: ToolDef,
-    toolExecute :: ToolContext m -> Value -> m (ToolOutcome m)
+    toolExecute :: ToolContext m -> Value -> IO (ToolOutcome m)
   }
 
 data ToolOutcome m
@@ -148,7 +148,7 @@ data TypedWorkflowTool m c a = TypedWorkflowTool
   { twtName :: Text,
     twtDescription :: Text,
     twtReadonly :: Bool,
-    twtExecute :: c -> a -> m (ToolOutcome m)
+    twtExecute :: c -> a -> IO (ToolOutcome m)
   }
 
 type ToolMap m = Map.Map Text (Tool m)

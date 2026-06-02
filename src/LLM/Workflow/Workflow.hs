@@ -96,7 +96,7 @@ eval rt (Stack step konts) = do
                 tcRuntimeArgs = rt
               }
           tools = getResolvedTools pending.prompt.agent.agent rt
-      result <- executeTool rt.rtHooks ctx tools toolCall
+      result <- liftIO (executeTool rt.rtHooks ctx tools toolCall)
       case result of
         ToolWorkflow workflow args -> do
           pure $ Stack (RunWorkflow workflow args) konts

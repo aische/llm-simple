@@ -15,7 +15,7 @@ where
 
 import Autodocodec qualified as AC
 import Autodocodec.Schema (jsonSchemaVia)
-import Control.Exception (SomeException (..))
+import Control.Exception (SomeException (..), try)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Aeson (FromJSON)
 import Data.Aeson qualified as AE
@@ -46,46 +46,19 @@ import LLM.Workflow.Types
   )
 
 -- -- | Execute a single tool call by looking it up in the tool list
-executeTool :: (MonadIO m) => Hooks -> ToolContext m -> [Tool m] -> ToolCall -> m (ToolOutcome m)
+executeTool :: (MonadIO m) => Hooks -> ToolContext m -> [Tool m] -> ToolCall -> IO (ToolOutcome m)
 executeTool hooks ctx tools tc = case lookup tc.tcName toolMap of
   Nothing -> pure $ ToolReply ("Unknown tool: " <> tc.tcName)
   Just exec -> do
     liftIO $ hooks.onToolCall tc.tcName (AE.toJSON tc.tcArguments)
-    -- result <- try (exec ctx tc.tcArguments)
-    result <- Right <$> exec ctx tc.tcArguments
+    result <- try (exec ctx tc.tcArguments)
     case result of
       Right outcome -> pure outcome
-      --  case outcome of
-      --   ToolReply text -> do
-      --     hooks.onToolResult tc.tcName text
-      --     pure $ ToolReply $ toolResult tc text
-      --   ToolWorkflow workflow promptArgs -> do
-      --     hooks.onToolResult tc.tcName "Workflow"
-      --     pure $ ToolWorkflow workflow promptArgs
       Left (e :: SomeException) -> do
         liftIO $ hooks.onToolError tc.tcName (T.pack (show e))
         pure $ ToolReply ("Tool error: " <> T.pack (show e))
   where
     toolMap = [(t.toolDef.toolName, t.toolExecute) | t <- tools]
-
--- -- | Execute all tool calls from a response
--- executeTools :: Hooks -> ToolContext -> [Tool] -> [ToolCall] -> IO [ToolResult]
--- executeTools hooks ctx tools = mapM (executeTool hooks ctx tools)
-
--- -- | Execute tool calls one at a time, checking the abort signal between each.
--- -- Returns @Left Aborted@ if the signal fires before all calls finish.
--- executeToolsWithAbort :: Maybe AbortSignal -> Hooks -> ToolContext -> [Tool] -> [ToolCall] -> IO (GenerateResult [ToolResult])
--- executeToolsWithAbort Nothing hooks ctx tools tcs = Right <$> executeTools hooks ctx tools tcs
--- executeToolsWithAbort (Just sig) hooks ctx tools tcs = go [] tcs
---   where
---     go acc [] = pure (Right (reverse acc))
---     go acc (tc : rest) = do
---       aborted <- isAborted sig
---       if aborted
---         then pure (Left GErrAborted)
---         else do
---           r <- executeTool hooks ctx tools tc
---           go (r : acc) rest
 
 createToolContext ::
   Agent ->

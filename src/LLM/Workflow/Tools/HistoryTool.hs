@@ -21,7 +21,7 @@ instance AC.HasCodec HistoryToolArgs where
     AC.object "get conversation history" $
       HistoryToolArgs <$> AC.requiredField "chunk" "0 = most recent hidden chunk, 1 = the one before that, etc." AC..= (\x -> x._historyChunk)
 
-getHistoryExecTyped :: (MonadIO m) => ToolContext m -> HistoryToolArgs -> m Text
+getHistoryExecTyped :: (MonadIO m) => ToolContext m -> HistoryToolArgs -> IO Text
 getHistoryExecTyped ctx args = do
   let chunkIdx = args._historyChunk
       hidden = take ctx.tcWindowOffset ctx.tcConversation

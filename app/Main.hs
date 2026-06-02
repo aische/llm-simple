@@ -74,7 +74,7 @@ main = do
         \with actionable recommendations and a concise final report."
 
   toolMap <-
-    fsTools "/Users/daniel/Desktop/hask-llm-data/"
+    fsTools "./user-workspace/" -- put some code files in this directory
       <&> addTools
         [ typedWorkflowToolToTool $
             subagent "subagent" "Use this tool to gain expert knowledge about a topic. Provide a topic." $

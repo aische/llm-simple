@@ -139,6 +139,23 @@ stackSize kont = case kont of
   KLoopWhile _maxIterations _iteration _workflow _policy _decider _decisionPolicy _cids _currentInput _outputsRev k -> 1 + stackSize k
   KLoopWhileDecision _maxIterations _iteration _workflow _policy _decider _decisionPolicy _cids _nextInput _outputsRev _lastOutput k -> 1 + stackSize k
 
+data CatchFrame m r where
+  CatchFrame :: o -> Kont m o r -> CatchFrame m r
+
+unwindToCatch :: Kont m o r -> Maybe (CatchFrame m r)
+unwindToCatch kont = case kont of
+  KEmpty -> Nothing
+  KTool _pending _mcid _assistantTurn _toolCalls _toolResults _toolCall k -> unwindToCatch k
+  KSeq1 _workflow2 _pol k -> unwindToCatch k
+  KPar1 _i _workflow2 _mergePolicy k -> unwindToCatch k
+  KPar2 _x _mergePolicy k -> unwindToCatch k
+  KMap _pol k -> unwindToCatch k
+  KLoop _n _workflow _policy _cids k -> unwindToCatch k
+  KLoopWhile _maxIterations _iteration _workflow _policy _decider _decisionPolicy _cids _currentInput _outputsRev k -> unwindToCatch k
+  KLoopWhileDecision _maxIterations _iteration _workflow _policy _decider _decisionPolicy _cids _nextInput _outputsRev _lastOutput k -> unwindToCatch k
+  KUpdateHistory _cid _history k -> unwindToCatch k
+  KCatch o k -> Just (CatchFrame o k)
+
 -- * Show functions for debugging -------------------------------------------
 
 showAgent :: Pending -> Text

@@ -31,7 +31,7 @@ import LLM.Workflow.Types
     ToolOutcome (ToolReply, ToolWorkflow),
     Workflow (..),
   )
-import LLM.Workflow.Utils (lookupHistory, mergePolicy, pendingToFinal, pendingToTurns, respToAssistantTurn, showKont, showStep, stackSize, transcriptPolicy, updateHistory)
+import LLM.Workflow.Utils (CatchFrame (CatchFrame), lookupHistory, mergePolicy, pendingToFinal, pendingToTurns, respToAssistantTurn, showKont, showStep, stackSize, transcriptPolicy, unwindToCatch, updateHistory)
 
 callLLM :: (MonadIO m) => RuntimeArgs m -> Pending -> IO (GenerateResult ChatResponse)
 callLLM rt pending = do
@@ -132,11 +132,11 @@ eval rt (Stack step konts) = do
       WCatch o wf ->
         pure $ Stack (RunWorkflow wf i) (KCatch o konts)
     RunThrow {} ->
-      case konts of
-        KCatch o k ->
-          pure $ Stack (RunReturn o) k
-        _ ->
-          pure $ Stack step konts
+      case unwindToCatch konts of
+        Just (CatchFrame caughtValue k) ->
+          pure $ Stack (RunReturn caughtValue) k
+        Nothing ->
+          error "Unhandled error" -- TODO: add a RunError step to handle this case
     RunReturn o -> case konts of
       KEmpty -> pure $ Stack step konts
       KTool pending mcid assistantTurn toolCalls toolResults toolCall k ->

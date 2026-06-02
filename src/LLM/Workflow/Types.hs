@@ -143,7 +143,7 @@ data Kont m o r where
   KCatch :: o -> Kont m o r -> Kont m o r
 
 data Stack m r where
-  Stack :: (Step m o) -> (Kont m o r) -> Stack m r
+  Stack :: Usage -> (Step m o) -> (Kont m o r) -> Stack m r
 
 data TypedWorkflowTool m c a = TypedWorkflowTool
   { twtName :: Text,

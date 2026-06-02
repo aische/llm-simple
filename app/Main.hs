@@ -169,8 +169,9 @@ main = do
       p1 =
         "Audit the project in the current workspace: identify correctness, safety, and maintainability risks, \
         \with actionable recommendations and a concise final report."
-  t <- run Nothing toolMap p1 wf1
+  (t, usage) <- run Nothing toolMap p1 wf1
   TIO.putStrLn t
+  TIO.putStrLn $ "Usage: " <> T.pack (show usage)
 
 -- ag1 <- mkAgent student _models1 True
 -- ag2 <- mkAgent expert _models2 True
@@ -241,7 +242,7 @@ llmHooks hooks =
       onLLMResponseError = hooks.onResponseError
     }
 
-run :: (MonadIO m) => Maybe AbortSignal -> ToolMap m -> Text -> Workflow m PromptArgs Final -> m Text
+run :: (MonadIO m) => Maybe AbortSignal -> ToolMap m -> Text -> Workflow m PromptArgs Final -> m (Text, Usage)
 run abortSignal toolMap prompt wf = do
   genId <- generate
   let rt =
@@ -259,8 +260,8 @@ run abortSignal toolMap prompt wf = do
           }
   r <- runWorkflow rt wf (PromptArgs {history = [], prompt})
   case r of
-    Left err -> error (show err)
-    Right final -> pure final.text
+    (Left err, usage) -> pure ("Error: " <> T.pack (show err), usage)
+    (Right final, usage) -> pure (final.text, usage)
 
 mkAgent :: (MonadIO m) => Agent -> ModelWithFallbacks -> Bool -> m (Workflow m PromptArgs Final)
 mkAgent ag models False = pure $ WPrompt (AgentWithModels ag models) Nothing

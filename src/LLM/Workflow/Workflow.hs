@@ -194,5 +194,5 @@ eval rt (Stack step konts) = do
           else pure $ Stack (RunReturn lastOutput) k
       KUpdateHistory cid history k -> do
         pure $ Stack step $ updateHistory cid history k
-      KCatch r k ->
-        pure $ Stack (RunReturn r) k
+      KCatch _r k ->
+        pure $ Stack step k

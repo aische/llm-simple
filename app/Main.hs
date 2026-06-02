@@ -54,6 +54,7 @@ import LLM.Workflow.Workflow
     runWorkflow,
   )
 import System.Environment (getArgs, getEnv)
+import Wf1 (buildWf1Workflow)
 
 -- | Orchestrator: no legacy tools, only UTools (subagent + workflow).
 createOrchestratorAgent :: Agent
@@ -153,45 +154,53 @@ subagent = workflowToolTyped
 
 main :: IO ()
 main = do
-  (_gpt, llama, haiku, gemini, mistral) <-
+  (gpt, llama, haiku, gemini, mistral, deepseek) <-
     loadModelsOrThrow
       "./model-catalog.json"
-      ("gpt_4_1", "llama_3_2", "haiku_4_5", "gemini_2_5_flash", "mistral")
+      ("gpt_4_1", "llama_3_2", "haiku_4_5", "gemini_2_5_flash", "mistral", "deepseek4flash")
 
   let _models1 = ModelWithFallbacks {mwfModel = llama, mwfFallbacks = []}
       _models2 = ModelWithFallbacks {mwfModel = mistral, mwfFallbacks = []}
       _models3 = ModelWithFallbacks {mwfModel = gemini, mwfFallbacks = []}
-      _models4 = ModelWithFallbacks {mwfModel = haiku, mwfFallbacks = []}
+      _models4 = ModelWithFallbacks {mwfModel = haiku, mwfFallbacks = [gpt, gemini, deepseek]}
 
-  ag1 <- mkAgent student _models1 True
-  ag2 <- mkAgent expert _models2 True
-  ag3 <- mkAgent worker2 _models4 True
-  _ag4 <- mkAgent worker1 _models4 True
-  let workflow1 =
-        mkLoop 3 TranscriptFinalToPromptArgs [ag1, ag2] $
-          WSeq
-            (WCatch (emptyFinal "error: expert unavailable") ag1)
-            (WCatch (emptyFinal "error: student unavailable") ag2)
-            TranscriptFinalToPromptArgs
-
-  -- let decider = WPrompt (AgentWithModels expert _models2 True) Nothing
-  --     workflow2 =
-  --       mkLoopWhile 3 TranscriptFinalToPromptArgs decider decisionPolicy [ag1, ag2] TranscriptFinalToPromptArgs $
-  --         workflow1
-  -- (LoopContext {lcIteration = 0, lcMaxIterations = 3, lcInput = PromptArgs {history = [], prompt = "Ask the expert about the topic: "}, lcNextInput = PromptArgs {history = [], prompt = "Ask the expert about the topic: "}, lcOutput = emptyFinal "error: expert unavailable", lcOutputs = []}) TranscriptFinalToPromptArgs (WCatch (emptyFinal "error: expert unavailable") ag1) (WCatch (emptyFinal "error: student unavailable") ag2) TranscriptFinalToPromptArgs
-
-  toolMap <-
-    fsTools "./user-workspace/"
-      <&> addTools
-        [ typedWorkflowToolToTool $
-            subagent "subagent" "Use this tool to gain expert knowledge about a topic. Provide a topic." $
-              \args _ctx ->
-                (WMap workflow1 TranscriptSummaryText, PromptArgs {history = [], prompt = "Ask the expert about the topic: " <> args.prompt})
-        ]
-
-  let p1 = "Which are the best programming languages for AI development? Try to use the subagent tool to gain expert knowledge about the topic."
-  t <- run Nothing toolMap p1 ag3
+  toolMap <- fsTools "/Users/daniel/Desktop/hask-llm-data/"
+  let wf1 = buildWf1Workflow _models4
+      p1 =
+        "Audit the project in the current workspace: identify correctness, safety, and maintainability risks, \
+        \with actionable recommendations and a concise final report."
+  t <- run Nothing toolMap p1 wf1
   TIO.putStrLn t
+
+-- ag1 <- mkAgent student _models1 True
+-- ag2 <- mkAgent expert _models2 True
+-- ag3 <- mkAgent worker2 _models4 True
+-- _ag4 <- mkAgent worker1 _models4 True
+-- let workflow1 =
+--       mkLoop 3 TranscriptFinalToPromptArgs [ag1, ag2] $
+--         WSeq
+--           (WCatch (emptyFinal "error: expert unavailable") ag1)
+--           (WCatch (emptyFinal "error: student unavailable") ag2)
+--           TranscriptFinalToPromptArgs
+
+-- let decider = WPrompt (AgentWithModels expert _models2 True) Nothing
+--     workflow2 =
+--       mkLoopWhile 3 TranscriptFinalToPromptArgs decider decisionPolicy [ag1, ag2] TranscriptFinalToPromptArgs $
+--         workflow1
+-- (LoopContext {lcIteration = 0, lcMaxIterations = 3, lcInput = PromptArgs {history = [], prompt = "Ask the expert about the topic: "}, lcNextInput = PromptArgs {history = [], prompt = "Ask the expert about the topic: "}, lcOutput = emptyFinal "error: expert unavailable", lcOutputs = []}) TranscriptFinalToPromptArgs (WCatch (emptyFinal "error: expert unavailable") ag1) (WCatch (emptyFinal "error: student unavailable") ag2) TranscriptFinalToPromptArgs
+
+-- toolMap <-
+--   fsTools "./user-workspace/"
+--     <&> addTools
+--       [ typedWorkflowToolToTool $
+--           subagent "subagent" "Use this tool to gain expert knowledge about a topic. Provide a topic." $
+--             \args _ctx ->
+--               (WMap workflow1 TranscriptSummaryText, PromptArgs {history = [], prompt = "Ask the expert about the topic: " <> args.prompt})
+--       ]
+
+-- let p1 = "Which are the best programming languages for AI development? Try to use the subagent tool to gain expert knowledge about the topic."
+-- t <- run Nothing toolMap p1 ag3
+-- TIO.putStrLn t
 
 -- let p2 = "are there any files in the current directory?"
 -- t2 <- run Nothing toolMap p2 ag4

@@ -84,6 +84,21 @@
         },
         "maxTokens": 1024,
         "temperature": 0.5,
+        "requestTimeout": 30000,
+        "throttleDelay": 5000,
+        "retryCount": 3,
+        "jitterBackoff": 5000
+    },
+    {
+        "modelConfigName": "deepseek4flash",
+        "providerName": "deepseek",
+        "modelName": "deepseek-v4-flash",
+        "pricing": {
+            "pricePerMillionInput": 2.0,
+            "pricePerMillionOutput": 8.0
+        },
+        "maxTokens": 1024,
+        "temperature": 0.5,
         "requestTimeout": 10000,
         "throttleDelay": 1000,
         "retryCount": 3,

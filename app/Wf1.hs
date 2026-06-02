@@ -147,7 +147,8 @@ reviewerAgentA =
             [ "You are reviewer A (correctness and safety focus).",
               "Use readfile to inspect candidate files from the plan and conversation context.",
               "Return findings with severity levels and concrete evidence.",
-              "If no issues are found, explicitly state that and what you checked."
+              "If no issues are found, explicitly state that and what you checked.",
+              "Do not discuss workflow status, missing submissions, blocked process, or reviewer coordination."
             ],
       agTools = ["readfile", "readdir"],
       agMaxToolRounds = 6,
@@ -164,7 +165,8 @@ reviewerAgentB =
             [ "You are reviewer B (maintainability and testability focus).",
               "Use readfile and readdir as needed.",
               "Return a structured review: missing tests, design debts, and improvement suggestions.",
-              "Ground every claim in inspected files."
+              "Ground every claim in inspected files.",
+              "Do not discuss workflow status, missing submissions, blocked process, or reviewer coordination."
             ],
       agTools = ["readfile", "readdir"],
       agMaxToolRounds = 6,
@@ -182,7 +184,9 @@ refinerAgent =
               "Input is a combined review draft.",
               "Improve clarity, remove duplicates, and ensure each finding has actionable next steps.",
               "Keep technical precision and do not drop important findings.",
-              "Never ask the user for more input. Produce the refined result immediately."
+              "Never ask the user for more input. Produce the refined result immediately.",
+              "Never claim the process failed or is blocked. Deliver a technical consolidation only.",
+              "Every finding must be tied to inspected files or explicit evidence from the reviewer drafts."
             ],
       agTools = [],
       agMaxToolRounds = 4,
@@ -201,7 +205,9 @@ finalizerAgent =
               "1) Executive summary",
               "2) Findings by severity",
               "3) Recommended action plan.",
-              "Keep output concise and implementation-oriented."
+              "Keep output concise and implementation-oriented.",
+              "Never output review-process status language such as FAILED/BLOCKED/missing submissions.",
+              "If evidence is weak, state uncertainty per finding, but still provide technical hypotheses and next verification steps."
             ],
       agTools = [],
       agMaxToolRounds = 3,
@@ -219,7 +225,8 @@ deciderAgent =
               "You receive loop context including current output and past outputs.",
               "Set shouldContinue=true only if substantial issues remain unresolved,",
               "or if the report quality is still too low for handoff.",
-              "Prefer stopping once the report is coherent, deduplicated, and actionable."
+              "Prefer stopping once the report is coherent, deduplicated, and actionable.",
+              "Set shouldContinue=true when output is meta/process-oriented (e.g. FAILED, BLOCKED, submission issues) instead of technical."
             ],
       agTools = [],
       agMaxToolRounds = 2,

@@ -38,14 +38,14 @@ instance AC.HasCodec LoopDecision where
         <$> AC.requiredField "shouldContinue" "Set to true when another refinement pass is required." AC..= (\x -> x.shouldContinue)
         <*> AC.requiredField "reason" "Brief reason for the decision." AC..= (\x -> x.reason)
 
-buildWf1Workflow :: (Applicative m) => ModelWithFallbacks -> Workflow m PromptArgs Final
-buildWf1Workflow models =
+buildWf1Workflow :: (Applicative m) => (ModelWithFallbacks, ModelWithFallbacks) -> Workflow m PromptArgs Final
+buildWf1Workflow (models, models2) =
   WMap
     (WSeq initialDraft (mkConditionalLoop 4 refiner deciderWorkflow) TranscriptFinalToPromptArgs)
     (TranscriptPolicyFunc (\result -> result {text = "WF1 Result\n\n" <> result.text}))
   where
     planner = WPrompt (AgentWithModels plannerAgent models) Nothing
-    reviewerA = WPrompt (AgentWithModels reviewerAgentA models) Nothing
+    reviewerA = WPrompt (AgentWithModels reviewerAgentA models2) Nothing
     reviewerB = WPrompt (AgentWithModels reviewerAgentB models) Nothing
     refiner = WPrompt (AgentWithModels refinerAgent models) Nothing
     finalizer = WPrompt (AgentWithModels finalizerAgent models) Nothing

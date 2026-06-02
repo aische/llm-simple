@@ -165,7 +165,7 @@ main = do
       _models4 = ModelWithFallbacks {mwfModel = haiku, mwfFallbacks = [gpt, gemini, deepseek]}
 
   toolMap <- fsTools "/Users/daniel/Desktop/hask-llm-data/"
-  let wf1 = buildWf1Workflow _models4
+  let wf1 = buildWf1Workflow (_models4, _models1)
       p1 =
         "Audit the project in the current workspace: identify correctness, safety, and maintainability risks, \
         \with actionable recommendations and a concise final report."
@@ -258,7 +258,9 @@ run abortSignal toolMap prompt wf = do
             rtToolMap = toolMap
           }
   r <- runWorkflow rt wf (PromptArgs {history = [], prompt})
-  pure r.text
+  case r of
+    Left err -> error (show err)
+    Right final -> pure final.text
 
 mkAgent :: (MonadIO m) => Agent -> ModelWithFallbacks -> Bool -> m (Workflow m PromptArgs Final)
 mkAgent ag models False = pure $ WPrompt (AgentWithModels ag models) Nothing

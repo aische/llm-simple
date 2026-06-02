@@ -24,7 +24,7 @@
         },
         "maxTokens": 1024,
         "temperature": 0.5,
-        "requestTimeout": 30000,
+        "requestTimeout": 3000,
         "throttleDelay": 1000,
         "retryCount": 3,
         "jitterBackoff": 1000

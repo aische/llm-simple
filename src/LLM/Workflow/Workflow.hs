@@ -1,12 +1,14 @@
 module LLM.Workflow.Workflow where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Unsafe.Coerce (unsafeCoerce)
 import Data.Map qualified as Map
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import LLM
   ( ChatResponse (..),
     GeneratableObject,
+    GenerateError,
     GenerateErrorResult (..),
     GenerateResult,
     ToolCall (..),
@@ -46,21 +48,22 @@ callLLMO rt pending = do
     Left errResult -> pure $ Left errResult.gerError
     Right (value, _usage) -> pure $ Right value
 
-runWorkflow :: (MonadIO m) => RuntimeArgs m -> Workflow m i o -> i -> m o
+runWorkflow :: (MonadIO m) => RuntimeArgs m -> Workflow m i o -> i -> m (Either GenerateError o)
 runWorkflow rt workflow i =
   loop rt (Stack (RunWorkflow workflow i) KEmpty)
 
-loop :: (MonadIO m) => RuntimeArgs m -> Stack m o -> m o
+loop :: (MonadIO m) => RuntimeArgs m -> Stack m (Either GenerateError o) -> m (Either GenerateError o)
 loop rt stack = do
-  stack' <- eval rt stack --
-  maybe (loop rt stack') pure $ isDone stack'
+  stack' <- eval rt stack
+  case isDone stack' of
+    Just result -> pure result
+    Nothing -> loop rt stack'
 
-isDone :: Stack m r -> Maybe r
-isDone (Stack (RunReturn o) KEmpty) = Just o
-isDone (Stack (RunThrow err) KEmpty) = error $ show err
+isDone :: Stack m (Either GenerateError o) -> Maybe (Either GenerateError o)
+isDone (Stack (RunFinish e) KEmpty) = Just (unsafeCoerce e)
 isDone (Stack _ _) = Nothing
 
-eval :: (MonadIO m) => RuntimeArgs m -> Stack m o -> m (Stack m o)
+eval :: (MonadIO m) => RuntimeArgs m -> Stack m (Either GenerateError o) -> m (Stack m (Either GenerateError o))
 eval rt (Stack step konts) = do
   _ <- liftIO $ TIO.putStrLn $ T.replicate (stackSize konts) " " <> showStep step <> T.unwords (map (" : " <>) (showKont konts))
   case step of
@@ -131,14 +134,16 @@ eval rt (Stack step konts) = do
         pure $ Stack (RunWorkflow wf (snd i)) konts
       WCatch o wf ->
         pure $ Stack (RunWorkflow wf i) (KCatch o konts)
-    RunThrow {} ->
+    RunFinish _ ->
+      pure $ Stack step konts
+    RunThrow err ->
       case unwindToCatch konts of
         Just (CatchFrame caughtValue k) ->
           pure $ Stack (RunReturn caughtValue) k
         Nothing ->
-          error "Unhandled error" -- TODO: add a RunError step to handle this case
+          pure $ Stack (RunFinish (Left err)) KEmpty
     RunReturn o -> case konts of
-      KEmpty -> pure $ Stack step konts
+      KEmpty -> pure $ Stack (RunFinish (Right (unsafeCoerce o))) KEmpty
       KTool pending mcid assistantTurn toolCalls toolResults toolCall k ->
         let tr = ToolResult toolCall.tcId toolCall.tcName o
             toolResults' = tr : toolResults

@@ -127,9 +127,10 @@ data Step m o where
   RunTool :: Pending -> Turn -> ToolCall -> Step m Text
   RunThrow :: GenerateError -> Step m o
   RunWorkflow :: Workflow m i o -> i -> Step m o
+  RunFinish :: Either GenerateError o -> Step m o
 
 data Kont m o r where
-  KEmpty :: Kont m o o
+  KEmpty :: Kont m o r
   KTool :: Pending -> Maybe CID -> Turn -> [ToolCall] -> [ToolResult] -> ToolCall -> Kont m Final r -> Kont m Text r
   KSeq1 :: Workflow m y o -> TranscriptPolicy x y -> Kont m o r -> Kont m x r
   KPar1 :: i -> Workflow m i y -> MergePolicy x y o -> Kont m o r -> Kont m x r

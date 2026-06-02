@@ -170,6 +170,7 @@ showStep step =
     RunTool _pending _assistantTurn toolCall -> "RunTool " <> toolCall.tcName
     RunThrow _err -> "RunThrow " <> T.pack (show _err)
     RunWorkflow _workflow _i -> "RunWorkflow"
+    RunFinish _ -> "RunFinish"
 
 showKont :: Kont m o r -> [Text]
 showKont kont =

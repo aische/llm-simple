@@ -66,7 +66,7 @@ main = do
   let _models1 = ModelWithFallbacks {mwfModel = llama, mwfFallbacks = []}
       _models2 = ModelWithFallbacks {mwfModel = mistral, mwfFallbacks = []}
       _models3 = ModelWithFallbacks {mwfModel = gemini, mwfFallbacks = []}
-      _models4 = ModelWithFallbacks {mwfModel = haiku, mwfFallbacks = [gpt, gemini, deepseek]}
+      _models4 = ModelWithFallbacks {mwfModel = deepseek, mwfFallbacks = [gpt, gemini, haiku]}
 
   let wf1 = buildWf1Workflow (_models4, _models1)
       p1 =

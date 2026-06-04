@@ -3,6 +3,7 @@ module LLM.Workflow.Workflow where
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
+import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import LLM
@@ -11,6 +12,7 @@ import LLM
     GenerateError,
     GenerateErrorResult (..),
     GenerateResult,
+    StreamChunk (..),
     ToolCall (..),
     ToolResult (..),
     Turn (..),
@@ -18,10 +20,12 @@ import LLM
     emptyUsage,
     genObject,
     generateTextWithFallbacks,
+    streamTextWithFallbacks,
   )
 import LLM.Workflow.ToolUtils (createGenRequest, executeTool, getResolvedTools)
 import LLM.Workflow.Types
-  ( AgentWithModels (agent, models),
+  ( Agent (agName),
+    AgentWithModels (agent, models),
     Kont (..),
     LoopContext (..),
     Pending (..),
@@ -41,6 +45,18 @@ callLLM :: (MonadIO m) => RuntimeArgs m -> Pending -> IO (GenerateResult ChatRes
 callLLM rt pending = do
   let messages = pendingToTurns pending
   generateTextWithFallbacks (createGenRequest pending.prompt.agent.agent rt messages) pending.prompt.agent.models
+
+streamLLM :: (MonadIO m) => (StreamChunk -> IO ()) -> RuntimeArgs m -> Pending -> IO (GenerateResult ChatResponse)
+streamLLM onChunk rt pending = do
+  let messages = pendingToTurns pending
+  streamTextWithFallbacks onChunk (createGenRequest pending.prompt.agent.agent rt messages) pending.prompt.agent.models
+
+showStreamChunk :: StreamChunk -> Text
+showStreamChunk = \case
+  AnswerDelta txt -> txt
+  ReasoningDelta txt -> txt
+  PreambleDelta txt -> txt
+  StreamToolCallChunk toolCall -> T.pack (show toolCall)
 
 callLLMO :: (GeneratableObject a, MonadIO m) => RuntimeArgs m -> Pending -> IO (GenerateResult (a, Usage))
 callLLMO rt pending = do
@@ -70,8 +86,9 @@ isDone (Stack usage _ _) = (Nothing, usage)
 
 eval :: (MonadIO m) => RuntimeArgs m -> Stack m (Either GenerateError o) -> m (Stack m (Either GenerateError o))
 eval rt (Stack uAcc step konts) = do
-  _ <- liftIO $ TIO.putStrLn $ T.replicate (stackSize konts) " " <> showStep step <> T.unwords (map (" : " <>) (showKont konts))
-  _ <- liftIO $ TIO.putStrLn $ "Usage (cents): " <> T.pack (show (usageCents uAcc))
+  let space = T.replicate (stackSize konts) " "
+  _ <- liftIO $ TIO.putStrLn $ space <> showStep step <> T.unwords (map (" : " <>) (showKont konts))
+  _ <- liftIO $ TIO.putStrLn $ space <> "Usage (cents): " <> T.pack (show (usageCents uAcc))
   case step of
     RunObject pending -> do
       result <- liftIO (callLLMO rt pending)
@@ -79,7 +96,10 @@ eval rt (Stack uAcc step konts) = do
         Left err -> pure $ Stack uAcc (RunThrow err) konts
         Right (value, usage) -> pure $ Stack (uAcc <> usage) (RunReturn value) konts
     RunPrompt pending mcid -> do
-      result <- liftIO (callLLM rt pending)
+      let agentName = pending.prompt.agent.agent.agName
+      -- result <- liftIO (callLLM rt pending)
+      _ <- liftIO (TIO.putStr $ space <> agentName <> ": ")
+      result <- liftIO (streamLLM (TIO.putStr . showStreamChunk) rt pending)
       case result of
         Left err -> pure $ Stack uAcc (RunThrow err) konts
         Right resp -> do

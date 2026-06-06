@@ -20,7 +20,7 @@ instance AC.HasCodec ReaddirToolArgs where
   codec :: AC.JSONCodec ReaddirToolArgs
   codec =
     AC.object "list a directory" $
-      ReaddirToolArgs <$> AC.requiredField "path" "Relative directory path to list" AC..= (\x -> x._rdPath)
+      ReaddirToolArgs <$> AC.requiredField "path" "Relative directory path to list" AC..= (._rdPath)
 
 readdirToolTyped :: FsConfig -> TypedTool ctx ReaddirToolArgs
 readdirToolTyped fsConfig =

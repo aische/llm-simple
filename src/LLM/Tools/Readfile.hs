@@ -18,7 +18,7 @@ newtype ReadfileToolArgs = ReadfileToolArgs
 instance AC.HasCodec ReadfileToolArgs where
   codec =
     AC.object "read a file" $
-      ReadfileToolArgs <$> AC.requiredField "path" "Relative file path to read" AC..= (\x -> x._rfPath)
+      ReadfileToolArgs <$> AC.requiredField "path" "Relative file path to read" AC..= (._rfPath)
 
 readfileToolTyped :: FsConfig -> TypedTool ctx ReadfileToolArgs
 readfileToolTyped cfg =

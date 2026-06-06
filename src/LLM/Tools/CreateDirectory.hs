@@ -20,8 +20,8 @@ instance AC.HasCodec CreateDirectoryToolArgs where
   codec =
     AC.object "create a directory" $
       CreateDirectoryToolArgs
-        <$> AC.requiredField "path" "Relative path of the directory to create" AC..= (\x -> x._cdPath)
-        <*> AC.optionalFieldWithDefault "parents" True "Create intermediate parent directories as needed" AC..= (\x -> x._cdParents)
+        <$> AC.requiredField "path" "Relative path of the directory to create" AC..= (._cdPath)
+        <*> AC.optionalFieldWithDefault "parents" True "Create intermediate parent directories as needed" AC..= (._cdParents)
 
 createDirectoryToolTyped :: FsConfig -> TypedTool ctx CreateDirectoryToolArgs
 createDirectoryToolTyped cfg =

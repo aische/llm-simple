@@ -20,8 +20,8 @@ instance AC.HasCodec CopyFileToolArgs where
   codec =
     AC.object "copy source to destination" $
       CopyFileToolArgs
-        <$> AC.requiredField "source" "Relative path of the file to copy" AC..= (\x -> x._cfSrc)
-        <*> AC.requiredField "destination" "Relative destination path (including filename)" AC..= (\x -> x._cfDst)
+        <$> AC.requiredField "source" "Relative path of the file to copy" AC..= (._cfSrc)
+        <*> AC.requiredField "destination" "Relative destination path (including filename)" AC..= (._cfDst)
 
 copyFileToolTyped :: FsConfig -> TypedTool ctx CopyFileToolArgs
 copyFileToolTyped cfg =

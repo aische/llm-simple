@@ -19,7 +19,7 @@ instance AC.HasCodec RemoveDirectoryToolArgs where
   codec =
     AC.object "remove a directory" $
       RemoveDirectoryToolArgs
-        <$> AC.requiredField "path" "Relative path of the directory to remove" AC..= (\x -> x._rdPath)
+        <$> AC.requiredField "path" "Relative path of the directory to remove" AC..= (._rdPath)
 
 removeDirectoryToolTyped :: FsConfig -> TypedTool ctx RemoveDirectoryToolArgs
 removeDirectoryToolTyped cfg =

@@ -20,7 +20,7 @@ instance AC.HasCodec WeatherToolArgs where
   codec =
     AC.object "WeatherToolArgs" $
       WeatherToolArgs
-        <$> AC.requiredField "location" "City name, e.g. London" AC..= (\x -> x._weatherLocation)
+        <$> AC.requiredField "location" "City name, e.g. London" AC..= (._weatherLocation)
 
 -- DO NOT TOUCH THIS TOOL - IT IS FOR TESTING
 

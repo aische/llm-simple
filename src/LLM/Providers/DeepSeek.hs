@@ -11,6 +11,7 @@ import Data.Aeson
   ( KeyValue ((.=)),
     Value,
     decodeStrict',
+    encode,
     object,
     withObject,
     (.:),
@@ -18,11 +19,14 @@ import Data.Aeson
 import Data.Aeson.Types (Pair, Parser, parseMaybe)
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
+import Data.Text.Lazy qualified as TL
+import Data.Text.Lazy.Encoding qualified as TLE
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, normalizeSchemaOpenAI, stripJsonFences)
+import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, stripJsonFences)
 import LLM.Core.Types
   ( ChatRequest
-      ( reqMaxTokens,
+      ( reqConversation,
+        reqMaxTokens,
         reqModel,
         reqTemperature,
         reqThinking,
@@ -31,6 +35,7 @@ import LLM.Core.Types
     LLMError (EmptyResponse),
     LLMGateway,
     ThinkingMode (..),
+    Turn (UserTurn),
     deepSeekMessageEncodeOptions,
   )
 import LLM.Providers.OpenAI
@@ -83,19 +88,15 @@ deepSeekProviderWith baseUrl baseOpts apiKey =
             handleStreamResponse resp (`parseOpenAIStream` callback),
       parseResponse = pure . parseOpenAIResponse,
       buildObjectBody = \r schema ->
-        object $
-          deepSeekBuildBodyPairs False r
-            <> [ "response_format"
-                   .= object
-                     [ "type" .= ("json_schema" :: Text),
-                       "json_schema"
-                         .= object
-                           [ "name" .= ("response" :: Text),
-                             "schema" .= normalizeSchemaOpenAI schema,
-                             "strict" .= True
-                           ]
-                     ]
-               ],
+        let schemaText = TL.toStrict . TLE.decodeUtf8 $ encode schema
+            instruction =
+              "Respond with a raw JSON object matching this JSON schema. "
+                <> "No markdown, no code fences, no explanation:\n"
+                <> schemaText
+            r' = r {reqConversation = r.reqConversation <> [UserTurn instruction]}
+         in object $
+              deepSeekBuildBodyPairs False r'
+                <> ["response_format" .= object ["type" .= ("json_object" :: Text)]],
       sendObjectRequest = sendRequest,
       parseObjectResponse = \v -> case parseMaybe parseObject v of
         Nothing -> pure $ Left EmptyResponse

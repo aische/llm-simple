@@ -14,7 +14,7 @@ import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isFileHidden, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath)
 import System.Directory
   ( doesDirectoryExist,
     doesFileExist,
@@ -147,16 +147,21 @@ collectFiles dir depth exts = do
 visit :: FilePath -> Int -> [Text] -> FilePath -> IO [FilePath]
 visit parent depth exts name = do
   let full = parent </> name
-  isDir <- doesDirectoryExist full
-  if isDir
-    then collectFiles full (depth + 1) exts
+  -- Skip symlinks to prevent traversal out of the sandbox.
+  isLink <- isSymlink full
+  if isLink
+    then pure []
     else do
-      isFile <- doesFileExist full
-      if isFile && extensionAllowed exts name
-        then do
-          ok <- isSizeOk full
-          pure [full | ok]
-        else pure []
+      isDir <- doesDirectoryExist full
+      if isDir
+        then collectFiles full (depth + 1) exts
+        else do
+          isFile <- doesFileExist full
+          if isFile && extensionAllowed exts name
+            then do
+              ok <- isSizeOk full
+              pure [full | ok]
+            else pure []
 
 extensionAllowed :: [Text] -> FilePath -> Bool
 extensionAllowed [] _ = True

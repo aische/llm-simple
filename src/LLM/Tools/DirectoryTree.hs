@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isFileHidden, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath)
 import System.Directory
   ( doesDirectoryExist,
     listDirectory,
@@ -55,8 +55,10 @@ drawTreeHelper :: T.Text -> FilePath -> IO [T.Text]
 drawTreeHelper = aux
   where
     aux prefix path = do
+      -- Don't follow symlinks: they could point outside the sandbox.
+      isLink <- isSymlink path
       isDir <- doesDirectoryExist path
-      if isDir
+      if isDir && not isLink
         then do
           contents <- listDirectory path
           let validContents = filter (`notElem` [".", ".."]) contents

@@ -5,13 +5,14 @@ module LLM.Tools.FsConfig
     sandboxPath,
     sandboxWritePath,
     isFileHidden,
+    isSymlink,
   )
 where
 
-import Control.Exception (Exception, throwIO)
+import Control.Exception (Exception, IOException, throwIO, try)
 import Control.Monad (unless)
 import Data.List (foldl', isPrefixOf)
-import System.Directory (canonicalizePath, createDirectoryIfMissing, doesPathExist)
+import System.Directory (canonicalizePath, createDirectoryIfMissing, doesPathExist, pathIsSymbolicLink)
 import System.FilePath (addTrailingPathSeparator, joinPath, normalise, splitDirectories, takeDirectory, (</>))
 
 -- | Configuration for file-system tools.
@@ -37,22 +38,37 @@ mkFsConfig dir =
 
 -- | Resolve a (possibly relative) path against the sandbox base,
 -- canonicalize it, and verify it stays within the sandbox.
--- If the path doesn't exist yet (e.g. for writes), falls back to
--- manual normalization to resolve @.@ and @..@ components.
+-- If the path doesn't exist yet (e.g. for writes), the longest
+-- existing ancestor is canonicalized (so symlinks in the parent
+-- chain are resolved) and the missing tail is appended verbatim.
 -- Throws 'SandboxViolation' on escape attempts.
 sandboxPath :: FsConfig -> FilePath -> IO FilePath
 sandboxPath cfg relPath = do
   let base = cfg.fsBasePath
-      candidate = base </> relPath
-  exists <- doesPathExist candidate
-  canonical <-
-    if exists
-      then canonicalizePath candidate
-      else pure (collapseDots (normalise candidate))
+      candidate = collapseDots (normalise (base </> relPath))
+  canonical <- canonicalizeExisting candidate
   unless (base `isPrefixOf` canonical || base `isPrefixOf` (canonical ++ "/")) $
     throwIO $
       SandboxViolation canonical base
   pure canonical
+
+-- | Canonicalize the longest existing prefix of a path, then append
+-- any missing trailing components. This ensures that even when the
+-- final target doesn't exist yet, symlinks in the parent chain are
+-- resolved before the containment check.
+canonicalizeExisting :: FilePath -> IO FilePath
+canonicalizeExisting path = do
+  exists <- doesPathExist path
+  if exists
+    then canonicalizePath path
+    else do
+      let parent = takeDirectory path
+          name = drop (length parent) path
+      if parent == path
+        then pure path
+        else do
+          parentCanon <- canonicalizeExisting parent
+          pure (parentCanon ++ name)
 
 -- | Like 'sandboxPath', but also creates parent directories
 -- inside the sandbox as needed (for write operations).
@@ -76,3 +92,12 @@ isFileHidden :: [Char] -> Bool
 isFileHidden path = case path of
   ('.' : _) -> True
   _ -> False
+
+-- | Check whether a path is a symbolic link (without following it).
+-- Returns 'False' if the path doesn't exist or can't be stat'd.
+isSymlink :: FilePath -> IO Bool
+isSymlink p = do
+  r <- try (pathIsSymbolicLink p) :: IO (Either IOException Bool)
+  case r of
+    Right b -> pure b
+    Left _ -> pure False

@@ -8,11 +8,12 @@ import Autodocodec qualified as AC
 import Control.Exception (IOException, try)
 import Data.Aeson (FromJSON)
 import Data.List (sort)
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isFileHidden, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath ((</>))
 
@@ -150,19 +151,24 @@ walk root includeHidden kind pat cap = go root [] 0 0 [] False
           let full = dir </> name
               entryRel = reverse (T.pack name : relSegs)
               relPath = T.unpack (T.intercalate "/" entryRel)
-          isDir <- doesDirectoryExist full
-          let entryKind = if isDir then DirectoryOnly else FileOnly
-              kindOk = case kind of
-                AnyEntry -> True
-                FileOnly -> entryKind == FileOnly
-                DirectoryOnly -> entryKind == DirectoryOnly
-              matched = kindOk && matchGlob pat entryRel
-              acc' = if matched then relPath : acc else acc
-          (descendAcc, descendScanned, descendTrunc) <-
-            if isDir
-              then go full (T.pack name : relSegs) (depth + 1) (scanned + 1) acc' truncated
-              else pure (reverse acc', scanned + 1, truncated)
-          step rest dir relSegs depth descendScanned (reverse descendAcc) descendTrunc
+          -- Skip symlinks: they could point outside the sandbox.
+          isLink <- isSymlink full
+          if isLink
+            then step rest dir relSegs depth (scanned + 1) acc truncated
+            else do
+              isDir <- doesDirectoryExist full
+              let entryKind = if isDir then DirectoryOnly else FileOnly
+                  kindOk = case kind of
+                    AnyEntry -> True
+                    FileOnly -> entryKind == FileOnly
+                    DirectoryOnly -> entryKind == DirectoryOnly
+                  matched = kindOk && matchGlob pat entryRel
+                  acc' = if matched then relPath : acc else acc
+              (descendAcc, descendScanned, descendTrunc) <-
+                if isDir
+                  then go full (T.pack name : relSegs) (depth + 1) (scanned + 1) acc' truncated
+                  else pure (reverse acc', scanned + 1, truncated)
+              step rest dir relSegs depth descendScanned (reverse descendAcc) descendTrunc
 
 safeListDirectory :: FilePath -> IO [FilePath]
 safeListDirectory path = do
@@ -179,9 +185,7 @@ safeListDirectory path = do
 -- can write either "**/*.hs" or "./**/*.hs".
 splitGlob :: Text -> [Text]
 splitGlob pat =
-  let stripped = case T.stripPrefix "./" pat of
-        Just rest -> rest
-        Nothing -> pat
+  let stripped = fromMaybe pat (T.stripPrefix "./" pat)
    in filter (not . T.null) (T.splitOn "/" stripped)
 
 -- | Match a list of glob segments against a list of path segments.

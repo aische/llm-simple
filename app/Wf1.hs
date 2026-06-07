@@ -132,7 +132,7 @@ plannerAgent =
               "Produce a concise audit plan with: files to inspect, risks, and expected output format.",
               "Do not fabricate file contents; only report what you inspected."
             ],
-      agTools = ["readdir", "directory_tree", "read_file_paginated"],
+      agTools = ["readdir", "directory_tree", "read_file_paginated", "grep"],
       agMaxToolRounds = 6,
       agContextWindow = Nothing
     }
@@ -150,7 +150,7 @@ reviewerAgentA =
               "If no issues are found, explicitly state that and what you checked.",
               "Do not discuss workflow status, missing submissions, blocked process, or reviewer coordination."
             ],
-      agTools = ["read_file_paginated", "readdir"],
+      agTools = ["read_file_paginated", "readdir", "grep"],
       agMaxToolRounds = 6,
       agContextWindow = Nothing
     }
@@ -168,7 +168,7 @@ reviewerAgentB =
               "Ground every claim in inspected files.",
               "Do not discuss workflow status, missing submissions, blocked process, or reviewer coordination."
             ],
-      agTools = ["read_file_paginated", "readdir"],
+      agTools = ["read_file_paginated", "readdir", "grep"],
       agMaxToolRounds = 6,
       agContextWindow = Nothing
     }

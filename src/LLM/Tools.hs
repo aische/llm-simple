@@ -4,6 +4,7 @@ module LLM.Tools
     copyFileToolTyped,
     createDirectoryToolTyped,
     directoryTreeToolTyped,
+    grepToolTyped,
     moveFileToolTyped,
     multiReplaceInFileToolTyped,
     readdirToolTyped,
@@ -26,6 +27,7 @@ import LLM.Tools.CopyFile (copyFileToolTyped)
 import LLM.Tools.CreateDirectory (createDirectoryToolTyped)
 import LLM.Tools.DirectoryTree (directoryTreeToolTyped)
 import LLM.Tools.FsConfig (FsConfig (..), mkFsConfig)
+import LLM.Tools.Grep (grepToolTyped)
 import LLM.Tools.MoveFile (moveFileToolTyped)
 import LLM.Tools.MultiReplaceInFile (multiReplaceInFileToolTyped)
 import LLM.Tools.Readdir (readdirToolTyped)

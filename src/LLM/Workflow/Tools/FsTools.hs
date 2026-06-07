@@ -6,6 +6,7 @@ import LLM.Tools.CopyFile (copyFileToolTyped)
 import LLM.Tools.CreateDirectory (createDirectoryToolTyped)
 import LLM.Tools.DirectoryTree (directoryTreeToolTyped)
 import LLM.Tools.FsConfig (mkFsConfig)
+import LLM.Tools.Grep (grepToolTyped)
 import LLM.Tools.MoveFile (moveFileToolTyped)
 import LLM.Tools.MultiReplaceInFile (multiReplaceInFileToolTyped)
 import LLM.Tools.ReadFilePaginated (readFilePaginatedToolTyped)
@@ -26,6 +27,7 @@ fsTools filePath = do
       [ ("copy_file", toTool $ copyFileToolTyped cfg),
         ("create_directory", toTool $ createDirectoryToolTyped cfg),
         ("directory_tree", toTool $ directoryTreeToolTyped cfg),
+        ("grep", toTool $ grepToolTyped cfg),
         ("move_file", toTool $ moveFileToolTyped cfg),
         ("multi_replace_in_file", toTool $ multiReplaceInFileToolTyped cfg),
         ("readdir", toTool $ readdirToolTyped cfg),

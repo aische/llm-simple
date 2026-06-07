@@ -279,7 +279,7 @@ renderResults rootDisplay pat matches scanned truncated =
 detectBinary :: FilePath -> IO Bool
 detectBinary path = do
   r <-
-    try (withBinaryFile path ReadMode (\h -> BS.hGet h binarySniffBytes)) ::
+    try (withBinaryFile path ReadMode (`BS.hGet` binarySniffBytes)) ::
       IO (Either IOException BS.ByteString)
   case r of
     Right bs -> pure (BS.elem 0 bs)

@@ -58,7 +58,7 @@ import Wf1 (buildWf1Workflow)
 
 main :: IO ()
 main = do
-  (gpt, llama, haiku, gemini, mistral, deepseek) <-
+  (_gpt, llama, _haiku, gemini, mistral, deepseek) <-
     loadModelsOrThrow
       "./model-catalog.json"
       ("gpt_4_1", "llama_3_2", "haiku_4_5", "gemini_2_5_flash", "mistral", "deepseek4flash")

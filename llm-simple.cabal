@@ -83,6 +83,8 @@ library
         LLM.Workflow.Tools.FsTools
         LLM.Tools.Weather
         LLM.Tools.DirectoryTree
+        LLM.Tools.FileInfo
+        LLM.Tools.FindFiles
         LLM.Tools.Grep
         LLM.Tools.MultiReplaceInFile
         LLM.Tools.Readfile

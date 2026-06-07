@@ -25,7 +25,7 @@ instance AC.HasCodec ReaddirToolArgs where
 readdirToolTyped :: FsConfig -> TypedTool ctx ReaddirToolArgs
 readdirToolTyped fsConfig =
   TypedTool
-    { ttoolName = "read_dir",
+    { ttoolName = "readdir",
       ttoolDescription =
         "List the contents of a directory (relative to the workspace). "
           <> "Returns one entry per line. Directories are suffixed with '/'. "

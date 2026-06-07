@@ -85,6 +85,7 @@ library
         LLM.Tools.DirectoryTree
         LLM.Tools.MultiReplaceInFile
         LLM.Tools.Readfile
+        LLM.Tools.ReadFilePaginated
         LLM.Tools.Writefile
         LLM.Tools.ReplaceInFile
         LLM.Tools.Readdir

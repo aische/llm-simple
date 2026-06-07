@@ -1,5 +1,6 @@
 module LLM.Workflow.Tools.FsTools where
 
+import Control.Monad.IO.Class (MonadIO)
 import Data.Map qualified as Map
 import LLM.Tools.CopyFile (copyFileToolTyped)
 import LLM.Tools.CreateDirectory (createDirectoryToolTyped)
@@ -7,6 +8,7 @@ import LLM.Tools.DirectoryTree (directoryTreeToolTyped)
 import LLM.Tools.FsConfig (mkFsConfig)
 import LLM.Tools.MoveFile (moveFileToolTyped)
 import LLM.Tools.MultiReplaceInFile (multiReplaceInFileToolTyped)
+import LLM.Tools.ReadFilePaginated (readFilePaginatedToolTyped)
 import LLM.Tools.Readdir (readdirToolTyped)
 import LLM.Tools.Readfile (readfileToolTyped)
 import LLM.Tools.RemoveDirectory (removeDirectoryToolTyped)
@@ -15,7 +17,6 @@ import LLM.Tools.ReplaceInFile (replaceInFileToolTyped)
 import LLM.Tools.Writefile (writefileToolTyped)
 import LLM.Workflow.ToolUtils (toTool)
 import LLM.Workflow.Types (ToolMap)
-import Control.Monad.IO.Class (MonadIO)
 
 fsTools :: (MonadIO m) => FilePath -> IO (ToolMap m)
 fsTools filePath = do
@@ -28,7 +29,8 @@ fsTools filePath = do
         ("move_file", toTool $ moveFileToolTyped cfg),
         ("multi_replace_in_file", toTool $ multiReplaceInFileToolTyped cfg),
         ("readdir", toTool $ readdirToolTyped cfg),
-        ("readfile", toTool $ readfileToolTyped cfg),
+        -- ("read_file", toTool $ readfileToolTyped cfg),
+        ("read_file_paginated", toTool $ readFilePaginatedToolTyped cfg),
         ("remove_directory", toTool $ removeDirectoryToolTyped cfg),
         ("remove_file", toTool $ removeFileToolTyped cfg),
         ("replace_in_file", toTool $ replaceInFileToolTyped cfg),

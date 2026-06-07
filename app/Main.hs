@@ -66,9 +66,10 @@ main = do
   let _models1 = ModelWithFallbacks {mwfModel = llama, mwfFallbacks = []}
       _models2 = ModelWithFallbacks {mwfModel = mistral, mwfFallbacks = []}
       _models3 = ModelWithFallbacks {mwfModel = gemini, mwfFallbacks = []}
-      _models4 = ModelWithFallbacks {mwfModel = deepseek, mwfFallbacks = [gpt, gemini, haiku]}
+      _models4 = ModelWithFallbacks {mwfModel = deepseek, mwfFallbacks = []}
+  -- _models4 = ModelWithFallbacks {mwfModel = deepseek, mwfFallbacks = [gpt, gemini, haiku]}
 
-  let wf1 = buildWf1Workflow (_models4, _models1)
+  let wf1 = buildWf1Workflow (_models4, _models4)
       p1 =
         "Audit the project in the current workspace: identify correctness, safety, and maintainability risks, \
         \with actionable recommendations and a concise final report."

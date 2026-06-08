@@ -14,6 +14,7 @@ import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath)
+import LLM.Tools.FsLimits (cheapWalkDepth)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath ((</>))
 
@@ -25,10 +26,11 @@ defaultMaxResults = 200
 maxResultsCap :: Int
 maxResultsCap = 2000
 
--- | Maximum directory depth from the search root. Prevents runaway
--- recursion and accidental traversal into vendored dependencies.
+-- | Maximum directory depth from the search root. Sourced from
+-- 'LLM.Tools.FsLimits.cheapWalkDepth' because @find_files@ only stats
+-- entries, so it can afford a deeper walk than @grep@.
 maxDepth :: Int
-maxDepth = 20
+maxDepth = cheapWalkDepth
 
 -- | What kind of filesystem entries to return.
 data EntryFilter = AnyEntry | FileOnly | DirectoryOnly

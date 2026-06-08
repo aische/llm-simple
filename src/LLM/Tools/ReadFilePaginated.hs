@@ -13,6 +13,7 @@ import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath)
+import LLM.Tools.FsLimits (binarySniffBytes)
 import System.IO
   ( Handle,
     IOMode (ReadMode),
@@ -32,10 +33,6 @@ defaultLimit = 200
 -- model's context window from runaway responses on pathological inputs.
 maxLimit :: Int
 maxLimit = 2000
-
--- | Number of leading bytes inspected when sniffing for binary content.
-binarySniffBytes :: Int
-binarySniffBytes = 8192
 
 data ReadFilePaginatedArgs = ReadFilePaginatedArgs
   { _rfpPath :: Text,

@@ -15,6 +15,7 @@ import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath)
+import LLM.Tools.FsLimits (binarySniffBytes, expensiveWalkDepth)
 import System.Directory
   ( doesDirectoryExist,
     doesFileExist,
@@ -40,14 +41,11 @@ maxResultsCap = 500
 maxFileSizeBytes :: Integer
 maxFileSizeBytes = 1024 * 1024 -- 1 MB
 
--- | Maximum directory depth from the search root. Prevents runaway recursion
--- on deep trees and accidental escape into vendored dependencies.
+-- | Maximum directory depth from the search root. Sourced from
+-- 'LLM.Tools.FsLimits.expensiveWalkDepth' because @grep@ reads every
+-- encountered file.
 maxDepth :: Int
-maxDepth = 12
-
--- | Number of leading bytes inspected when sniffing for binary content.
-binarySniffBytes :: Int
-binarySniffBytes = 8192
+maxDepth = expensiveWalkDepth
 
 -- | Truncate matched line text in output to keep results compact.
 maxLineLength :: Int
@@ -280,7 +278,8 @@ renderResults rootDisplay pat matches scanned truncated =
         <> m.mText
 
 -- | NUL byte in the first few KB is a robust, cheap binary heuristic
--- (the same one used by git diff and grep).
+-- (the same one used by git diff and grep). Uses the shared sniff
+-- threshold from 'LLM.Tools.FsLimits' so all tools agree.
 detectBinary :: FilePath -> IO Bool
 detectBinary path = do
   r <-

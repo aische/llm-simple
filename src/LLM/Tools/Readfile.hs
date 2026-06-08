@@ -28,7 +28,7 @@ instance AC.HasCodec ReadfileToolArgs where
 readfileToolTyped :: FsConfig -> TypedTool ctx ReadfileToolArgs
 readfileToolTyped cfg =
   TypedTool
-    { ttoolName = "read_file",
+    { ttoolName = "readfile",
       ttoolDescription =
         "Read the contents of a text file at the given path (relative to the workspace). "
           <> "Returns the full file content as text. Binary files are refused. "
@@ -49,7 +49,7 @@ readfileExecTyped cfg args = do
       pure $
         "Error: "
           <> p
-          <> " appears to be a binary file; read_file only supports text files."
+          <> " appears to be a binary file; readfile only supports text files."
     else do
       sizeRes <-
         try (withBinaryFile resolved ReadMode hFileSize) ::
@@ -65,7 +65,7 @@ readfileExecTyped cfg args = do
                   <> T.pack (show sz)
                   <> " bytes, which exceeds the "
                   <> T.pack (show maxReadBytes)
-                  <> "-byte cap for read_file; use read_file_paginated."
+                  <> "-byte cap for readfile; use read_file_paginated."
           | otherwise -> do
               -- Strict bounded read: avoids lazy-IO handle linger (see R1)
               -- and bounds the byte buffer at the cap even if the file

@@ -39,7 +39,7 @@ cheapWalkDepth = 20
 expensiveWalkDepth :: Int
 expensiveWalkDepth = 12
 
--- | Hard cap on the number of bytes a single @read_file@-style tool may
+-- | Hard cap on the number of bytes a single @readfile@-style tool may
 -- materialize into memory. Paginated readers should use their own
 -- per-page limits; this is the ceiling for "give me the whole thing"
 -- tools that have no pagination story.

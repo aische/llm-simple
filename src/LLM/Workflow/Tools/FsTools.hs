@@ -35,7 +35,7 @@ fsTools filePath = do
         ("move_file", toTool $ moveFileToolTyped cfg),
         ("multi_replace_in_file", toTool $ multiReplaceInFileToolTyped cfg),
         ("readdir", toTool $ readdirToolTyped cfg),
-        -- ("read_file", toTool $ readfileToolTyped cfg),
+        -- ("readfile", toTool $ readfileToolTyped cfg),
         ("read_file_paginated", toTool $ readFilePaginatedToolTyped cfg),
         ("remove_directory", toTool $ removeDirectoryToolTyped cfg),
         ("remove_file", toTool $ removeFileToolTyped cfg),

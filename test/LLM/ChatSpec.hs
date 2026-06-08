@@ -20,7 +20,7 @@ import LLM.Core.Types
     LLMError (..),
     LLMGateway (..),
     LLMHooks (..),
-    ToolCall (ToolCall),
+    mkToolCall,
     ToolDef (ToolDef, toolDescription, toolName, toolParameters, toolReadonly),
     Turn (..),
   )
@@ -72,7 +72,7 @@ mockToolGateway =
         if any isToolTurn req.reqConversation
           then pure $ Right (ChatResponse "The weather is sunny." [TextBlock "The weather is sunny."] (Just (Usage 80 15 0)) Nothing)
           else
-            let tc = ToolCall "call_1" "get_weather" (object ["location" .= ("London" :: Text)])
+            let tc = mkToolCall "call_1" "get_weather" (object ["location" .= ("London" :: Text)])
              in pure $ Right (ChatResponse "" [ToolCallBlock tc] (Just (Usage 50 10 0)) Nothing),
       gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing),
       gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
@@ -191,7 +191,7 @@ spec = describe "Chat" $ do
             LLMGateway
               { gwName = "mock-infinite",
                 gwGenerateText = \_ _ ->
-                  let tc = ToolCall "call_1" "get_weather" (object [])
+                  let tc = mkToolCall "call_1" "get_weather" (object [])
                    in pure $ Right (ChatResponse "" [ToolCallBlock tc] Nothing Nothing),
                 gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing),
                 gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
@@ -259,8 +259,8 @@ spec = describe "Chat" $ do
             LLMGateway
               { gwName = "mock-two",
                 gwGenerateText = \_ _ ->
-                  let tc1 = ToolCall "c1" "slow" (object [])
-                      tc2 = ToolCall "c2" "slow" (object [])
+                  let tc1 = mkToolCall "c1" "slow" (object [])
+                      tc2 = mkToolCall "c2" "slow" (object [])
                    in pure $ Right (ChatResponse "" [ToolCallBlock tc1, ToolCallBlock tc2] Nothing Nothing),
                 gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing),
                 gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)

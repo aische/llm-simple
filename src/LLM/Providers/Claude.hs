@@ -42,6 +42,7 @@ import LLM.Core.Types
     LLMTextResult,
     StreamEvent (..),
     ToolCall (..),
+    mkToolCall,
     ToolDef (toolDescription, toolName, toolParameters),
     ToolResult (trCallId, trContent),
     Turn (..),
@@ -153,7 +154,7 @@ parseClaudeStream reader callback = do
             let args = case decodeStrict' (encodeUtf8 jsonStr) of
                   Just v -> v
                   Nothing -> String jsonStr
-                tc = ToolCall cid name args
+                tc = mkToolCall cid name args
             modifyIORef' blocksRef (ToolCallBlock tc :)
             callback (StreamToolCall tc)
             writeIORef toolAccRef Nothing
@@ -305,7 +306,7 @@ parseClaudeResponse v = case parseMaybe go v of
           cid <- o .: "id"
           name <- o .: "name"
           args <- o .: "input"
-          pure $ ToolCallBlock (ToolCall cid name args)
+          pure $ ToolCallBlock (mkToolCall cid name args)
         _ -> fail $ "Unknown content block type: " <> T.unpack typ
 
 parseClaudeUsage :: Value -> Maybe Usage

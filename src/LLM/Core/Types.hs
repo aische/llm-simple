@@ -10,6 +10,7 @@ module LLM.Core.Types
     LLMResult,
     ToolDef (..),
     ToolCall (..),
+    mkToolCall,
     LLMGateway (..),
     ToolResult (..),
     StreamEvent (..),
@@ -94,13 +95,27 @@ data TypedTool c a = TypedTool
     ttoolExecute :: c -> a -> IO Text
   }
 
--- | A tool invocation returned by the model
+-- | A tool invocation returned by the model.
+--
+-- 'tcProviderMeta' is an opaque, provider-owned JSON bag that must round-trip
+-- back to the provider on subsequent requests when this tool call is replayed
+-- as part of the conversation history. It exists because some providers
+-- (currently Gemini 2.5 thinking models, with their @thoughtSignature@) bind
+-- internal state to a specific tool-call part and reject the request if it
+-- isn't echoed back verbatim. Each provider is responsible for the shape of
+-- its own metadata; consumers should treat it as opaque.
 data ToolCall = ToolCall
   { tcId :: Text, -- provider-specific call id
     tcName :: Text,
-    tcArguments :: Value
+    tcArguments :: Value,
+    tcProviderMeta :: Maybe Value
   }
   deriving (Show, Eq, Generic, FromJSON, ToJSON)
+
+-- | Smart constructor for a 'ToolCall' with no provider metadata. Use this
+-- everywhere except when a provider parser is attaching its own metadata.
+mkToolCall :: Text -> Text -> Value -> ToolCall
+mkToolCall cid name args = ToolCall cid name args Nothing
 
 -- | The result of executing a tool, sent back to the model
 data ToolResult = ToolResult

@@ -89,12 +89,13 @@ streamResponseJson r =
   where
     blockToJson (TextBlock t) = object ["type" .= ("text" :: Text), "text" .= t]
     blockToJson (ToolCallBlock tc) =
-      object
+      object $
         [ "type" .= ("tool_call" :: Text),
           "id" .= tc.tcId,
           "name" .= tc.tcName,
           "arguments" .= tc.tcArguments
         ]
+          ++ ["provider_meta" .= m | Just m <- [tc.tcProviderMeta]]
     usageToJson u =
       object
         [ "input_tokens" .= u.usageInputTokens,
@@ -123,7 +124,8 @@ parseChatResponse = AE.withObject "ChatResponse" $ \v -> do
           tcId <- o AE..: "id"
           tcName <- o AE..: "name"
           tcArgs <- o AE..: "arguments"
-          pure $ ToolCallBlock $ ToolCall tcId tcName tcArgs
+          tcMeta <- o AE..:? "provider_meta"
+          pure $ ToolCallBlock $ ToolCall tcId tcName tcArgs tcMeta
         _ -> fail "Unknown content block type"
 
     parseUsage = AE.withObject "Usage" $ \o -> do

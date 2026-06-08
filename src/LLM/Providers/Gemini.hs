@@ -9,7 +9,7 @@ where
 import Control.Applicative ((<|>))
 import Data.Aeson
   ( KeyValue ((.=)),
-    Value (Object),
+    Value (Object, String),
     decodeStrict',
     object,
     withObject,
@@ -48,6 +48,7 @@ import LLM.Core.Types
     ToolDef (toolDescription, toolName, toolParameters),
     ToolResult (trContent, trName),
     Turn (..),
+    mkToolCall,
   )
 import LLM.Core.Usage (Usage (..))
 import Network.HTTP.Client qualified as HC
@@ -91,7 +92,7 @@ geminiProvider apiKey =
       buildObjectBody = \r schema ->
         object $
           [ "_model" .= r.reqModel,
-            "contents" .= concatMap encodeTurn r.reqConversation,
+            "contents" .= concatMap (encodeTurn r.reqModel) r.reqConversation,
             "generationConfig"
               .= object
                 ( [ "maxOutputTokens" .= r.reqMaxTokens,
@@ -141,13 +142,15 @@ parseGeminiStream reader callback = do
     case decodeStrict' (encodeUtf8 sse.sseData) of
       Nothing -> pure ()
       Just v -> do
-        -- Each SSE chunk is a complete response fragment; parse parts from it
-        case parseMaybe parseChunkParts v of
+        -- modelVersion is needed so we can later guard against replaying
+        -- thought signatures into a different model than the one that
+        -- produced them.
+        let modelVer = parseMaybe parseModelVersion v
+        case parseMaybe (parseChunkParts modelVer) v of
           Just parts -> do
             newBlocks <- mapM (assignToolId callback) parts
             modifyIORef' blocksRef (++ newBlocks)
           Nothing -> pure ()
-        -- Check for usage metadata (usually in the last chunk)
         case parseMaybe parseUsageMetadata v of
           Just u -> writeIORef usageRef (Just u)
           Nothing -> pure ()
@@ -167,19 +170,20 @@ parseGeminiStream reader callback = do
       cb (StreamToolCall tc')
       pure (ToolCallBlock tc')
 
-    parseChunkParts :: Value -> Parser [ContentBlock]
-    parseChunkParts = withObject "GeminiChunk" $ \o -> do
+    parseChunkParts :: Maybe Text -> Value -> Parser [ContentBlock]
+    parseChunkParts modelVer = withObject "GeminiChunk" $ \o -> do
       (cand : _) <- o .: "candidates" :: Parser [Value]
       withObject
         "candidate"
         ( \co -> do
             cont <- co .: "content"
-            withObject "content" (\cco -> cco .: "parts" >>= mapM parsePartBlock) cont
+            withObject "content" (\cco -> cco .: "parts" >>= mapM (parsePartBlock modelVer)) cont
         )
         cand
 
-    parsePartBlock :: Value -> Parser ContentBlock
-    parsePartBlock = withObject "part" $ \o -> do
+    parsePartBlock :: Maybe Text -> Value -> Parser ContentBlock
+    parsePartBlock modelVer = withObject "part" $ \o -> do
+      mSig <- o .:? "thoughtSignature" :: Parser (Maybe Text)
       let tryText = TextBlock <$> (o .: "text")
           tryFunctionCall = do
             fc <- o .: "functionCall"
@@ -188,7 +192,7 @@ parseGeminiStream reader callback = do
               ( \fco -> do
                   name <- fco .: "name"
                   args <- fco .:? "args" .!= object []
-                  pure $ ToolCallBlock (ToolCall name name args)
+                  pure $ ToolCallBlock (attachGeminiMeta modelVer mSig (mkToolCall name name args))
               )
               fc
       tryText <|> tryFunctionCall
@@ -207,7 +211,7 @@ geminiBuildBody r = object $ geminiBuildBodyPairs r
 geminiBuildBodyPairs :: ChatRequest -> [Pair]
 geminiBuildBodyPairs r =
   [ "_model" .= r.reqModel,
-    "contents" .= concatMap encodeTurn r.reqConversation,
+    "contents" .= concatMap (encodeTurn r.reqModel) r.reqConversation,
     "generationConfig" .= genConfig r
   ]
     ++ [ "system_instruction" .= object ["parts" .= [object ["text" .= sys]]]
@@ -217,14 +221,17 @@ geminiBuildBodyPairs r =
          | not (null r.reqTools)
        ]
 
-encodeTurn :: Turn -> [Value]
-encodeTurn (UserTurn content) =
+-- | Encode a turn for Gemini. The current request model is threaded through
+-- so that thought signatures captured from a previous response can be
+-- replayed only when the receiving model matches the one that emitted them.
+encodeTurn :: Text -> Turn -> [Value]
+encodeTurn _ (UserTurn content) =
   [ object
       [ "role" .= ("user" :: Text),
         "parts" .= [object ["text" .= content]]
       ]
   ]
-encodeTurn (AssistantTurn text _mReasoning calls) =
+encodeTurn currentModel (AssistantTurn text _mReasoning calls) =
   [ object
       [ "role" .= ("model" :: Text),
         "parts" .= (textParts ++ callParts)
@@ -232,8 +239,8 @@ encodeTurn (AssistantTurn text _mReasoning calls) =
   ]
   where
     textParts = [object ["text" .= text] | not (T.null text)]
-    callParts = map encodeFunctionCall calls
-encodeTurn (ToolTurn results) =
+    callParts = map (encodeFunctionCall currentModel) calls
+encodeTurn _ (ToolTurn results) =
   [ object
       [ "role" .= ("user" :: Text),
         "parts" .= map encodeFunctionResponse results
@@ -248,15 +255,25 @@ encodeToolDef td =
       "parameters" .= td.toolParameters
     ]
 
-encodeFunctionCall :: ToolCall -> Value
-encodeFunctionCall tc =
-  object
+-- | Encode an assistant tool call back to a Gemini @functionCall@ part.
+--
+-- Gemini 2.5 thinking models attach an opaque 'thoughtSignature' to each
+-- function-call part. That signature must be replayed verbatim on subsequent
+-- requests against the same model, or the API rejects the request with a
+-- @function call is missing a thought_signature@ error. We stored the
+-- signature plus the emitting model name in 'tcProviderMeta' at parse time;
+-- here we re-emit it only when 'currentModel' matches, because signatures
+-- are bound to the model that produced them.
+encodeFunctionCall :: Text -> ToolCall -> Value
+encodeFunctionCall currentModel tc =
+  object $
     [ "functionCall"
         .= object
           [ "name" .= tc.tcName,
             "args" .= tc.tcArguments
           ]
     ]
+      ++ ["thoughtSignature" .= s | Just s <- [signatureForModel currentModel tc.tcProviderMeta]]
 
 encodeFunctionResponse :: ToolResult -> Value
 encodeFunctionResponse tr =
@@ -286,7 +303,7 @@ genConfig r =
       : ["temperature" .= t | Just t <- [r.reqTemperature]]
 
 parseGeminiResponse :: Value -> IO LLMTextResult
-parseGeminiResponse v = case parseMaybe go v of
+parseGeminiResponse v = case parseMaybe (go modelVer) v of
   Nothing -> pure $ Left EmptyResponse
   Just blocks -> do
     blocks' <- mapM normalizeBlock blocks
@@ -296,8 +313,10 @@ parseGeminiResponse v = case parseMaybe go v of
         let text = T.concat [t | TextBlock t <- blocks']
          in pure $ Right (ChatResponse text blocks' (parseGeminiUsage v) Nothing)
   where
-    go :: Value -> Parser [ContentBlock]
-    go = withObject "GeminiResponse" $ \o -> do
+    modelVer = parseMaybe parseModelVersion v
+
+    go :: Maybe Text -> Value -> Parser [ContentBlock]
+    go mv = withObject "GeminiResponse" $ \o -> do
       (cand : _) <- o .: "candidates" :: Parser [Value]
       withObject
         "candidate"
@@ -307,14 +326,15 @@ parseGeminiResponse v = case parseMaybe go v of
               "content"
               ( \cco -> do
                   parts <- cco .: "parts" :: Parser [Value]
-                  mapM parsePart parts
+                  mapM (parsePart mv) parts
               )
               cont
         )
         cand
 
-    parsePart :: Value -> Parser ContentBlock
-    parsePart = withObject "part" $ \o -> do
+    parsePart :: Maybe Text -> Value -> Parser ContentBlock
+    parsePart mv = withObject "part" $ \o -> do
+      mSig <- o .:? "thoughtSignature" :: Parser (Maybe Text)
       let tryText = TextBlock <$> (o .: "text")
           tryFunctionCall = do
             fc <- o .: "functionCall"
@@ -323,11 +343,46 @@ parseGeminiResponse v = case parseMaybe go v of
               ( \fco -> do
                   name <- fco .: "name"
                   args <- fco .:? "args" .!= object []
-                  -- Gemini doesn't provide a call id; use the function name
-                  pure $ ToolCallBlock (ToolCall name name args)
+                  -- Gemini doesn't provide a call id; use the function name.
+                  -- normalizeBlock replaces it with a unique id later.
+                  pure $ ToolCallBlock (attachGeminiMeta mv mSig (mkToolCall name name args))
               )
               fc
       tryText <|> tryFunctionCall
+
+-- | Extract @modelVersion@ from a Gemini response or chunk. This is the
+-- canonical model name (e.g. @gemini-2.5-pro-001@) used as the binding key
+-- for thought signatures.
+parseModelVersion :: Value -> Parser Text
+parseModelVersion = withObject "GeminiResponse" (.: "modelVersion")
+
+-- | Build the provider-metadata bag stored on a 'ToolCall' for Gemini.
+-- Returns the original tool call unchanged when there's no signature to
+-- preserve, so we don't pollute logs with empty metadata.
+attachGeminiMeta :: Maybe Text -> Maybe Text -> ToolCall -> ToolCall
+attachGeminiMeta _ Nothing tc = tc
+attachGeminiMeta mModel (Just sig) tc =
+  tc {tcProviderMeta = Just (object (("thoughtSignature" .= sig) : modelField))}
+  where
+    modelField = ["model" .= m | Just m <- [mModel]]
+
+-- | Pull a thought signature out of 'tcProviderMeta' iff it was emitted by
+-- the model we're currently calling. Cross-model replay is unsafe — Gemini
+-- treats the signature as an opaque per-model token and will reject it.
+signatureForModel :: Text -> Maybe Value -> Maybe Text
+signatureForModel currentModel (Just (Object o)) = do
+  String sig <- KM.lookup "thoughtSignature" o
+  case KM.lookup "model" o of
+    Just (String m) | not (modelsMatch currentModel m) -> Nothing
+    _ -> Just sig
+signatureForModel _ _ = Nothing
+
+-- | A signature emitted by @gemini-2.5-pro-001@ is safe to replay against
+-- @gemini-2.5-pro@ (and vice-versa): the response carries the resolved
+-- version string while requests typically use an alias. We accept either
+-- direction being a prefix of the other.
+modelsMatch :: Text -> Text -> Bool
+modelsMatch a b = a == b || T.isPrefixOf a b || T.isPrefixOf b a
 
 parseGeminiUsage :: Value -> Maybe Usage
 parseGeminiUsage = parseMaybe $ withObject "GeminiResponse" $ \o -> do

@@ -55,6 +55,7 @@ import LLM.Core.Types
     MessageEncodeOptions (..),
     StreamEvent (..),
     ToolCall (..),
+    mkToolCall,
     ToolDef (toolDescription, toolName, toolParameters),
     ToolResult (trCallId, trContent),
     Turn (..),
@@ -268,7 +269,7 @@ parseOpenAIResponse v = case parseMaybe go v of
             let args = case decodeStrict' (encodeUtf8 argsStr) of
                   Just v' -> v'
                   Nothing -> String argsStr
-            pure $ ToolCallBlock (ToolCall cid name args)
+            pure $ ToolCallBlock (mkToolCall cid name args)
         )
         fn
 
@@ -327,7 +328,7 @@ parseOpenAIStream reader callback = do
                 let args = case decodeStrict' (encodeUtf8 argsStr) of
                       Just a -> a
                       Nothing -> String argsStr
-                    tc = ToolCall cid name args
+                    tc = mkToolCall cid name args
                 modifyIORef' blocksRef (ToolCallBlock tc :)
                 callback (StreamToolCall tc)
               writeIORef toolAccRef []
@@ -342,7 +343,7 @@ parseOpenAIStream reader callback = do
     let args = case decodeStrict' (encodeUtf8 argsStr) of
           Just a -> a
           Nothing -> String argsStr
-        tc = ToolCall cid name args
+        tc = mkToolCall cid name args
     modifyIORef' blocksRef (ToolCallBlock tc :)
     callback (StreamToolCall tc)
   blocks <- reverse <$> readIORef blocksRef

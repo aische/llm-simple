@@ -8,9 +8,9 @@ import LLM.Core.Types
   ( ChatRequest (..),
     ChatResponse (respReasoning, respText),
     ThinkingMode (..),
-    ToolCall (..),
     Turn (..),
     deepSeekMessageEncodeOptions,
+    mkToolCall,
     defaultMessageEncodeOptions,
   )
 import LLM.Providers.DeepSeek (deepSeekBuildBodyPairs)
@@ -25,7 +25,7 @@ spec = describe "DeepSeek thinking mode" $ do
             AssistantTurn
               "Let me check."
               (Just "I should call the weather tool.")
-              [ToolCall "call_1" "get_weather" (object ["location" .= ("London" :: Text)])]
+              [mkToolCall "call_1" "get_weather" (object ["location" .= ("London" :: Text)])]
           msg = head (encodeTurn deepSeekMessageEncodeOptions turn)
       lookupText "reasoning_content" msg `shouldBe` Just "I should call the weather tool."
 
@@ -82,7 +82,7 @@ sampleRequest =
   ChatRequest
     { reqModel = "deepseek-v4-pro",
       reqConversation =
-        [ AssistantTurn "Hi" (Just "CoT") [ToolCall "c1" "get_date" (object [])],
+        [ AssistantTurn "Hi" (Just "CoT") [mkToolCall "c1" "get_date" (object [])],
           ToolTurn []
         ],
       reqSystem = Nothing,

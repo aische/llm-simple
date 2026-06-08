@@ -5,7 +5,7 @@ import LLM.Core.Types
   ( ChatResponse (ChatResponse),
     ContentBlock (TextBlock, ToolCallBlock),
     LLMError (EmptyResponse, HttpError, NetworkError),
-    ToolCall (ToolCall),
+    mkToolCall,
   )
 import LLM.Core.Usage
   ( PricingInfo (..),
@@ -60,7 +60,7 @@ spec = describe "Types" $ do
       getToolCalls resp `shouldBe` []
 
     it "returns True when tool calls present" $ do
-      let tc = ToolCall "id1" "get_weather" (object ["location" .= ("London" :: String)])
+      let tc = mkToolCall "id1" "get_weather" (object ["location" .= ("London" :: String)])
           resp = ChatResponse "" [ToolCallBlock tc] Nothing Nothing
       hasToolCalls resp `shouldBe` True
       getToolCalls resp `shouldBe` [tc]

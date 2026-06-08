@@ -54,6 +54,7 @@ import Network.HTTP.Client qualified as HC
 import Network.HTTP.Req
   ( POST (POST),
     ReqBodyJson (ReqBodyJson),
+    header,
     https,
     jsonResponse,
     req,
@@ -84,7 +85,7 @@ geminiProvider apiKey =
                   /: "v1beta"
                   /: "models"
                   /: (model <> ":streamGenerateContent")
-          reqBr POST url (ReqBodyJson (stripBoundsAndComments $ stripModel body)) ("key" =: apiKey <> "alt" =: ("sse" :: Text)) $ \resp ->
+          reqBr POST url (ReqBodyJson (stripBoundsAndComments $ stripModel body)) (header "x-goog-api-key" (encodeUtf8 apiKey) <> "alt" =: ("sse" :: Text)) $ \resp ->
             handleStreamResponse resp (`parseGeminiStream` callback),
       parseResponse = parseGeminiResponse,
       buildObjectBody = \r schema ->
@@ -120,7 +121,7 @@ geminiProvider apiKey =
                 /: "v1beta"
                 /: "models"
                 /: (model <> ":generateContent")
-        resp <- req POST url (ReqBodyJson (stripBoundsAndComments $ stripModel body)) jsonResponse ("key" =: apiKey)
+        resp <- req POST url (ReqBodyJson (stripBoundsAndComments $ stripModel body)) jsonResponse (header "x-goog-api-key" (encodeUtf8 apiKey))
         pure (responseStatusCode resp, responseBody resp)
 
 -- | Extract model name stashed in the request body by geminiBuildBody.

@@ -141,4 +141,4 @@ thinkingPairs r =
     Just tm ->
       ("thinking" .= object ["type" .= ("enabled" :: Text)]) : ["reasoning_effort" .= e | Just e <- [tm.tmEffort]]
     Nothing ->
-      ["thinking" .= object ["type" .= ("enabled" :: Text)]]
+      ["thinking" .= object ["type" .= ("disabled" :: Text)]]

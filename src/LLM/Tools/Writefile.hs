@@ -27,7 +27,7 @@ instance AC.HasCodec WritefileToolArgs where
 writefileToolTyped :: FsConfig -> TypedTool ctx WritefileToolArgs
 writefileToolTyped cfg =
   TypedTool
-    { ttoolName = "write_file",
+    { ttoolName = "writefile",
       ttoolDescription =
         "Write content to a file at the given path (relative to the workspace). "
           <> "Creates the file if it doesn't exist, overwrites if it does. "

@@ -7,8 +7,9 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isFileHidden, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath)
 import System.Directory (doesDirectoryExist, listDirectory)
+import System.FilePath ((</>))
 
 newtype ReaddirToolArgs = ReaddirToolArgs
   { _rdPath :: Text
@@ -28,8 +29,9 @@ readdirToolTyped fsConfig =
     { ttoolName = "readdir",
       ttoolDescription =
         "List the contents of a directory (relative to the workspace). "
-          <> "Returns one entry per line. Directories are suffixed with '/'. "
-          <> "Use path '.' or omit it to list the workspace root.",
+          <> "Returns one entry per line. Directories are suffixed with '/', "
+          <> "symbolic links with '@' (links are not followed). "
+          <> "Use path '.' to list the workspace root.",
       ttoolReadonly = True,
       ttoolExecute = const (readdirExecTyped fsConfig)
     }
@@ -42,10 +44,18 @@ readdirExecTyped cfg args = do
   annotated <- mapM (annotateEntry resolved) $ filter (not . isFileHidden) entries
   pure $ T.intercalate "\n" annotated
 
+-- | Annotate a directory entry without following symlinks.
+-- Symbolic links are tagged with '@' and never treated as directories,
+-- even if they happen to point at one (possibly outside the sandbox).
 annotateEntry :: FilePath -> FilePath -> IO Text
 annotateEntry parent name = do
-  isDir <- doesDirectoryExist (parent <> "/" <> name)
-  pure $
-    if isDir
-      then T.pack name <> "/"
-      else T.pack name
+  let full = parent </> name
+  link <- isSymlink full
+  if link
+    then pure $ T.pack name <> "@"
+    else do
+      isDir <- doesDirectoryExist full
+      pure $
+        if isDir
+          then T.pack name <> "/"
+          else T.pack name

@@ -22,7 +22,7 @@ import LLM
     generateTextWithFallbacks,
     streamTextWithFallbacks,
   )
-import LLM.Workflow.ToolUtils (createGenRequest, executeTool, getResolvedTools, createToolContext)
+import LLM.Workflow.ToolUtils (createGenRequest, createToolContext, executeTool, getResolvedTools)
 import LLM.Workflow.Types
   ( Agent (agName),
     AgentWithModels (agent, models),
@@ -34,7 +34,6 @@ import LLM.Workflow.Types
     RuntimeArgs (rtHooks),
     Stack (..),
     Step (..),
-    ToolContext (..),
     ToolOutcome (ToolReply, ToolWorkflow),
     Workflow (..),
   )

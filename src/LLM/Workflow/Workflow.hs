@@ -22,7 +22,7 @@ import LLM
     generateTextWithFallbacks,
     streamTextWithFallbacks,
   )
-import LLM.Workflow.ToolUtils (createGenRequest, executeTool, getResolvedTools)
+import LLM.Workflow.ToolUtils (createGenRequest, executeTool, getResolvedTools, createToolContext)
 import LLM.Workflow.Types
   ( Agent (agName),
     AgentWithModels (agent, models),
@@ -118,14 +118,8 @@ eval rt (Stack uAcc step konts) = do
                   (uAcc <> fromMaybe emptyUsage resp.respUsage)
                   (RunTool pending assistantTurn toolCall)
                   (KTool pending mcid assistantTurn toolCalls' [] toolCall konts)
-    RunTool pending assistantTurn toolCall -> do
-      let ctx =
-            ToolContext
-              { tcConversation = pending.prompt.history ++ pending.toolRounds ++ [assistantTurn],
-                tcUsage = emptyUsage,
-                tcWindowOffset = 0,
-                tcRuntimeArgs = rt
-              }
+    RunTool pending _assistantTurn toolCall -> do
+      let ctx = createToolContext pending.prompt.agent.agent pending.prompt.history emptyUsage rt
           tools = getResolvedTools pending.prompt.agent.agent rt
       result <- liftIO (executeTool rt.rtHooks ctx tools toolCall)
       case result of

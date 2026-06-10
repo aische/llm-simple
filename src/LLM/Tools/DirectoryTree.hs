@@ -69,19 +69,18 @@ drawTree path displayRoot = do
   where
     renderHeader n trunc depthCut =
       let notes =
-            (if trunc then [T.pack ("truncated at " ++ show maxTreeEntries ++ " entries")] else [])
-              ++ (if depthCut then [T.pack ("depth cut at " ++ show cheapWalkDepth)] else [])
-       in if null notes
-            then []
-            else
-              [ "=== directory_tree | "
-                  <> T.pack (show n)
-                  <> " entr"
-                  <> (if n == 1 then "y" else "ies")
-                  <> " | "
-                  <> T.intercalate ", " notes
-                  <> " ==="
-              ]
+            ([T.pack ("truncated at " ++ show maxTreeEntries ++ " entries") | trunc])
+              ++ ([T.pack ("depth cut at " ++ show cheapWalkDepth) | depthCut])
+       in ( [ "=== directory_tree | "
+                <> T.pack (show n)
+                <> " entr"
+                <> (if n == 1 then "y" else "ies")
+                <> " | "
+                <> T.intercalate ", " notes
+                <> " ==="
+              | not (null notes)
+            ]
+          )
 
 -- | Walk a directory non-recursively in the outer caller's sense:
 -- emits lines for visible children, recursing into subdirectories until

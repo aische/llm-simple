@@ -233,7 +233,7 @@ eitherToMaybe (Left _) = Nothing
 detectBinary :: FilePath -> IO Bool
 detectBinary path = do
   r <-
-    try (withBinaryFile path ReadMode (\h -> BS.hGet h binarySniffBytes)) ::
+    try (withBinaryFile path ReadMode (`BS.hGet` binarySniffBytes)) ::
       IO (Either IOException BS.ByteString)
   pure $ case r of
     Right bs -> BS.elem 0 bs

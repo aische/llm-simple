@@ -267,13 +267,13 @@ encodeToolDef td =
 encodeFunctionCall :: Text -> ToolCall -> Value
 encodeFunctionCall currentModel tc =
   object $
-    [ "functionCall"
+    ( "functionCall"
         .= object
           [ "name" .= tc.tcName,
             "args" .= tc.tcArguments
           ]
-    ]
-      ++ ["thoughtSignature" .= s | Just s <- [signatureForModel currentModel tc.tcProviderMeta]]
+    )
+      : ["thoughtSignature" .= s | Just s <- [signatureForModel currentModel tc.tcProviderMeta]]
 
 encodeFunctionResponse :: ToolResult -> Value
 encodeFunctionResponse tr =

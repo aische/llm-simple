@@ -17,6 +17,7 @@ import Autodocodec.Schema (jsonSchemaVia)
 import Control.Exception (SomeException, try)
 import Data.Aeson (FromJSON)
 import Data.Aeson qualified as AE
+import Data.Map qualified as Map
 import Data.Text qualified as T
 import LLM.Agent.Tools.HistoryTool (historyToolTyped)
 import LLM.Agent.Types
@@ -24,6 +25,7 @@ import LLM.Agent.Types
     RuntimeArgs (..),
     Tool (Tool, toolDef, toolExecute),
     ToolContext (..),
+    ToolMap,
   )
 import LLM.Core.Abort (AbortSignal, isAborted)
 import LLM.Core.Types
@@ -137,10 +139,10 @@ findNthUserFromEnd n conv = go (length conv - 1) n
           UserTurn _ -> go (idx - 1) (remaining - 1)
           _ -> go (idx - 1) remaining
 
-createGenRequest :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
-createGenRequest agent rt messages =
+createGenRequest :: Agent -> ToolMap -> RuntimeArgs -> [Turn] -> GenRequest
+createGenRequest agent toolMap rt messages =
   let offset = windowOffset agent.agContextWindow messages
-      tools = getResolvedTools agent rt
+      tools = getResolvedTools agent toolMap rt
    in GenRequest
         { grSystemPrompt = agent.agSystemPrompt,
           grTools = map (\x -> x.toolDef) tools,
@@ -150,8 +152,8 @@ createGenRequest agent rt messages =
           grHooks = rt.rtHooks
         }
 
-getResolvedTools :: Agent -> RuntimeArgs -> [Tool]
-getResolvedTools agent rt = filterReadonlyTools rt.rtReadonly agent.agTools ++ getHistoryTool agent
+getResolvedTools :: Agent -> ToolMap -> RuntimeArgs -> [Tool]
+getResolvedTools agent toolMap rt = filterReadonlyTools rt.rtReadonly (Map.elems toolMap) ++ getHistoryTool agent
 
 getHistoryTool :: Agent -> [Tool]
 getHistoryTool agent = case agent.agContextWindow of

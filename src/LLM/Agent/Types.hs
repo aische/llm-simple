@@ -2,6 +2,7 @@ module LLM.Agent.Types
   ( Agent (..),
     RuntimeArgs (..),
     Tool (..),
+    ToolMap,
     ToolContext (..),
     GenerateEvent (..),
     GenerateEventDetail (..),
@@ -10,6 +11,7 @@ module LLM.Agent.Types
 where
 
 import Data.Aeson (Value)
+import Data.Map (Map)
 import Data.Text (Text)
 import Data.UUID.Types (UUID)
 import LLM.Core.Abort (AbortSignal)
@@ -26,8 +28,7 @@ import LLM.Generate.Types (GenerateError, GenerateErrorResult, GenerateTextResul
 data Agent = Agent
   { agName :: Text,
     agSystemPrompt :: Maybe Text,
-    agTools :: [Tool],
-    agUTools :: [Text],
+    agTools :: [Text],
     agMaxToolRounds :: Int,
     agContextWindow :: Maybe Int -- max recent turns sent to the model; Nothing = all
   }
@@ -49,6 +50,8 @@ data Tool = Tool
   { toolDef :: ToolDef,
     toolExecute :: ToolContext -> Value -> IO Text
   }
+
+type ToolMap = Map Text Tool
 
 -- | Context passed to tool implementations during execution.
 data ToolContext = ToolContext

@@ -15,7 +15,18 @@ import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import Heptapod (generate)
-import LLM (AbortSignal, Hooks (..), ThinkingMode (..), claudeGateway, deepSeekGateway, defaultDebugHooks, mkFsConfig)
+import LLM
+  ( AbortSignal,
+    Hooks (..),
+    ThinkingMode (..),
+    claudeGateway,
+    deepSeekGateway,
+    defaultDebugHooks,
+    generateText,
+    mkFsConfig,
+    noEventObserver,
+  )
+import LLM.Agent.Types (Agent (..), RuntimeArgs (..))
 import LLM.Core.Types (LLMHooks (..), ToolDef (..), Turn (UserTurn))
 import LLM.Core.Usage (PricingInfo (..), Usage)
 import LLM.Generate.Logger (noHooks)
@@ -25,36 +36,9 @@ import LLM.Generate.Types
     GenerateTextResult (..),
     StreamChunk (..),
   )
+import LLM.Load.FsTools (fsTools)
 import LLM.Load.LoadModels (loadModelsOrThrow)
-import LLM.Workflow (emptyFinal)
-import LLM.Workflow.ToolUtils (toTool, toTypedWorkflowTool, typedWorkflowToolToTool, workflowToolTyped)
-import LLM.Workflow.Tools.FsTools (fsTools)
-import LLM.Workflow.Types
-  ( Agent (..),
-    AgentWithModels (..),
-    CID (CID),
-    Final (..),
-    GenerateEvent (..),
-    GetCid (..),
-    Kont,
-    LoopContext (..),
-    Prompt (..),
-    PromptArgs (..),
-    RuntimeArgs (..),
-    Tool (..),
-    ToolContext (..),
-    ToolMap,
-    TranscriptPolicy (TranscriptFinalText, TranscriptFinalToPromptArgs, TranscriptPolicyFunc, TranscriptSummaryText),
-    TypedWorkflowTool,
-    Workflow (..),
-  )
-import LLM.Workflow.Workflow
-  ( eval,
-    loop,
-    runWorkflow,
-  )
 import System.Environment (getArgs, getEnv)
-import Wf1 (buildWf1Workflow)
 
 main :: IO ()
 main = do
@@ -67,99 +51,32 @@ main = do
       _models2 = ModelWithFallbacks {mwfModel = mistral, mwfFallbacks = []}
       _models3 = ModelWithFallbacks {mwfModel = gemini, mwfFallbacks = []}
       _models4 = ModelWithFallbacks {mwfModel = deepseek, mwfFallbacks = []}
-  -- _models4 = ModelWithFallbacks {mwfModel = deepseek, mwfFallbacks = [gpt, gemini, haiku]}
-
-  let wf1 = buildWf1Workflow (_models4, _models4)
-      p1 =
-        "Audit the project in the current workspace: identify correctness, safety, and maintainability risks, \
-        \with actionable recommendations and a concise final report."
 
   toolMap <-
-    fsTools "./user-workspace/" -- put some code files in this directory
-      <&> addTools
-        [ typedWorkflowToolToTool $
-            subagent "subagent" "Use this tool to gain expert knowledge about a topic. Provide a topic." $
-              \args _ctx ->
-                (WMap wf1 TranscriptSummaryText, PromptArgs {history = [], prompt = "Ask the expert about the topic: " <> args.prompt})
-        ]
-  let orchestrator = WPrompt (AgentWithModels orchestratorAgent _models4) Nothing
-  (t, usage) <- run Nothing toolMap p1 orchestrator
-  TIO.putStrLn t
-  TIO.putStrLn $ "Usage: " <> T.pack (show usage)
+    fsTools "./user-workspace/"
+  genId <- generate
+  let agent =
+        Agent
+          { agName = "friendly-assistant",
+            agSystemPrompt = Nothing,
+            agTools = ["directory_tree"],
+            agMaxToolRounds = 10,
+            agContextWindow = Nothing
+          }
+      rt =
+        RuntimeArgs
+          { rtGenerationId = genId,
+            rtAbortSignal = Nothing,
+            rtLLMHooks = llmHooks defaultDebugHooks,
+            rtHooks = defaultDebugHooks,
+            rtOnEvent = noEventObserver,
+            rtReadonly = False
+          }
 
-orchestratorAgent :: Agent
-orchestratorAgent =
-  Agent
-    { agName = "orchestrator",
-      agSystemPrompt =
-        Just
-          "You are a helpful assistant. You may delegate work using tools:\n\
-          \- subagent: filesystem-capable child agent for a single task",
-      agTools = ["subagent"],
-      agMaxToolRounds = 5,
-      agContextWindow = Nothing
-    }
-
--- ---------------------------------------------------------------------------
--- utils - move them to separate files later
--- ---------------------------------------------------------------------------
-
-mkAgent :: (MonadIO m) => Agent -> ModelWithFallbacks -> Bool -> m (Workflow m PromptArgs Final)
-mkAgent ag models False = pure $ WPrompt (AgentWithModels ag models) Nothing
-mkAgent ag models True = do
-  cid <- CID <$> generate
-  pure $ WPrompt (AgentWithModels ag models) (Just cid)
-
-mkLoop :: (MonadIO m, GetCid x) => Int -> TranscriptPolicy o i -> [x] -> Workflow m i o -> Workflow m i o
-mkLoop n policy scope wf = WLoop n wf policy cids
-  where
-    cids = concatMap getCid scope :: [CID]
-
-mkLoopWhile :: (MonadIO m, GetCid x) => Int -> TranscriptPolicy o i -> Workflow m (LoopContext i o) d -> TranscriptPolicy d Bool -> [x] -> Workflow m i o -> Workflow m i o
-mkLoopWhile maxIterations bodyPolicy decider decisionPolicy scope = WLoopWhile maxIterations decider decisionPolicy cids bodyPolicy
-  where
-    cids = concatMap getCid scope :: [CID]
-
-addTools :: [Tool m] -> ToolMap m -> ToolMap m
-addTools tools toolMap = toolMap <> Map.fromList [(tool.toolDef.toolName, tool) | tool <- tools]
-
-newtype SubagentArgs = SubagentArgs
-  { prompt :: Text
-  }
-  deriving (Generic)
-  deriving (FromJSON) via (AC.Autodocodec SubagentArgs)
-
-instance AC.HasCodec SubagentArgs where
-  codec :: AC.JSONCodec SubagentArgs
-  codec =
-    AC.object "precise prompt for the subagent" $
-      SubagentArgs <$> AC.requiredField "prompt" "a precise prompt for the subagent" AC..= (\x -> x.prompt)
-
-subagent :: (MonadIO m) => Text -> Text -> (SubagentArgs -> ToolContext m -> (Workflow m PromptArgs Text, PromptArgs)) -> TypedWorkflowTool m (ToolContext m) SubagentArgs
-subagent = workflowToolTyped
-
-printGenerateResult :: Either GenerateErrorResult GenerateTextResult -> IO ()
-printGenerateResult = \case
-  Left err -> do
-    putStrLn "Generation failed:"
-    print err
-  Right ok -> do
-    putStrLn "Final text:"
-    TIO.putStrLn ok.gtrText
-    putStrLn "Usage:"
-    print ok.gtrUsage
-
-onStreamChunk :: StreamChunk -> IO ()
-onStreamChunk = \case
-  AnswerDelta txt -> TIO.putStr txt
-  ReasoningDelta txt -> TIO.putStr txt
-  PreambleDelta txt -> TIO.putStr txt
-  StreamToolCallChunk _ -> pure ()
-
-printEvent :: GenerateEvent -> IO ()
-printEvent ev = do
-  putStrLn "--------------------------------"
-  print ev
+  r <- generateText agent _models4 toolMap rt [UserTurn "are there any files in the current workspace?"]
+  case r of
+    Left err -> putStrLn $ "Error: " <> show err
+    Right resp -> putStrLn $ "Response: " <> show resp
 
 llmHooks :: Hooks -> LLMHooks
 llmHooks hooks =
@@ -168,24 +85,3 @@ llmHooks hooks =
       onLLMResponse = hooks.onResponse,
       onLLMResponseError = hooks.onResponseError
     }
-
-run :: (MonadIO m) => Maybe AbortSignal -> ToolMap m -> Text -> Workflow m PromptArgs Final -> m (Text, Usage)
-run abortSignal toolMap prompt wf = do
-  genId <- generate
-  let rt =
-        RuntimeArgs
-          { rtGenerationId = genId,
-            rtAbortSignal = abortSignal,
-            rtLLMHooks = llmHooks defaultDebugHooks,
-            rtHooks =
-              defaultDebugHooks
-                { onLog = \level msg -> TIO.putStrLn ("[" <> T.pack (show level) <> "] " <> msg)
-                },
-            rtOnEvent = printEvent,
-            rtReadonly = False,
-            rtToolMap = toolMap
-          }
-  r <- runWorkflow rt wf (PromptArgs {history = [], prompt})
-  case r of
-    (Left err, usage) -> pure ("Error: " <> T.pack (show err), usage)
-    (Right final, usage) -> pure (final.text, usage)

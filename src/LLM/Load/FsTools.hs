@@ -1,7 +1,10 @@
-module LLM.Workflow.Tools.FsTools where
+module LLM.Load.FsTools where
 
-import Control.Monad.IO.Class (MonadIO)
 import Data.Map qualified as Map
+-- import LLM.Tools.Readfile (readfileToolTyped)
+
+import LLM.Agent.ToolUtils (toTool)
+import LLM.Agent.Types (ToolMap)
 import LLM.Tools.CopyFile (copyFileToolTyped)
 import LLM.Tools.CreateDirectory (createDirectoryToolTyped)
 import LLM.Tools.DirectoryTree (directoryTreeToolTyped)
@@ -13,15 +16,12 @@ import LLM.Tools.MoveFile (moveFileToolTyped)
 import LLM.Tools.MultiReplaceInFile (multiReplaceInFileToolTyped)
 import LLM.Tools.ReadFilePaginated (readFilePaginatedToolTyped)
 import LLM.Tools.Readdir (readdirToolTyped)
--- import LLM.Tools.Readfile (readfileToolTyped)
 import LLM.Tools.RemoveDirectory (removeDirectoryToolTyped)
 import LLM.Tools.RemoveFile (removeFileToolTyped)
 import LLM.Tools.ReplaceInFile (replaceInFileToolTyped)
 import LLM.Tools.Writefile (writefileToolTyped)
-import LLM.Workflow.ToolUtils (toTool)
-import LLM.Workflow.Types (ToolMap)
 
-fsTools :: (MonadIO m) => FilePath -> IO (ToolMap m)
+fsTools :: FilePath -> IO ToolMap
 fsTools filePath = do
   cfg <- mkFsConfig filePath
   pure $

@@ -1,6 +1,7 @@
 module LLM.Agent.GenerateObject where
 
 import Data.Aeson (Value)
+import Data.Map qualified as Map
 import LLM.Agent.ToolUtils (createGenRequest)
 import LLM.Agent.Types
   ( Agent (..),
@@ -23,7 +24,7 @@ generateObject ::
   RuntimeArgs ->
   [Turn] ->
   IO (Either GenerateErrorResult (t, Usage))
-generateObject a m r t = genObject (createGenRequest a {agTools = []} r t) m
+generateObject a m r t = genObject (createGenRequest a Map.empty r t) m
 
 generateObjectUntyped ::
   Agent ->
@@ -32,4 +33,4 @@ generateObjectUntyped ::
   [Turn] ->
   Value ->
   IO (Either GenerateErrorResult (Value, Usage))
-generateObjectUntyped a m r t = genObjectUntyped (createGenRequest a {agTools = []} r t) m
+generateObjectUntyped a m r t = genObjectUntyped (createGenRequest a Map.empty r t) m

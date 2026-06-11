@@ -80,7 +80,6 @@ library
         LLM.Generate.Types
 
         LLM.Tools
-        LLM.Workflow.Tools.FsTools
         LLM.Tools.Weather
         LLM.Tools.DirectoryTree
         LLM.Tools.FileInfo
@@ -106,13 +105,7 @@ library
         LLM.Load.LoadModels
         LLM.Load.Types
         LLM.Load.Utils
-
-        LLM.Workflow
-        LLM.Workflow.Types
-        LLM.Workflow.Workflow
-        LLM.Workflow.ToolUtils
-        LLM.Workflow.Utils
-        LLM.Workflow.Tools.HistoryTool
+        LLM.Load.FsTools
 
     other-modules:
         LLM.Core.SSE
@@ -144,7 +137,7 @@ library
 executable llm-simple
     import: opts
     main-is:          Main.hs
-    other-modules:    Wf1
+    other-modules:   
     hs-source-dirs:   app
     build-depends:
         aeson          >=2.0   && <2.3,

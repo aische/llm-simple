@@ -9,6 +9,7 @@ module LLM.Agent.ToolUtils
     getResolvedTools,
     windowOffset,
     createGenRequest,
+    embedTextTool,
   )
 where
 

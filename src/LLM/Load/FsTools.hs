@@ -4,7 +4,7 @@ import Data.Map qualified as Map
 -- import LLM.Tools.Readfile (readfileToolTyped)
 
 import Data.Text (Text)
-import LLM.Agent.ToolUtils (toTool)
+import LLM.Agent.ToolUtils (embedTextTool, toTool)
 import LLM.Agent.Types (ToolMap)
 import LLM.Tools.CopyFile (copyFileToolTyped)
 import LLM.Tools.CreateDirectory (createDirectoryToolTyped)
@@ -43,3 +43,8 @@ fsTools filePath = do
         ("replace_in_file", toTool $ replaceInFileToolTyped cfg),
         ("writefile", toTool $ writefileToolTyped cfg)
       ]
+
+fsTools' :: (Text -> result) -> FilePath -> IO (ToolMap result)
+fsTools' embed filePath = do
+  m <- fsTools filePath
+  pure $ Map.map (embedTextTool embed) m

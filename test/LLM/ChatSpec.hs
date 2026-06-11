@@ -102,7 +102,7 @@ mockModel gw =
       mcJitterBackoff = 0
     }
 
-weatherTool :: Tool
+weatherTool :: Tool Text
 weatherTool =
   Tool
     { toolDef =
@@ -146,7 +146,7 @@ mkRuntime mSig = do
 runGenerate ::
   Agent ->
   ModelWithFallbacks ->
-  ToolMap ->
+  ToolMap Text ->
   Maybe AbortSignal ->
   [Turn] ->
   IO (Either GenerateErrorResult GenerateTextResult)

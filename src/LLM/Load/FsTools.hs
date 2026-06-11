@@ -3,6 +3,7 @@ module LLM.Load.FsTools where
 import Data.Map qualified as Map
 -- import LLM.Tools.Readfile (readfileToolTyped)
 
+import Data.Text (Text)
 import LLM.Agent.ToolUtils (toTool)
 import LLM.Agent.Types (ToolMap)
 import LLM.Tools.CopyFile (copyFileToolTyped)
@@ -21,7 +22,7 @@ import LLM.Tools.RemoveFile (removeFileToolTyped)
 import LLM.Tools.ReplaceInFile (replaceInFileToolTyped)
 import LLM.Tools.Writefile (writefileToolTyped)
 
-fsTools :: FilePath -> IO ToolMap
+fsTools :: FilePath -> IO (ToolMap Text)
 fsTools filePath = do
   cfg <- mkFsConfig filePath
   pure $

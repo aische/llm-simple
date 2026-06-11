@@ -46,7 +46,7 @@ import LLM.Generate.Types
   )
 
 -- | Execute a single tool call by looking it up in the tool list
-executeTool :: Hooks -> ToolContext -> [Tool] -> ToolCall -> IO ToolResult
+executeTool :: Hooks -> ToolContext -> [Tool Text] -> ToolCall -> IO ToolResult
 executeTool hooks ctx tools tc = case lookup tc.tcName toolMap of
   Nothing -> pure $ toolResult tc ("Unknown tool: " <> tc.tcName)
   Just exec -> do
@@ -63,12 +63,12 @@ executeTool hooks ctx tools tc = case lookup tc.tcName toolMap of
     toolMap = [(t.toolDef.toolName, t.toolExecute) | t <- tools]
 
 -- | Execute all tool calls from a response
-executeTools :: Hooks -> ToolContext -> [Tool] -> [ToolCall] -> IO [ToolResult]
+executeTools :: Hooks -> ToolContext -> [Tool Text] -> [ToolCall] -> IO [ToolResult]
 executeTools hooks ctx tools = mapM (executeTool hooks ctx tools)
 
 -- | Execute tool calls one at a time, checking the abort signal between each.
 -- Returns @Left Aborted@ if the signal fires before all calls finish.
-executeToolsWithAbort :: Maybe AbortSignal -> Hooks -> ToolContext -> [Tool] -> [ToolCall] -> IO (GenerateResult [ToolResult])
+executeToolsWithAbort :: Maybe AbortSignal -> Hooks -> ToolContext -> [Tool Text] -> [ToolCall] -> IO (GenerateResult [ToolResult])
 executeToolsWithAbort Nothing hooks ctx tools tcs = Right <$> executeTools hooks ctx tools tcs
 executeToolsWithAbort (Just sig) hooks ctx tools tcs = go [] tcs
   where
@@ -98,7 +98,7 @@ createToolContext agent messages roundUsage rt =
 getSchema :: (AC.HasCodec t, FromJSON t) => TypedTool ToolContext t -> AC.JSONCodec t
 getSchema _ = AC.codec
 
-toTool :: (AC.HasCodec t, FromJSON t) => TypedTool ToolContext t -> Tool
+toTool :: (AC.HasCodec t, FromJSON t) => TypedTool ToolContext t -> Tool Text
 toTool t@(TypedTool name descr readonly exec) =
   Tool
     { toolDef =
@@ -114,7 +114,7 @@ toTool t@(TypedTool name descr readonly exec) =
           AE.Success args -> exec ctx args
     }
 
-filterReadonlyTools :: Bool -> [Tool] -> [Tool]
+filterReadonlyTools :: Bool -> [Tool result] -> [Tool result]
 filterReadonlyTools False tools = tools
 filterReadonlyTools True tools = filter (\x -> x.toolDef.toolReadonly) tools
 
@@ -140,10 +140,10 @@ findNthUserFromEnd n conv = go (length conv - 1) n
           UserTurn _ -> go (idx - 1) (remaining - 1)
           _ -> go (idx - 1) remaining
 
-createGenRequest :: Agent -> ToolMap -> RuntimeArgs -> [Turn] -> GenRequest
-createGenRequest agent toolMap rt messages =
+createGenRequest :: (Text -> result) -> Agent -> ToolMap result -> RuntimeArgs -> [Turn] -> GenRequest
+createGenRequest embed agent toolMap rt messages =
   let offset = windowOffset agent.agContextWindow messages
-      tools = getResolvedTools agent toolMap rt
+      tools = getResolvedTools embed agent toolMap rt
    in GenRequest
         { grSystemPrompt = agent.agSystemPrompt,
           grTools = map (\x -> x.toolDef) tools,
@@ -153,17 +153,25 @@ createGenRequest agent toolMap rt messages =
           grHooks = rt.rtHooks
         }
 
-getResolvedTools :: Agent -> ToolMap -> RuntimeArgs -> [Tool]
-getResolvedTools agent toolMap rt = filterReadonlyTools rt.rtReadonly (getToolsFromMap toolMap agent.agTools) ++ getHistoryTool agent
+getResolvedTools :: (Text -> result) -> Agent -> ToolMap result -> RuntimeArgs -> [Tool result]
+getResolvedTools embed agent toolMap rt = filterReadonlyTools rt.rtReadonly (getToolsFromMap toolMap agent.agTools) ++ fmap (embedTextTool embed) (getHistoryTool agent)
 
-getToolsFromMap :: ToolMap -> [Text] -> [Tool]
+getToolsFromMap :: ToolMap result -> [Text] -> [Tool result]
 getToolsFromMap toolMap toolNames = toolNames >>= lookupTool
   where
     lookupTool name = case Map.lookup name toolMap of
       Just tool -> [tool]
       Nothing -> []
 
-getHistoryTool :: Agent -> [Tool]
+getHistoryTool :: Agent -> [Tool Text]
 getHistoryTool agent = case agent.agContextWindow of
   Just n | n > 0 -> [toTool historyToolTyped]
   _ -> []
+
+embedTextTool :: (Text -> result) -> Tool Text -> Tool result
+embedTextTool embed tool =
+  tool
+    { toolExecute = \ctx args -> do
+        result <- tool.toolExecute ctx args
+        pure $ embed result
+    }

@@ -61,13 +61,13 @@ mockProvider mp adapter =
             Just chatResponse -> pure $ Right chatResponse
     }
 
-streamChatLoopMain :: Bool -> (Agent, ModelWithFallbacks, ToolMap, RuntimeArgs) -> [Text] -> IO ()
+streamChatLoopMain :: Bool -> (Agent, ModelWithFallbacks, ToolMap Text, RuntimeArgs) -> [Text] -> IO ()
 streamChatLoopMain stream env prompts = do
   putStrLn "\n=== Ollama (with Claude  and Gemini fallbacks) ==="
   _ <- streamChatLoop stream env prompts
   pure ()
 
-streamChatLoop :: Bool -> (Agent, ModelWithFallbacks, ToolMap, RuntimeArgs) -> [Text] -> IO [Turn]
+streamChatLoop :: Bool -> (Agent, ModelWithFallbacks, ToolMap Text, RuntimeArgs) -> [Text] -> IO [Turn]
 streamChatLoop stream (agent, models, toolMap, rt) = aux emptyUsage []
   where
     aux _totalUsage conv [] = do

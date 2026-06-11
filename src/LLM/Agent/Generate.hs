@@ -6,6 +6,7 @@ module LLM.Agent.Generate
 where
 
 import Data.Maybe (fromMaybe)
+import Data.Text (Text)
 import LLM.Agent.Events (emitEvent)
 import LLM.Agent.ToolUtils
   ( createGenRequest,
@@ -45,13 +46,13 @@ import LLM.Generate.Types
 generateText ::
   Agent ->
   ModelWithFallbacks ->
-  ToolMap ->
+  ToolMap Text ->
   RuntimeArgs ->
   [Turn] ->
   IO (Either GenerateErrorResult GenerateTextResult)
 generateText agent models toolMap rt initialTurns =
   agentLoop
-    (\a m r t -> generateTextWithFallbacks (createGenRequest a toolMap r t) m)
+    (\a m r t -> generateTextWithFallbacks (createGenRequest id a toolMap r t) m)
     agent
     models
     toolMap
@@ -62,13 +63,13 @@ streamText ::
   (StreamChunk -> IO ()) ->
   Agent ->
   ModelWithFallbacks ->
-  ToolMap ->
+  ToolMap Text ->
   RuntimeArgs ->
   [Turn] ->
   IO (Either GenerateErrorResult GenerateTextResult)
 streamText onChunk agent models toolMap rt initialTurns =
   agentLoop
-    (\a m r t -> streamTextWithFallbacks onChunk (createGenRequest a toolMap r t) m)
+    (\a m r t -> streamTextWithFallbacks onChunk (createGenRequest id a toolMap r t) m)
     agent
     models
     toolMap
@@ -79,7 +80,7 @@ agentLoop ::
   (Agent -> ModelWithFallbacks -> RuntimeArgs -> [Turn] -> IO (GenerateResult ChatResponse)) ->
   Agent ->
   ModelWithFallbacks ->
-  ToolMap ->
+  ToolMap Text ->
   RuntimeArgs ->
   [Turn] ->
   IO (Either GenerateErrorResult GenerateTextResult)
@@ -125,7 +126,7 @@ agentLoop call agent models toolMap rt initialTurns = do
                     _ -> do
                       let assistantTurn = AssistantTurn txt resp.respReasoning toolCalls
                           toolContext = createToolContext agent currentTurns newUsage rt
-                          tools = getResolvedTools agent toolMap rt
+                          tools = getResolvedTools id agent toolMap rt
                       emitEvent rt (MessageCreated assistantTurn)
                       emitEvent rt (ToolRoundStarted loopCount)
 

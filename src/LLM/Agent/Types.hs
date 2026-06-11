@@ -46,12 +46,12 @@ data RuntimeArgs = RuntimeArgs
 -- | A tool: its definition (sent to the model) paired with its implementation.
 -- 'toolExecute' receives a 'ToolContext' (full conversation + usage) and
 -- the JSON arguments from the model.
-data Tool = Tool
+data Tool result = Tool
   { toolDef :: ToolDef,
-    toolExecute :: ToolContext -> Value -> IO Text
+    toolExecute :: ToolContext -> Value -> IO result
   }
 
-type ToolMap = Map Text Tool
+type ToolMap result = Map Text (Tool result)
 
 -- | Context passed to tool implementations during execution.
 data ToolContext = ToolContext

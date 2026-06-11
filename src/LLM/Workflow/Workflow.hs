@@ -86,8 +86,9 @@ isDone (Stack usage _ _) = (Nothing, usage)
 eval :: (MonadIO m) => RuntimeArgs m -> Stack m (Either GenerateError o) -> m (Stack m (Either GenerateError o))
 eval rt (Stack uAcc step konts) = do
   let space = T.replicate (stackSize konts) " "
-  _ <- liftIO $ TIO.putStrLn $ space <> showStep step <> T.unwords (map (" : " <>) (showKont konts))
-  _ <- liftIO $ TIO.putStrLn $ space <> "Usage (cents): " <> T.pack (show (usageCents uAcc))
+      cents = "(¢ " <> T.pack (show (usageCents uAcc)) <> ")"
+  _ <- liftIO $ TIO.putStrLn $ space <> cents <> " " <> showStep step <> T.unwords (map (" : " <>) (showKont konts))
+  -- _ <- liftIO $ TIO.putStrLn $ space <> "Usage (cents): " <> T.pack (show (usageCents uAcc))
   case step of
     RunObject pending -> do
       result <- liftIO (callLLMO rt pending)

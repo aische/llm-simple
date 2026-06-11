@@ -26,11 +26,13 @@ module LLM.Generate
     safeHooks,
     debugHooks,
     defaultDebugHooks,
+    llmHooks,
   )
 where
 
 import LLM.Generate.Generate
 import LLM.Generate.GenerateObject
+import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger
 import LLM.Generate.ModelConfig
 import LLM.Generate.Types

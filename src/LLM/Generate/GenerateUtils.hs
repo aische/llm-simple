@@ -4,13 +4,19 @@ module LLM.Generate.GenerateUtils
     usageWithModelCost,
     callWithRetryTimeout,
     withModelFallbacks,
+    llmHooks,
   )
 where
 
 import Control.Concurrent (threadDelay)
 import Data.Text (Text)
 import Data.Text qualified as T
-import LLM.Core.Types (ChatRequest (..), LLMError (..), LLMGateway (gwName))
+import LLM.Core.Types
+  ( ChatRequest (..),
+    LLMError (..),
+    LLMGateway (gwName),
+    LLMHooks (..),
+  )
 import LLM.Core.Usage (Usage (..), estimateCost)
 import LLM.Core.Utils (withRetry, withTimeout)
 import LLM.Generate.Logger (Hooks (..), LogLevel (..), onLog)
@@ -91,3 +97,11 @@ formatModelFallback mc err =
     <> mc.mcModel
     <> ": "
     <> T.pack (show err)
+
+llmHooks :: Hooks -> LLMHooks
+llmHooks hooks =
+  LLMHooks
+    { onLLMRequest = hooks.onRequest,
+      onLLMResponse = hooks.onResponse,
+      onLLMResponseError = hooks.onResponseError
+    }

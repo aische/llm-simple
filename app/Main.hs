@@ -1,44 +1,26 @@
 {-# LANGUAGE ImpredicativeTypes #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Main where
 
-import Autodocodec qualified as AC
-import Configuration.Dotenv (defaultConfig, loadFile)
-import Control.Exception (SomeException (SomeException), catch)
-import Control.Monad.IO.Class (MonadIO)
-import Data.Aeson (FromJSON)
-import Data.Functor ((<&>))
-import Data.Map.Strict qualified as Map
-import Data.Text (Text)
-import Data.Text qualified as T
-import Data.Text.IO qualified as TIO
-import GHC.Generics (Generic)
 import Heptapod (generate)
-import LLM
-  ( AbortSignal,
-    Hooks (..),
-    ThinkingMode (..),
-    claudeGateway,
-    deepSeekGateway,
-    defaultDebugHooks,
+import LLM.Agent
+  ( Agent (..),
+    RuntimeArgs (..),
     generateText,
-    mkFsConfig,
     noEventObserver,
   )
-import LLM.Agent.Types (Agent (..), RuntimeArgs (..))
-import LLM.Core.Types (LLMHooks (..), ToolDef (..), Turn (UserTurn))
-import LLM.Core.Usage (PricingInfo (..), Usage)
-import LLM.Generate.Logger (noHooks)
-import LLM.Generate.ModelConfig (ModelConfig (..), ModelWithFallbacks (..))
-import LLM.Generate.Types
-  ( GenerateErrorResult (..),
-    GenerateTextResult (..),
-    StreamChunk (..),
+import LLM.Core
+  ( Turn (UserTurn),
   )
-import LLM.Load.FsTools (fsTools)
-import LLM.Load.LoadModels (loadModelsOrThrow)
-import System.Environment (getArgs, getEnv)
+import LLM.Generate
+  ( ModelWithFallbacks (..),
+    defaultDebugHooks,
+    llmHooks,
+  )
+import LLM.Load
+  ( fsTools,
+    loadModelsOrThrow,
+  )
 
 main :: IO ()
 main = do
@@ -77,11 +59,3 @@ main = do
   case r of
     Left err -> putStrLn $ "Error: " <> show err
     Right resp -> putStrLn $ "Response: " <> show resp
-
-llmHooks :: Hooks -> LLMHooks
-llmHooks hooks =
-  LLMHooks
-    { onLLMRequest = hooks.onRequest,
-      onLLMResponse = hooks.onResponse,
-      onLLMResponseError = hooks.onResponseError
-    }

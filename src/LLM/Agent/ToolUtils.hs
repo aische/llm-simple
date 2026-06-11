@@ -96,10 +96,10 @@ createToolContext agent messages roundUsage rt =
       tcRuntimeArgs = rt
     }
 
-getSchema :: (AC.HasCodec t, FromJSON t) => TypedTool ToolContext t -> AC.JSONCodec t
+getSchema :: (AC.HasCodec t, FromJSON t) => m ToolContext t -> AC.JSONCodec t
 getSchema _ = AC.codec
 
-toTool :: (AC.HasCodec t, FromJSON t) => TypedTool ToolContext t -> Tool Text
+toTool :: (AC.HasCodec args, FromJSON args) => TypedTool ToolContext args -> Tool Text
 toTool t@(TypedTool name descr readonly exec) =
   Tool
     { toolDef =

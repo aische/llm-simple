@@ -14,5 +14,5 @@ folders/sub-packages:
 - Tools: collection of file system tools
 - Load: loading model catalog from json file, initializing providers with API keys
 - Generate: single-request generateTextWithFallbacks, streamTextWithFallbacks, genObject, genObjectUntyped (no tools), all with model fallback logic, timeout etc
-- Agent: generateText, streamText (agent loops with tool execution). Will probably be removed later
-- Workflow: Extended alternative to Agent: Agent loop with tool execution, workflows, and tools that can run workflows. No streaming, events, logging yet
+- Agent: generateText, streamText (agent loops with tool execution).
+- Workflow removed / moved to different repo

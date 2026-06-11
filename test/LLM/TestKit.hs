@@ -6,7 +6,7 @@ import Data.Map qualified as M
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import LLM.Agent.Generate (generateText, streamText)
-import LLM.Agent.Types (Agent, RuntimeArgs)
+import LLM.Agent.Types (Agent, RuntimeArgs, ToolMap)
 import LLM.Core.LLMProvider (LLMProvider (..))
 import LLM.Core.Types (Turn (..))
 import LLM.Core.Usage (addUsage, emptyUsage)
@@ -61,20 +61,20 @@ mockProvider mp adapter =
             Just chatResponse -> pure $ Right chatResponse
     }
 
-streamChatLoopMain :: Bool -> (Agent, ModelWithFallbacks, RuntimeArgs) -> [Text] -> IO ()
+streamChatLoopMain :: Bool -> (Agent, ModelWithFallbacks, ToolMap, RuntimeArgs) -> [Text] -> IO ()
 streamChatLoopMain stream env prompts = do
   putStrLn "\n=== Ollama (with Claude  and Gemini fallbacks) ==="
   _ <- streamChatLoop stream env prompts
   pure ()
 
-streamChatLoop :: Bool -> (Agent, ModelWithFallbacks, RuntimeArgs) -> [Text] -> IO [Turn]
-streamChatLoop stream (agent, models, rt) = aux emptyUsage []
+streamChatLoop :: Bool -> (Agent, ModelWithFallbacks, ToolMap, RuntimeArgs) -> [Text] -> IO [Turn]
+streamChatLoop stream (agent, models, toolMap, rt) = aux emptyUsage []
   where
     aux _totalUsage conv [] = do
       return conv
     aux totalUsage conv (prompt : rest) = do
       let conv' = conv ++ [UserTurn prompt]
-      result <- if stream then streamText (const (pure ())) agent models rt conv' else generateText agent models rt conv'
+      result <- if stream then streamText (const (pure ())) agent models toolMap rt conv' else generateText agent models toolMap rt conv'
       case result of
         Left (GenerateErrorResult {gerError = err}) -> do
           print err

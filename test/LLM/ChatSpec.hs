@@ -3,6 +3,7 @@
 module LLM.ChatSpec (spec) where
 
 import Data.Aeson (object, (.=))
+import Data.Map qualified as Map
 import Data.Text (Text)
 import Heptapod (generate)
 import LLM.Agent.Events (noEventObserver)
@@ -11,6 +12,7 @@ import LLM.Agent.Types
   ( Agent (..),
     RuntimeArgs (..),
     Tool (..),
+    ToolMap,
   )
 import LLM.Core.Abort (AbortSignal, abort, newAbortSignal)
 import LLM.Core.Types
@@ -20,9 +22,9 @@ import LLM.Core.Types
     LLMError (..),
     LLMGateway (..),
     LLMHooks (..),
-    mkToolCall,
     ToolDef (ToolDef, toolDescription, toolName, toolParameters, toolReadonly),
     Turn (..),
+    mkToolCall,
   )
 import LLM.Core.Usage (PricingInfo (..), Usage (Usage))
 import LLM.Generate.Logger (noHooks)
@@ -119,7 +121,6 @@ defaultAgent =
     { agName = "test",
       agSystemPrompt = Nothing,
       agTools = [],
-      agUTools = [],
       agMaxToolRounds = 10,
       agContextWindow = Nothing
     }
@@ -145,20 +146,22 @@ mkRuntime mSig = do
 runGenerate ::
   Agent ->
   ModelWithFallbacks ->
+  ToolMap ->
   Maybe AbortSignal ->
   [Turn] ->
   IO (Either GenerateErrorResult GenerateTextResult)
-runGenerate agent models mSig turns = do
+runGenerate agent models toolMap mSig turns = do
   rt <- mkRuntime mSig
-  generateText agent models rt turns
+  generateText agent models toolMap rt turns
 
 spec :: Spec
 spec = describe "Chat" $ do
+  let toolMap = Map.fromList [("get_weather", weatherTool)]
   describe "generateText" $ do
     it "returns text for a simple response" $ do
       let gw = mockGateway (ChatResponse "Hi there!" [TextBlock "Hi there!"] (Just (Usage 10 5 0)) Nothing)
           models = ModelWithFallbacks (mockModel gw) []
-      result <- runGenerate defaultAgent models Nothing [UserTurn "hello"]
+      result <- runGenerate defaultAgent models toolMap Nothing [UserTurn "hello"]
       case result of
         Right r -> do
           r.gtrText `shouldBe` "Hi there!"
@@ -169,15 +172,15 @@ spec = describe "Chat" $ do
     it "propagates errors" $ do
       let gw = mockErrorGateway (HttpError 500 "internal error")
           models = ModelWithFallbacks (mockModel gw) []
-      result <- runGenerate defaultAgent models Nothing [UserTurn "hello"]
+      result <- runGenerate defaultAgent models toolMap Nothing [UserTurn "hello"]
       case result of
         Left GenerateErrorResult {gerError = GErrLLM (HttpError 500 _)} -> pure ()
         other -> expectationFailure $ "Expected HttpError 500, got: " <> show other
 
     it "handles tool call loop" $ do
-      let agent = defaultAgent {agTools = [weatherTool]}
+      let agent = defaultAgent {agTools = ["get_weather"]}
           models = ModelWithFallbacks (mockModel mockToolGateway) []
-      result <- runGenerate agent models Nothing [UserTurn "weather in london?"]
+      result <- runGenerate agent models toolMap Nothing [UserTurn "weather in london?"]
       case result of
         Right r -> do
           r.gtrText `shouldBe` "The weather is sunny."
@@ -196,9 +199,9 @@ spec = describe "Chat" $ do
                 gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing),
                 gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
               }
-          agent = defaultAgent {agMaxToolRounds = 2, agTools = [weatherTool]}
+          agent = defaultAgent {agMaxToolRounds = 2, agTools = ["get_weather"]}
           models = ModelWithFallbacks (mockModel infiniteToolGateway) []
-      result <- runGenerate agent models Nothing [UserTurn "test"]
+      result <- runGenerate agent models toolMap Nothing [UserTurn "test"]
       case result of
         Left GenerateErrorResult {gerError = GErrToolExceeded} -> pure ()
         other -> expectationFailure $ "Expected GErrToolExceeded, got: " <> show other
@@ -207,7 +210,7 @@ spec = describe "Chat" $ do
       let failGw = mockErrorGateway (HttpError 503 "service unavailable")
           okGw = mockGateway (ChatResponse "Fallback worked!" [TextBlock "Fallback worked!"] (Just (Usage 10 5 0)) Nothing)
           models = ModelWithFallbacks (mockModel failGw) [mockModel okGw]
-      result <- runGenerate defaultAgent models Nothing [UserTurn "hello"]
+      result <- runGenerate defaultAgent models toolMap Nothing [UserTurn "hello"]
       case result of
         Right r -> r.gtrText `shouldBe` "Fallback worked!"
         Left err -> expectationFailure $ "Expected fallback success, got: " <> show err
@@ -216,7 +219,7 @@ spec = describe "Chat" $ do
       let failGw = mockErrorGateway (HttpError 400 "bad request")
           okGw = mockGateway (ChatResponse "Fallback worked!" [TextBlock "Fallback worked!"] (Just (Usage 10 5 0)) Nothing)
           models = ModelWithFallbacks (mockModel failGw) [mockModel okGw]
-      result <- runGenerate defaultAgent models Nothing [UserTurn "hello"]
+      result <- runGenerate defaultAgent models toolMap Nothing [UserTurn "hello"]
       case result of
         Right r -> r.gtrText `shouldBe` "Fallback worked!"
         Left err -> expectationFailure $ "Expected fallback success, got: " <> show err
@@ -225,7 +228,7 @@ spec = describe "Chat" $ do
       let failGw1 = mockErrorGateway (HttpError 503 "service unavailable")
           failGw2 = mockErrorGateway (HttpError 400 "bad request")
           models = ModelWithFallbacks (mockModel failGw1) [mockModel failGw2]
-      result <- runGenerate defaultAgent models Nothing [UserTurn "hello"]
+      result <- runGenerate defaultAgent models toolMap Nothing [UserTurn "hello"]
       case result of
         Left GenerateErrorResult {gerError = GErrLLM (HttpError 400 _)} -> pure ()
         other -> expectationFailure $ "Expected HttpError 400 from last model, got: " <> show other
@@ -235,7 +238,7 @@ spec = describe "Chat" $ do
           models = ModelWithFallbacks (mockModel gw) []
       sig <- newAbortSignal
       abort sig
-      result <- runGenerate defaultAgent models (Just sig) [UserTurn "hello"]
+      result <- runGenerate defaultAgent models toolMap (Just sig) [UserTurn "hello"]
       case result of
         Left GenerateErrorResult {gerError = GErrAborted} -> pure ()
         other -> expectationFailure $ "Expected GErrAborted, got: " <> show other
@@ -265,9 +268,10 @@ spec = describe "Chat" $ do
                 gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing),
                 gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
               }
-          agent = defaultAgent {agTools = [slowTool]}
+          tm = Map.fromList [("slow", slowTool)]
+          agent = defaultAgent {agTools = ["slow"]}
           models = ModelWithFallbacks (mockModel twoCallGw) []
-      result <- runGenerate agent models (Just sig) [UserTurn "go"]
+      result <- runGenerate agent models tm (Just sig) [UserTurn "go"]
       case result of
         Left GenerateErrorResult {gerError = GErrAborted} -> pure ()
         other -> expectationFailure $ "Expected GErrAborted during tools, got: " <> show other
@@ -278,7 +282,7 @@ spec = describe "Chat" $ do
           models = ModelWithFallbacks (mockModel gw) [mockModel okGw]
       sig <- newAbortSignal
       abort sig
-      result <- runGenerate defaultAgent models (Just sig) [UserTurn "hello"]
+      result <- runGenerate defaultAgent models Map.empty (Just sig) [UserTurn "hello"]
       case result of
         Left GenerateErrorResult {gerError = GErrAborted} -> pure ()
         other -> expectationFailure $ "Expected GErrAborted (no fallback), got: " <> show other

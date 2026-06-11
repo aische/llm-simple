@@ -10,8 +10,8 @@ import LLM.Core.Types
     ThinkingMode (..),
     Turn (..),
     deepSeekMessageEncodeOptions,
-    mkToolCall,
     defaultMessageEncodeOptions,
+    mkToolCall,
   )
 import LLM.Providers.DeepSeek (deepSeekBuildBodyPairs)
 import LLM.Providers.OpenAI (encodeTurn, parseOpenAIResponse)
@@ -35,9 +35,9 @@ spec = describe "DeepSeek thinking mode" $ do
       lookupText "reasoning_content" msg `shouldBe` Nothing
 
   describe "request body" $ do
-    it "enables thinking by default" $ do
+    it "disables thinking by default" $ do
       let body = object (deepSeekBuildBodyPairs False sampleRequest)
-      nestedText ["thinking", "type"] body `shouldBe` Just "enabled"
+      nestedText ["thinking", "type"] body `shouldBe` Just "disabled"
 
     it "supports explicit thinking configuration" $ do
       let req =

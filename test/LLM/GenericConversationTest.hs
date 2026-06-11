@@ -1,5 +1,6 @@
 module LLM.GenericConversationTest (createSpec, GenericConversationTextOps (..)) where
 
+import Data.Map qualified as Map
 import Data.Text qualified as T
 import Heptapod (generate)
 import LLM (LLMHooks (..))
@@ -28,6 +29,8 @@ data GenericConversationTextOps = GenericConversationTextOps
 
 createSpec :: GenericConversationTextOps -> Spec
 createSpec opts = describe opts.specTitle $ do
+  let toolMap = Map.fromList [("get_weather", toTool weatherToolTyped)]
+
   it "generateText" $ do
     (m, p) <- loadRecordedConversation opts.filePathGenerated
     uuid1 <- generate
@@ -51,9 +54,8 @@ createSpec opts = describe opts.specTitle $ do
             { agName = "test",
               agSystemPrompt = Just systemPrompt,
               agTools =
-                [ toTool weatherToolTyped
+                [ "get_weather"
                 ],
-              agUTools = [],
               agMaxToolRounds = 3,
               agContextWindow = Nothing
             }
@@ -67,7 +69,7 @@ createSpec opts = describe opts.specTitle $ do
               rtOnEvent = noEventObserver,
               rtReadonly = False
             }
-    turns <- streamChatLoop False (agent, models, rt) p
+    turns <- streamChatLoop False (agent, models, toolMap, rt) p
     length turns `shouldBe` 8
 
   it "streamText" $ do
@@ -93,8 +95,7 @@ createSpec opts = describe opts.specTitle $ do
           Agent
             { agName = "test",
               agSystemPrompt = Just systemPrompt,
-              agTools = [toTool weatherToolTyped],
-              agUTools = [],
+              agTools = ["get_weather"],
               agMaxToolRounds = 3,
               agContextWindow = Nothing
             }
@@ -112,5 +113,5 @@ createSpec opts = describe opts.specTitle $ do
               rtOnEvent = noEventObserver,
               rtReadonly = False
             }
-    turns <- streamChatLoop True (agent, models, runtime) p
+    turns <- streamChatLoop True (agent, models, toolMap, runtime) p
     length turns `shouldBe` 8

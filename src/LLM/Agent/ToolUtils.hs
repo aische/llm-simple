@@ -18,6 +18,7 @@ import Control.Exception (SomeException, try)
 import Data.Aeson (FromJSON)
 import Data.Aeson qualified as AE
 import Data.Map qualified as Map
+import Data.Text (Text)
 import Data.Text qualified as T
 import LLM.Agent.Tools.HistoryTool (historyToolTyped)
 import LLM.Agent.Types
@@ -153,7 +154,14 @@ createGenRequest agent toolMap rt messages =
         }
 
 getResolvedTools :: Agent -> ToolMap -> RuntimeArgs -> [Tool]
-getResolvedTools agent toolMap rt = filterReadonlyTools rt.rtReadonly (Map.elems toolMap) ++ getHistoryTool agent
+getResolvedTools agent toolMap rt = filterReadonlyTools rt.rtReadonly (getToolsFromMap toolMap agent.agTools) ++ getHistoryTool agent
+
+getToolsFromMap :: ToolMap -> [Text] -> [Tool]
+getToolsFromMap toolMap toolNames = toolNames >>= lookupTool
+  where
+    lookupTool name = case Map.lookup name toolMap of
+      Just tool -> [tool]
+      Nothing -> []
 
 getHistoryTool :: Agent -> [Tool]
 getHistoryTool agent = case agent.agContextWindow of

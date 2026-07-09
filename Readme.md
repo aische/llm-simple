@@ -1,18 +1,193 @@
 # llm-simple
 
-experimental library for talking to LLMs. _Work in progress, POC level. This Readme might be outdated already._
+Experimental Haskell library for talking to LLMs: multi-provider gateways, model fallbacks, agent tool loops, structured output, and built-in filesystem tools.
 
-folders/sub-packages:
+**Status:** work in progress / proof of concept. APIs may change; this README may lag behind the code.
 
-- Core: Basic types and functions for creating LLMGateways for different providers
-- Providers:
-    - ollama
-    - claude
-    - gemini
-    - openai
-    - deepseek
-- Tools: collection of file system tools
-- Load: loading model catalog from json file, initializing providers with API keys
-- Generate: single-request generateTextWithFallbacks, streamTextWithFallbacks, genObject, genObjectUntyped (no tools), all with model fallback logic, timeout etc
-- Agent: generateText, streamText (agent loops with tool execution).
-- Workflow removed / moved to different repo
+## Features
+
+- **Providers:** OpenAI, Claude, Gemini, Ollama, DeepSeek
+- **Generate:** single-request text, streaming, and structured object generation with model fallbacks, timeouts, retries, and throttling
+- **Agent:** multi-round tool loops (`generateText`, `streamText`, `generateObject`)
+- **Tools:** filesystem tool suite with workspace sandboxing
+- **Load:** JSON model catalog and API-key gateway initialization
+- **Observability:** hooks, logging, and generation lifecycle events
+
+## Install
+
+```bash
+cabal build
+```
+
+Requires GHC with `GHC2021` (see `llm-simple.cabal`).
+
+## Quick start
+
+1. Create a `.env` file with API keys for the providers you use:
+
+```env
+OPENAI_API_KEY=...
+CLAUDE_API_KEY=...
+GEMINI_API_KEY=...
+DEEPSEEK_API_KEY=...
+```
+
+Ollama needs no API key. Keys are read from the environment; `.env` is loaded automatically when gateways are initialized.
+
+2. Configure models in `model-catalog.json` (a bundled example is included).
+
+3. Create a workspace directory for filesystem tools (the example uses `./user-workspace/`).
+
+4. Run the example executable:
+
+```bash
+cabal run llm-simple
+```
+
+The example loads models from the catalog, wires up filesystem tools, and runs a small agent that asks about files in the workspace.
+
+## Configuration
+
+### Model catalog
+
+Models are defined in a JSON array. Each entry maps a logical config name to a provider and model, plus runtime settings:
+
+| Field | Description |
+|-------|-------------|
+| `modelConfigName` | Name used in code to look up this config |
+| `providerName` | `"openai"`, `"claude"`, `"gemini"`, `"ollama"`, or `"deepseek"` |
+| `modelName` | Provider-specific model identifier |
+| `pricing` | `pricePerMillionInput` / `pricePerMillionOutput` for usage cost tracking |
+| `maxTokens` | Max tokens per request |
+| `temperature` | Sampling temperature (optional) |
+| `requestTimeout` | Request timeout in ms (optional) |
+| `throttleDelay` | Delay between requests in ms (optional) |
+| `retryCount` | Number of retries on failure |
+| `jitterBackoff` | Backoff jitter in ms between retries |
+| `thinking` | Extended thinking effort level (optional, provider-dependent) |
+
+A provider is only available if its API key is set (except Ollama, which is always available).
+
+### Loading models
+
+```haskell
+(gemini, deepseek) <-
+  loadModelsOrThrow "./model-catalog.json" ("gemini_2_5_flash", "deepseek4flash")
+
+let models = ModelWithFallbacks { mwfModel = gemini, mwfFallbacks = [deepseek] }
+```
+
+`loadModelsOrThrow` takes a filepath and a tuple of config names, returning a tuple of `ModelConfig` values. Use `loadModelOrThrow` for a single model.
+
+## Usage
+
+### Agent with tools
+
+An agent runs a loop: the model may call tools, results are fed back, and the loop continues until the model finishes or `agMaxToolRounds` is reached.
+
+```haskell
+import Heptapod (generate)
+import LLM.Agent
+import LLM.Core (Turn (UserTurn))
+import LLM.Generate (ModelWithFallbacks (..), defaultDebugHooks, llmHooks)
+import LLM.Load (fsTools, loadModelsOrThrow)
+
+main :: IO ()
+main = do
+  (gemini, deepseek) <-
+    loadModelsOrThrow "./model-catalog.json" ("gemini_2_5_flash", "deepseek4flash")
+
+  let models = ModelWithFallbacks { mwfModel = gemini, mwfFallbacks = [deepseek] }
+
+  toolMap <- fsTools "./user-workspace/"
+  genId <- generate
+
+  let agent =
+        Agent
+          { agName = "friendly-assistant",
+            agSystemPrompt = Nothing,
+            agTools = ["directory_tree"],
+            agMaxToolRounds = 10,
+            agContextWindow = Nothing
+          }
+      rt =
+        RuntimeArgs
+          { rtGenerationId = genId,
+            rtAbortSignal = Nothing,
+            rtLLMHooks = llmHooks defaultDebugHooks,
+            rtHooks = defaultDebugHooks,
+            rtOnEvent = noEventObserver,
+            rtReadonly = False
+          }
+
+  r <- generateText agent models toolMap rt [UserTurn "what files are here?"]
+  print r
+```
+
+Set `rtReadonly = True` to prevent mutating filesystem tools from making changes.
+
+### Single request (no agent loop)
+
+For one-shot generation without a tool loop, use the Generate layer directly:
+
+```haskell
+import LLM.Generate (GenRequest (..), generateTextWithFallbacks)
+
+result <- generateTextWithFallbacks genRequest models
+```
+
+Also available: `streamTextWithFallbacks`, `genObject`, and `genObjectUntyped`.
+
+### Custom tools
+
+Define a `Tool` with a `ToolDef` (sent to the model) and an execution function, then add it to a `ToolMap`. Use `toTool` to convert typed tool definitions. See `LLM.Agent.ToolUtils` and the modules under `LLM.Tools`.
+
+## Built-in filesystem tools
+
+`fsTools` registers these tools, all scoped to a workspace root:
+
+| Tool name | Purpose |
+|-----------|---------|
+| `copy_file` | Copy a file |
+| `create_directory` | Create a directory |
+| `directory_tree` | Show directory tree |
+| `file_info` | File metadata |
+| `find_files` | Find files by pattern |
+| `grep` | Search file contents |
+| `move_file` | Move/rename a file |
+| `multi_replace_in_file` | Multiple search-and-replace in one file |
+| `readdir` | List directory contents |
+| `read_file_paginated` | Read a file in pages |
+| `remove_directory` | Remove a directory |
+| `remove_file` | Remove a file |
+| `replace_in_file` | Search-and-replace in a file |
+| `writefile` | Write or overwrite a file |
+
+Use `fsTools'` to map tool results through a custom embedding function.
+
+## Module layout
+
+| Module | Purpose |
+|--------|---------|
+| `LLM.Core` | Types, gateways, provider interface, usage tracking |
+| `LLM.Providers` | Provider implementations (OpenAI, Claude, Gemini, Ollama, DeepSeek) |
+| `LLM.Generate` | Single-request generation with fallbacks (`generateTextWithFallbacks`, `streamTextWithFallbacks`, `genObject`) |
+| `LLM.Agent` | Agent loops with tool execution (`generateText`, `streamText`) |
+| `LLM.Tools` | Tool definitions (filesystem, weather, etc.) |
+| `LLM.Load` | Model catalog loading, gateway init, `fsTools` |
+
+Import everything from the top-level `LLM` module, or import sub-modules directly.
+
+**Note:** Workflow support was removed from this repo and moved elsewhere.
+
+## Testing
+
+```bash
+cabal test
+```
+
+Tests replay recorded provider responses from `test/fixtures/` so they run without live API calls.
+
+## License
+
+BSD-3-Clause. See [LICENSE](LICENSE).

@@ -2,6 +2,8 @@
 
 An experimental Haskell **LLM toolbox** for trying out providers, tool loops, and workspace agents locally. It is meant to get you from zero to a working agent quickly — not to be a production agent platform.
 
+The API stays small on purpose: a JSON model catalog, bundled filesystem tools, and a straight line from `loadModelOrThrow` to `generateText`. Under that surface you still get multi-provider gateways, fallbacks, streaming, structured output, and sandboxed workspace tools — enough to prototype and compare ideas without assembling the pieces yourself.
+
 **Status:** early 0.1.x release. APIs may change.
 
 ## Features

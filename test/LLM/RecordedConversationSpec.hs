@@ -2,6 +2,7 @@ module LLM.RecordedConversationSpec (spec) where
 
 import LLM.GenericConversationTest (GenericConversationTextOps (..), createSpec)
 import LLM.Providers.Claude (claudeProvider)
+import LLM.Providers.DeepSeek (deepSeekProvider)
 import LLM.Providers.Gemini (geminiProvider)
 import LLM.Providers.Ollama (ollamaProvider)
 import LLM.Providers.OpenAI (openAIProvider)
@@ -30,6 +31,12 @@ openAIConversationGeneratedFilePath = "./test/fixtures/openai-conversation-gener
 
 openAIConversationStreamedFilePath :: String
 openAIConversationStreamedFilePath = "./test/fixtures/openai-conversation-streamed.json"
+
+deepSeekConversationGeneratedFilePath :: String
+deepSeekConversationGeneratedFilePath = "./test/fixtures/deepseek-conversation-generated.json"
+
+deepSeekConversationStreamedFilePath :: String
+deepSeekConversationStreamedFilePath = "./test/fixtures/deepseek-conversation-streamed.json"
 
 spec :: SpecWith ()
 spec =
@@ -62,3 +69,10 @@ spec =
         "gpt-4.1-2025-04-14"
         openAIConversationGeneratedFilePath
         openAIConversationStreamedFilePath
+    createSpec $
+      GenericConversationTextOps
+        "DeepSeek"
+        (deepSeekProvider "")
+        "deepseek-v4-flash"
+        deepSeekConversationGeneratedFilePath
+        deepSeekConversationStreamedFilePath

@@ -14,6 +14,7 @@ import LLM.Generate.ModelConfig (ModelConfig (..), ModelWithFallbacks (ModelWith
 import LLM.TestKit
   ( loadRecordedConversation,
     mockProvider,
+    recordedConversationSystemPrompt,
     streamChatLoop,
   )
 import LLM.WeatherTool (weatherToolTyped)
@@ -48,7 +49,7 @@ createSpec opts = describe opts.specTitle $ do
               mcRetryCount = 3,
               mcJitterBackoff = 1_000
             }
-        systemPrompt = "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available."
+        systemPrompt = recordedConversationSystemPrompt
         agent :: Agent =
           Agent
             { agName = "test",
@@ -89,7 +90,7 @@ createSpec opts = describe opts.specTitle $ do
               mcRetryCount = 3,
               mcJitterBackoff = 1_000
             }
-        systemPrompt = "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available."
+        systemPrompt = recordedConversationSystemPrompt
         models = ModelWithFallbacks modelConf []
         agent =
           Agent

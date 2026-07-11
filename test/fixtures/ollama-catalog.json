@@ -1,0 +1,32 @@
+[
+    {
+        "modelConfigName": "llama_3_2",
+        "providerName": "ollama",
+        "modelName": "llama3.2:latest",
+        "pricing": {
+            "pricePerMillionInput": 0.0,
+            "pricePerMillionOutput": 0.0
+        },
+        "maxTokens": 1024,
+        "temperature": 0.5,
+        "requestTimeout": 3000,
+        "throttleDelay": 1000,
+        "retryCount": 3,
+        "jitterBackoff": 1000
+    },
+    {
+        "modelConfigName": "mistral",
+        "providerName": "ollama",
+        "modelName": "mistral:latest",
+        "pricing": {
+            "pricePerMillionInput": 0.0,
+            "pricePerMillionOutput": 0.0
+        },
+        "maxTokens": 1024,
+        "temperature": 0.5,
+        "requestTimeout": 3000,
+        "throttleDelay": 1000,
+        "retryCount": 3,
+        "jitterBackoff": 1000
+    }
+]

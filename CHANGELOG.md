@@ -27,7 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `formatSandboxViolation` for workspace-relative sandbox error messages.
 - `readBoundedTextFile` and `maxPaginatedFileBytes` filesystem resource limits.
 - DeepSeek recorded conversation fixtures and `record-conversation` executable.
-- Filesystem sandbox tests (`FsConfigSpec`, `FsLimitsSpec`, `ToolUtilsSpec`).
+- Filesystem sandbox tests (`FsConfigSpec`, `FsLimitsSpec`, `FsToolsSpec`, `ToolUtilsSpec`).
+- Load, streaming, history, and structured-output tests (`LoadSpec`, `StreamingSpec`, `HistoryToolSpec`, `GenerateObjectSpec`).
 
 ### Removed
 

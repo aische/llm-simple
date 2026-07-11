@@ -216,6 +216,11 @@ test-suite llm-simple-test
                         LLM.DeepSeekSpec
                         LLM.FsConfigSpec
                         LLM.FsLimitsSpec
+                        LLM.FsToolsSpec
+                        LLM.LoadSpec
+                        LLM.StreamingSpec
+                        LLM.HistoryToolSpec
+                        LLM.GenerateObjectSpec
                         LLM.ToolUtilsSpec
                         LLM.TestKit
                         LLM.WeatherTool

@@ -12,7 +12,6 @@ cabal.project.local~
 .env
 dumps/
 .mydocs/
-.github/
 .vscode/
 .cursorrules
 .cursor/

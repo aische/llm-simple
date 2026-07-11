@@ -12,6 +12,7 @@ module LLM.TestKit
     recordConversation,
     writeRecordedConversation,
     mkRecordedConversationRuntime,
+    recordedDeepSeekThinking,
   )
 where
 
@@ -31,7 +32,7 @@ import LLM.Agent.Generate (generateText, streamText)
 import LLM.Agent.ToolUtils (toTool)
 import LLM.Agent.Types (Agent (..), RuntimeArgs (..), ToolMap)
 import LLM.Core.LLMProvider (LLMProvider (..))
-import LLM.Core.Types (LLMGateway, Turn (..))
+import LLM.Core.Types (LLMGateway, ThinkingMode (..), Turn (..))
 import LLM.Core.Usage (PricingInfo (..), addUsage, emptyUsage)
 import LLM.Core.Utils (parseChatResponse)
 import LLM.Generate.GenerateUtils (llmHooks)
@@ -63,6 +64,9 @@ recordedConversationPrompts =
 recordedConversationSystemPrompt :: Text
 recordedConversationSystemPrompt =
   "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available."
+
+recordedDeepSeekThinking :: ThinkingMode
+recordedDeepSeekThinking = ThinkingMode {tmEnabled = True, tmEffort = Nothing}
 
 readMockRequestResponse :: FilePath -> IO (Maybe MockConversation)
 readMockRequestResponse = decodeFileStrict
@@ -126,11 +130,12 @@ streamChatLoop stream (agent, models, toolMap, rt) = aux emptyUsage []
 mkRecordedConversationRuntime ::
   LLMGateway ->
   Text ->
+  Maybe ThinkingMode ->
   IORef (Maybe Text) ->
   IORef (Maybe Value) ->
   IORef [MockRequestResponse] ->
   IO (Agent, ModelWithFallbacks, ToolMap Text, RuntimeArgs)
-mkRecordedConversationRuntime gateway modelName promptRef pendingRef entriesRef = do
+mkRecordedConversationRuntime gateway modelName thinking promptRef pendingRef entriesRef = do
   genId <- generate
   let hooks = recordingHooks promptRef pendingRef entriesRef
       agent =
@@ -148,7 +153,7 @@ mkRecordedConversationRuntime gateway modelName promptRef pendingRef entriesRef 
             mcPricing = PricingInfo {pricePerMillionInput = 0.0, pricePerMillionOutput = 0.0},
             mcMaxTokens = 1024,
             mcTemperature = Nothing,
-            mcThinking = Nothing,
+            mcThinking = thinking,
             mcRequestTimeout = Nothing,
             mcThrottleDelay = Nothing,
             mcRetryCount = 3,
@@ -167,12 +172,12 @@ mkRecordedConversationRuntime gateway modelName promptRef pendingRef entriesRef 
           }
   pure (agent, models, toolMap, rt)
 
-recordConversation :: Bool -> LLMGateway -> Text -> FilePath -> IO MockConversation
-recordConversation stream gateway modelName outPath = do
+recordConversation :: Bool -> LLMGateway -> Text -> Maybe ThinkingMode -> FilePath -> IO MockConversation
+recordConversation stream gateway modelName thinking outPath = do
   promptRef <- newIORef Nothing
   pendingRef <- newIORef Nothing
   entriesRef <- newIORef []
-  env <- mkRecordedConversationRuntime gateway modelName promptRef pendingRef entriesRef
+  env <- mkRecordedConversationRuntime gateway modelName thinking promptRef pendingRef entriesRef
   turns <- recordStreamChatLoop stream promptRef env recordedConversationPrompts
   entries <- readIORef entriesRef
   let conversation = reverse entries

@@ -8,6 +8,7 @@ import LLM.Agent.Events (noEventObserver)
 import LLM.Agent.ToolUtils (toTool)
 import LLM.Agent.Types (Agent (..), RuntimeArgs (..))
 import LLM.Core.LLMProvider (LLMProvider, toGateway)
+import LLM.Core.Types (LLMGateway, ThinkingMode (..))
 import LLM.Core.Usage (PricingInfo (..))
 import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig (ModelConfig (..), ModelWithFallbacks (ModelWithFallbacks))
@@ -24,9 +25,25 @@ data GenericConversationTextOps = GenericConversationTextOps
   { specTitle :: String,
     specProvider :: LLMProvider,
     modelName :: String,
+    specThinking :: Maybe ThinkingMode,
     filePathGenerated :: String,
     filePathStreamed :: String
   }
+
+mkModelConfig :: GenericConversationTextOps -> LLMGateway -> ModelConfig
+mkModelConfig opts provider =
+  ModelConfig
+    { mcGateway = provider,
+      mcModel = T.pack opts.modelName,
+      mcPricing = PricingInfo {pricePerMillionInput = 0.0, pricePerMillionOutput = 0.0},
+      mcMaxTokens = 1024,
+      mcTemperature = Nothing,
+      mcThinking = opts.specThinking,
+      mcRequestTimeout = Nothing,
+      mcThrottleDelay = Nothing,
+      mcRetryCount = 3,
+      mcJitterBackoff = 1_000
+    }
 
 createSpec :: GenericConversationTextOps -> Spec
 createSpec opts = describe opts.specTitle $ do
@@ -36,19 +53,7 @@ createSpec opts = describe opts.specTitle $ do
     (m, p) <- loadRecordedConversation opts.filePathGenerated
     uuid1 <- generate
     let provider = toGateway $ mockProvider m opts.specProvider
-        modelConf =
-          ModelConfig
-            { mcGateway = provider,
-              mcModel = T.pack opts.modelName,
-              mcPricing = PricingInfo {pricePerMillionInput = 0.0, pricePerMillionOutput = 0.0},
-              mcMaxTokens = 1024,
-              mcTemperature = Nothing,
-              mcThinking = Nothing,
-              mcRequestTimeout = Nothing,
-              mcThrottleDelay = Nothing,
-              mcRetryCount = 3,
-              mcJitterBackoff = 1_000
-            }
+        modelConf = mkModelConfig opts provider
         systemPrompt = recordedConversationSystemPrompt
         agent :: Agent =
           Agent
@@ -77,19 +82,7 @@ createSpec opts = describe opts.specTitle $ do
     (m, p) <- loadRecordedConversation opts.filePathStreamed
     uuid1 <- generate
     let provider = toGateway $ mockProvider m opts.specProvider
-        modelConf =
-          ModelConfig
-            { mcGateway = provider,
-              mcModel = T.pack opts.modelName,
-              mcPricing = PricingInfo {pricePerMillionInput = 0.0, pricePerMillionOutput = 0.0},
-              mcMaxTokens = 1024,
-              mcTemperature = Nothing,
-              mcThinking = Nothing,
-              mcRequestTimeout = Nothing,
-              mcThrottleDelay = Nothing,
-              mcRetryCount = 3,
-              mcJitterBackoff = 1_000
-            }
+        modelConf = mkModelConfig opts provider
         systemPrompt = recordedConversationSystemPrompt
         models = ModelWithFallbacks modelConf []
         agent =

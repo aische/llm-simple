@@ -15,204 +15,7 @@
             ],
             "model": "deepseek-v4-flash",
             "thinking": {
-                "type": "disabled"
-            },
-            "tools": [
-                {
-                    "function": {
-                        "description": "Get the current weather for a given location",
-                        "name": "get_weather",
-                        "parameters": {
-                            "$comment": "WeatherToolArgs",
-                            "properties": {
-                                "location": {
-                                    "$comment": "City name, e.g. London",
-                                    "type": "string"
-                                }
-                            },
-                            "required": [
-                                "location"
-                            ],
-                            "type": "object"
-                        }
-                    },
-                    "type": "function"
-                }
-            ]
-        },
-        "response": {
-            "choices": [
-                {
-                    "finish_reason": "tool_calls",
-                    "index": 0,
-                    "logprobs": null,
-                    "message": {
-                        "content": "Let me check the current weather in London for you!",
-                        "role": "assistant",
-                        "tool_calls": [
-                            {
-                                "function": {
-                                    "arguments": "{\"location\": \"London\"}",
-                                    "name": "get_weather"
-                                },
-                                "id": "call_00_rVi32QwQMaQ7V2Kv6t677165",
-                                "index": 0,
-                                "type": "function"
-                            }
-                        ]
-                    }
-                }
-            ],
-            "created": 1783770800,
-            "id": "65f22808-317e-47fb-8e41-2a3bd55e55d3",
-            "model": "deepseek-v4-flash",
-            "object": "chat.completion",
-            "system_fingerprint": "fp_8b330d02d0_prod0820_fp8_kvcache_20260402",
-            "usage": {
-                "completion_tokens": 55,
-                "prompt_cache_hit_tokens": 0,
-                "prompt_cache_miss_tokens": 336,
-                "prompt_tokens": 336,
-                "prompt_tokens_details": {
-                    "cached_tokens": 0
-                },
-                "total_tokens": 391
-            }
-        }
-    },
-    {
-        "prompt": null,
-        "request": {
-            "max_tokens": 1024,
-            "messages": [
-                {
-                    "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
-                    "role": "system"
-                },
-                {
-                    "content": "how's the weather in london?",
-                    "role": "user"
-                },
-                {
-                    "content": "Let me check the current weather in London for you!",
-                    "role": "assistant",
-                    "tool_calls": [
-                        {
-                            "function": {
-                                "arguments": "{\"location\":\"London\"}",
-                                "name": "get_weather"
-                            },
-                            "id": "call_00_rVi32QwQMaQ7V2Kv6t677165",
-                            "type": "function"
-                        }
-                    ]
-                },
-                {
-                    "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
-                    "role": "tool",
-                    "tool_call_id": "call_00_rVi32QwQMaQ7V2Kv6t677165"
-                }
-            ],
-            "model": "deepseek-v4-flash",
-            "thinking": {
-                "type": "disabled"
-            },
-            "tools": [
-                {
-                    "function": {
-                        "description": "Get the current weather for a given location",
-                        "name": "get_weather",
-                        "parameters": {
-                            "$comment": "WeatherToolArgs",
-                            "properties": {
-                                "location": {
-                                    "$comment": "City name, e.g. London",
-                                    "type": "string"
-                                }
-                            },
-                            "required": [
-                                "location"
-                            ],
-                            "type": "object"
-                        }
-                    },
-                    "type": "function"
-                }
-            ]
-        },
-        "response": {
-            "choices": [
-                {
-                    "finish_reason": "stop",
-                    "index": 0,
-                    "logprobs": null,
-                    "message": {
-                        "content": "The weather in London is currently **partly cloudy** with a temperature of **18°C**. There's a **light breeze** coming from the west. It feels like a mild and pleasant day!",
-                        "role": "assistant"
-                    }
-                }
-            ],
-            "created": 1783770801,
-            "id": "1952765b-4235-46fb-8ab5-1726be463855",
-            "model": "deepseek-v4-flash",
-            "object": "chat.completion",
-            "system_fingerprint": "fp_8b330d02d0_prod0820_fp8_kvcache_20260402",
-            "usage": {
-                "completion_tokens": 41,
-                "prompt_cache_hit_tokens": 256,
-                "prompt_cache_miss_tokens": 163,
-                "prompt_tokens": 419,
-                "prompt_tokens_details": {
-                    "cached_tokens": 256
-                },
-                "total_tokens": 460
-            }
-        }
-    },
-    {
-        "prompt": "and in paris?",
-        "request": {
-            "max_tokens": 1024,
-            "messages": [
-                {
-                    "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
-                    "role": "system"
-                },
-                {
-                    "content": "how's the weather in london?",
-                    "role": "user"
-                },
-                {
-                    "content": "Let me check the current weather in London for you!",
-                    "role": "assistant",
-                    "tool_calls": [
-                        {
-                            "function": {
-                                "arguments": "{\"location\":\"London\"}",
-                                "name": "get_weather"
-                            },
-                            "id": "call_00_rVi32QwQMaQ7V2Kv6t677165",
-                            "type": "function"
-                        }
-                    ]
-                },
-                {
-                    "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
-                    "role": "tool",
-                    "tool_call_id": "call_00_rVi32QwQMaQ7V2Kv6t677165"
-                },
-                {
-                    "content": "The weather in London is currently **partly cloudy** with a temperature of **18°C**. There's a **light breeze** coming from the west. It feels like a mild and pleasant day!",
-                    "role": "assistant"
-                },
-                {
-                    "content": "and in paris?",
-                    "role": "user"
-                }
-            ],
-            "model": "deepseek-v4-flash",
-            "thinking": {
-                "type": "disabled"
+                "type": "enabled"
             },
             "tools": [
                 {
@@ -245,14 +48,15 @@
                     "logprobs": null,
                     "message": {
                         "content": "",
+                        "reasoning_content": "The user is asking about the weather in London. I can use the get_weather tool to answer this question.",
                         "role": "assistant",
                         "tool_calls": [
                             {
                                 "function": {
-                                    "arguments": "{\"location\": \"Paris\"}",
+                                    "arguments": "{\"location\": \"London\"}",
                                     "name": "get_weather"
                                 },
-                                "id": "call_00_MuT5O36e41IAW2DWoQdb9113",
+                                "id": "call_00_Rx8k7TxPUlsbOoGFTqVR6618",
                                 "index": 0,
                                 "type": "function"
                             }
@@ -260,20 +64,23 @@
                     }
                 }
             ],
-            "created": 1783770802,
-            "id": "fb4de35c-c0cf-4ba2-93b8-4dd1ad8f7745",
+            "created": 1783771054,
+            "id": "86881337-9981-4093-b08b-c6bb828f51ef",
             "model": "deepseek-v4-flash",
             "object": "chat.completion",
             "system_fingerprint": "fp_8b330d02d0_prod0820_fp8_kvcache_20260402",
             "usage": {
-                "completion_tokens": 44,
-                "prompt_cache_hit_tokens": 384,
-                "prompt_cache_miss_tokens": 85,
-                "prompt_tokens": 469,
-                "prompt_tokens_details": {
-                    "cached_tokens": 384
+                "completion_tokens": 68,
+                "completion_tokens_details": {
+                    "reasoning_tokens": 23
                 },
-                "total_tokens": 513
+                "prompt_cache_hit_tokens": 256,
+                "prompt_cache_miss_tokens": 80,
+                "prompt_tokens": 336,
+                "prompt_tokens_details": {
+                    "cached_tokens": 256
+                },
+                "total_tokens": 404
             }
         }
     },
@@ -291,7 +98,7 @@
                     "role": "user"
                 },
                 {
-                    "content": "Let me check the current weather in London for you!",
+                    "reasoning_content": "The user is asking about the weather in London. I can use the get_weather tool to answer this question.",
                     "role": "assistant",
                     "tool_calls": [
                         {
@@ -299,7 +106,7 @@
                                 "arguments": "{\"location\":\"London\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_00_rVi32QwQMaQ7V2Kv6t677165",
+                            "id": "call_00_Rx8k7TxPUlsbOoGFTqVR6618",
                             "type": "function"
                         }
                     ]
@@ -307,38 +114,12 @@
                 {
                     "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
                     "role": "tool",
-                    "tool_call_id": "call_00_rVi32QwQMaQ7V2Kv6t677165"
-                },
-                {
-                    "content": "The weather in London is currently **partly cloudy** with a temperature of **18°C**. There's a **light breeze** coming from the west. It feels like a mild and pleasant day!",
-                    "role": "assistant"
-                },
-                {
-                    "content": "and in paris?",
-                    "role": "user"
-                },
-                {
-                    "role": "assistant",
-                    "tool_calls": [
-                        {
-                            "function": {
-                                "arguments": "{\"location\":\"Paris\"}",
-                                "name": "get_weather"
-                            },
-                            "id": "call_00_MuT5O36e41IAW2DWoQdb9113",
-                            "type": "function"
-                        }
-                    ]
-                },
-                {
-                    "content": "Weather in Paris is sunny, 23°C, no wind.",
-                    "role": "tool",
-                    "tool_call_id": "call_00_MuT5O36e41IAW2DWoQdb9113"
+                    "tool_call_id": "call_00_Rx8k7TxPUlsbOoGFTqVR6618"
                 }
             ],
             "model": "deepseek-v4-flash",
             "thinking": {
-                "type": "disabled"
+                "type": "enabled"
             },
             "tools": [
                 {
@@ -370,25 +151,263 @@
                     "index": 0,
                     "logprobs": null,
                     "message": {
-                        "content": "The weather in Paris is **sunny** with a temperature of **23°C** and no wind. It's a bit warmer than London and a lovely day! ☀️",
+                        "content": "The weather in London is currently **partly cloudy** with a temperature of **18°C**. There's a **light breeze** coming from the west. Not too bad! 🌤️",
+                        "reasoning_content": "I have the weather information for London. Let me share it with the user.",
                         "role": "assistant"
                     }
                 }
             ],
-            "created": 1783770804,
-            "id": "bdd9d207-329b-452d-98ad-0a2bd7793846",
+            "created": 1783771055,
+            "id": "aa2e01d5-7e2f-441d-a51e-67dba6def0f5",
             "model": "deepseek-v4-flash",
             "object": "chat.completion",
             "system_fingerprint": "fp_8b330d02d0_prod0820_fp8_kvcache_20260402",
             "usage": {
-                "completion_tokens": 37,
+                "completion_tokens": 56,
+                "completion_tokens_details": {
+                    "reasoning_tokens": 16
+                },
+                "prompt_cache_hit_tokens": 384,
+                "prompt_cache_miss_tokens": 49,
+                "prompt_tokens": 433,
+                "prompt_tokens_details": {
+                    "cached_tokens": 384
+                },
+                "total_tokens": 489
+            }
+        }
+    },
+    {
+        "prompt": "and in paris?",
+        "request": {
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+                    "role": "system"
+                },
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "reasoning_content": "The user is asking about the weather in London. I can use the get_weather tool to answer this question.",
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "{\"location\":\"London\"}",
+                                "name": "get_weather"
+                            },
+                            "id": "call_00_Rx8k7TxPUlsbOoGFTqVR6618",
+                            "type": "function"
+                        }
+                    ]
+                },
+                {
+                    "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                    "role": "tool",
+                    "tool_call_id": "call_00_Rx8k7TxPUlsbOoGFTqVR6618"
+                },
+                {
+                    "content": "The weather in London is currently **partly cloudy** with a temperature of **18°C**. There's a **light breeze** coming from the west. Not too bad! 🌤️",
+                    "reasoning_content": "I have the weather information for London. Let me share it with the user.",
+                    "role": "assistant"
+                },
+                {
+                    "content": "and in paris?",
+                    "role": "user"
+                }
+            ],
+            "model": "deepseek-v4-flash",
+            "thinking": {
+                "type": "enabled"
+            },
+            "tools": [
+                {
+                    "function": {
+                        "description": "Get the current weather for a given location",
+                        "name": "get_weather",
+                        "parameters": {
+                            "$comment": "WeatherToolArgs",
+                            "properties": {
+                                "location": {
+                                    "$comment": "City name, e.g. London",
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "location"
+                            ],
+                            "type": "object"
+                        }
+                    },
+                    "type": "function"
+                }
+            ]
+        },
+        "response": {
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "index": 0,
+                    "logprobs": null,
+                    "message": {
+                        "content": "",
+                        "reasoning_content": "The user is asking about the weather in Paris. Let me get that information.",
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "function": {
+                                    "arguments": "{\"location\": \"Paris\"}",
+                                    "name": "get_weather"
+                                },
+                                "id": "call_00_1PYplGFNtKGlcxKaWG299040",
+                                "index": 0,
+                                "type": "function"
+                            }
+                        ]
+                    }
+                }
+            ],
+            "created": 1783771056,
+            "id": "87b805ea-a0bb-4a9d-8c98-5b2136a56fae",
+            "model": "deepseek-v4-flash",
+            "object": "chat.completion",
+            "system_fingerprint": "fp_8b330d02d0_prod0820_fp8_kvcache_20260402",
+            "usage": {
+                "completion_tokens": 61,
+                "completion_tokens_details": {
+                    "reasoning_tokens": 16
+                },
+                "prompt_cache_hit_tokens": 384,
+                "prompt_cache_miss_tokens": 114,
+                "prompt_tokens": 498,
+                "prompt_tokens_details": {
+                    "cached_tokens": 384
+                },
+                "total_tokens": 559
+            }
+        }
+    },
+    {
+        "prompt": null,
+        "request": {
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+                    "role": "system"
+                },
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "reasoning_content": "The user is asking about the weather in London. I can use the get_weather tool to answer this question.",
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "{\"location\":\"London\"}",
+                                "name": "get_weather"
+                            },
+                            "id": "call_00_Rx8k7TxPUlsbOoGFTqVR6618",
+                            "type": "function"
+                        }
+                    ]
+                },
+                {
+                    "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                    "role": "tool",
+                    "tool_call_id": "call_00_Rx8k7TxPUlsbOoGFTqVR6618"
+                },
+                {
+                    "content": "The weather in London is currently **partly cloudy** with a temperature of **18°C**. There's a **light breeze** coming from the west. Not too bad! 🌤️",
+                    "reasoning_content": "I have the weather information for London. Let me share it with the user.",
+                    "role": "assistant"
+                },
+                {
+                    "content": "and in paris?",
+                    "role": "user"
+                },
+                {
+                    "reasoning_content": "The user is asking about the weather in Paris. Let me get that information.",
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "{\"location\":\"Paris\"}",
+                                "name": "get_weather"
+                            },
+                            "id": "call_00_1PYplGFNtKGlcxKaWG299040",
+                            "type": "function"
+                        }
+                    ]
+                },
+                {
+                    "content": "Weather in Paris is sunny, 23°C, no wind.",
+                    "role": "tool",
+                    "tool_call_id": "call_00_1PYplGFNtKGlcxKaWG299040"
+                }
+            ],
+            "model": "deepseek-v4-flash",
+            "thinking": {
+                "type": "enabled"
+            },
+            "tools": [
+                {
+                    "function": {
+                        "description": "Get the current weather for a given location",
+                        "name": "get_weather",
+                        "parameters": {
+                            "$comment": "WeatherToolArgs",
+                            "properties": {
+                                "location": {
+                                    "$comment": "City name, e.g. London",
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "location"
+                            ],
+                            "type": "object"
+                        }
+                    },
+                    "type": "function"
+                }
+            ]
+        },
+        "response": {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "index": 0,
+                    "logprobs": null,
+                    "message": {
+                        "content": "The weather in Paris is **sunny** and **23°C** with no wind. ☀️ It's a bit warmer than London and a lovely day there!",
+                        "reasoning_content": "Let me share the Paris weather info with the user.",
+                        "role": "assistant"
+                    }
+                }
+            ],
+            "created": 1783771057,
+            "id": "a40d09ab-3803-4018-b25b-b92f7938c3cb",
+            "model": "deepseek-v4-flash",
+            "object": "chat.completion",
+            "system_fingerprint": "fp_8b330d02d0_prod0820_fp8_kvcache_20260402",
+            "usage": {
+                "completion_tokens": 47,
+                "completion_tokens_details": {
+                    "reasoning_tokens": 11
+                },
                 "prompt_cache_hit_tokens": 512,
-                "prompt_cache_miss_tokens": 26,
-                "prompt_tokens": 538,
+                "prompt_cache_miss_tokens": 72,
+                "prompt_tokens": 584,
                 "prompt_tokens_details": {
                     "cached_tokens": 512
                 },
-                "total_tokens": 575
+                "total_tokens": 631
             }
         }
     }

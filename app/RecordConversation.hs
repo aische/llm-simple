@@ -6,7 +6,7 @@ import Control.Monad (unless, void, when)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import LLM.Core.Types (LLMGateway)
+import LLM.Core.Types (LLMGateway, ThinkingMode (..))
 import LLM.Providers.Claude (claudeGateway)
 import LLM.Providers.DeepSeek (deepSeekGateway)
 import LLM.Providers.Gemini (geminiGateway)
@@ -39,6 +39,9 @@ import System.Exit (die)
 data Options = Options
   { optProvider :: ProviderName,
     optModel :: Maybe Text,
+    optThinking :: Bool,
+    optNoThinking :: Bool,
+    optThinkingEffort :: Maybe Text,
     optGeneratedOut :: FilePath,
     optStreamedOut :: FilePath,
     optGeneratedOnly :: Bool,
@@ -46,7 +49,7 @@ data Options = Options
   }
 
 data ProviderName = Ollama | OpenAI | Claude | Gemini | DeepSeek
-  deriving (Show, Read)
+  deriving (Show, Read, Eq)
 
 providerParser :: Parser ProviderName
 providerParser =
@@ -69,6 +72,27 @@ optionsParser =
               [ long "model",
                 metavar "MODEL",
                 help "Provider model name (defaults per provider when omitted)"
+              ]
+      )
+    <*> switch
+      ( mconcat
+          [ long "thinking",
+            help "Enable thinking mode (default for DeepSeek)"
+          ]
+      )
+    <*> switch
+      ( mconcat
+          [ long "no-thinking",
+            help "Disable thinking mode (overrides DeepSeek default)"
+          ]
+      )
+    <*> optional
+      ( fmap T.pack $
+          strOption $
+            mconcat
+              [ long "thinking-effort",
+                metavar "LEVEL",
+                help "Thinking effort level (e.g. high, max)"
               ]
       )
     <*> strOption
@@ -104,19 +128,23 @@ main = do
   opts <- execParser optionsInfo
   when (opts.optGeneratedOnly && opts.optStreamedOnly) $
     die "--generated-only and --streamed-only are mutually exclusive"
+  when (opts.optThinking && opts.optNoThinking) $
+    die "--thinking and --no-thinking are mutually exclusive"
   gateway <- loadGateway opts.optProvider
   let modelName = fromMaybe (defaultModel opts.optProvider) opts.optModel
+      thinking = resolveThinking opts
   putStrLn $
     unlines
       [ "Recording conversation fixtures",
         "  provider: " <> show opts.optProvider,
         "  model: " <> T.unpack modelName,
+        "  thinking: " <> show thinking,
         "  prompts: " <> show (map T.unpack recordedConversationPrompts)
       ]
   unless opts.optStreamedOnly $
-    void $ recordConversation False gateway modelName opts.optGeneratedOut
+    void $ recordConversation False gateway modelName thinking opts.optGeneratedOut
   unless opts.optGeneratedOnly $
-    void $ recordConversation True gateway modelName opts.optStreamedOut
+    void $ recordConversation True gateway modelName thinking opts.optStreamedOut
   putStrLn "Done."
 
 optionsInfo :: ParserInfo Options
@@ -153,3 +181,14 @@ defaultModel = \case
   Claude -> "claude-haiku-4-5-20251001"
   Gemini -> "gemini-2.5-flash"
   DeepSeek -> "deepseek-v4-flash"
+
+resolveThinking :: Options -> Maybe ThinkingMode
+resolveThinking opts
+  | opts.optNoThinking = Nothing
+  | opts.optThinking || opts.optProvider == DeepSeek =
+      Just
+        ThinkingMode
+          { tmEnabled = True,
+            tmEffort = opts.optThinkingEffort
+          }
+  | otherwise = Nothing

@@ -19,130 +19,7 @@
                 "include_usage": true
             },
             "thinking": {
-                "type": "disabled"
-            },
-            "tools": [
-                {
-                    "function": {
-                        "description": "Get the current weather for a given location",
-                        "name": "get_weather",
-                        "parameters": {
-                            "$comment": "WeatherToolArgs",
-                            "properties": {
-                                "location": {
-                                    "$comment": "City name, e.g. London",
-                                    "type": "string"
-                                }
-                            },
-                            "required": [
-                                "location"
-                            ],
-                            "type": "object"
-                        }
-                    },
-                    "type": "function"
-                }
-            ]
-        },
-        "response": {
-            "content": [
-                {
-                    "text": "Let",
-                    "type": "text"
-                },
-                {
-                    "text": " me",
-                    "type": "text"
-                },
-                {
-                    "text": " check",
-                    "type": "text"
-                },
-                {
-                    "text": " the",
-                    "type": "text"
-                },
-                {
-                    "text": " weather",
-                    "type": "text"
-                },
-                {
-                    "text": " in",
-                    "type": "text"
-                },
-                {
-                    "text": " London",
-                    "type": "text"
-                },
-                {
-                    "text": " for",
-                    "type": "text"
-                },
-                {
-                    "text": " you",
-                    "type": "text"
-                },
-                {
-                    "text": ".",
-                    "type": "text"
-                },
-                {
-                    "arguments": {
-                        "location": "London"
-                    },
-                    "id": "call_00_yd4pu0uD6i7VtktWOZBy5077",
-                    "name": "get_weather",
-                    "type": "tool_call"
-                }
-            ],
-            "reasoning": null,
-            "text": "Let me check the weather in London for you.",
-            "usage": {
-                "input_tokens": 336,
-                "output_tokens": 54
-            }
-        }
-    },
-    {
-        "prompt": null,
-        "request": {
-            "max_tokens": 1024,
-            "messages": [
-                {
-                    "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
-                    "role": "system"
-                },
-                {
-                    "content": "how's the weather in london?",
-                    "role": "user"
-                },
-                {
-                    "content": "Let me check the weather in London for you.",
-                    "role": "assistant",
-                    "tool_calls": [
-                        {
-                            "function": {
-                                "arguments": "{\"location\":\"London\"}",
-                                "name": "get_weather"
-                            },
-                            "id": "call_00_yd4pu0uD6i7VtktWOZBy5077",
-                            "type": "function"
-                        }
-                    ]
-                },
-                {
-                    "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
-                    "role": "tool",
-                    "tool_call_id": "call_00_yd4pu0uD6i7VtktWOZBy5077"
-                }
-            ],
-            "model": "deepseek-v4-flash",
-            "stream": true,
-            "stream_options": {
-                "include_usage": true
-            },
-            "thinking": {
-                "type": "disabled"
+                "type": "enabled"
             },
             "tools": [
                 {
@@ -190,39 +67,23 @@
                     "type": "text"
                 },
                 {
-                    "text": " currently",
+                    "text": " quite",
                     "type": "text"
                 },
                 {
-                    "text": " **",
+                    "text": " classic",
                     "type": "text"
                 },
                 {
-                    "text": "part",
+                    "text": " for",
                     "type": "text"
                 },
                 {
-                    "text": "ly",
+                    "text": " this",
                     "type": "text"
                 },
                 {
-                    "text": " cloudy",
-                    "type": "text"
-                },
-                {
-                    "text": "**",
-                    "type": "text"
-                },
-                {
-                    "text": " with",
-                    "type": "text"
-                },
-                {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " temperature",
+                    "text": " time",
                     "type": "text"
                 },
                 {
@@ -230,75 +91,7 @@
                     "type": "text"
                 },
                 {
-                    "text": " **",
-                    "type": "text"
-                },
-                {
-                    "text": "18",
-                    "type": "text"
-                },
-                {
-                    "text": "°",
-                    "type": "text"
-                },
-                {
-                    "text": "C",
-                    "type": "text"
-                },
-                {
-                    "text": "**.",
-                    "type": "text"
-                },
-                {
-                    "text": " There",
-                    "type": "text"
-                },
-                {
-                    "text": "'s",
-                    "type": "text"
-                },
-                {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " light",
-                    "type": "text"
-                },
-                {
-                    "text": " breeze",
-                    "type": "text"
-                },
-                {
-                    "text": " coming",
-                    "type": "text"
-                },
-                {
-                    "text": " from",
-                    "type": "text"
-                },
-                {
-                    "text": " the",
-                    "type": "text"
-                },
-                {
-                    "text": " west",
-                    "type": "text"
-                },
-                {
-                    "text": ".",
-                    "type": "text"
-                },
-                {
-                    "text": " Pretty",
-                    "type": "text"
-                },
-                {
-                    "text": " mild",
-                    "type": "text"
-                },
-                {
-                    "text": " weather",
+                    "text": " year",
                     "type": "text"
                 },
                 {
@@ -306,110 +99,43 @@
                     "type": "text"
                 },
                 {
-                    "text": " 🌤",
+                    "text": " Let",
                     "type": "text"
                 },
                 {
-                    "text": "️",
+                    "text": " me",
                     "type": "text"
-                }
-            ],
-            "reasoning": null,
-            "text": "The weather in London is currently **partly cloudy** with a temperature of **18°C**. There's a light breeze coming from the west. Pretty mild weather! 🌤️",
-            "usage": {
-                "input_tokens": 418,
-                "output_tokens": 37
-            }
-        }
-    },
-    {
-        "prompt": "and in paris?",
-        "request": {
-            "max_tokens": 1024,
-            "messages": [
-                {
-                    "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
-                    "role": "system"
                 },
                 {
-                    "content": "how's the weather in london?",
-                    "role": "user"
+                    "text": " check",
+                    "type": "text"
                 },
                 {
-                    "content": "Let me check the weather in London for you.",
-                    "role": "assistant",
-                    "tool_calls": [
-                        {
-                            "function": {
-                                "arguments": "{\"location\":\"London\"}",
-                                "name": "get_weather"
-                            },
-                            "id": "call_00_yd4pu0uD6i7VtktWOZBy5077",
-                            "type": "function"
-                        }
-                    ]
+                    "text": " for",
+                    "type": "text"
                 },
                 {
-                    "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
-                    "role": "tool",
-                    "tool_call_id": "call_00_yd4pu0uD6i7VtktWOZBy5077"
+                    "text": " you",
+                    "type": "text"
                 },
                 {
-                    "content": "The weather in London is currently **partly cloudy** with a temperature of **18°C**. There's a light breeze coming from the west. Pretty mild weather! 🌤️",
-                    "role": "assistant"
+                    "text": ".",
+                    "type": "text"
                 },
-                {
-                    "content": "and in paris?",
-                    "role": "user"
-                }
-            ],
-            "model": "deepseek-v4-flash",
-            "stream": true,
-            "stream_options": {
-                "include_usage": true
-            },
-            "thinking": {
-                "type": "disabled"
-            },
-            "tools": [
-                {
-                    "function": {
-                        "description": "Get the current weather for a given location",
-                        "name": "get_weather",
-                        "parameters": {
-                            "$comment": "WeatherToolArgs",
-                            "properties": {
-                                "location": {
-                                    "$comment": "City name, e.g. London",
-                                    "type": "string"
-                                }
-                            },
-                            "required": [
-                                "location"
-                            ],
-                            "type": "object"
-                        }
-                    },
-                    "type": "function"
-                }
-            ]
-        },
-        "response": {
-            "content": [
                 {
                     "arguments": {
-                        "location": "Paris"
+                        "location": "London"
                     },
-                    "id": "call_00_axTb2PbwcoC3trWKqqkf5269",
+                    "id": "call_00_v2vxnOSEtQPnPeP4bnFN6734",
                     "name": "get_weather",
                     "type": "tool_call"
                 }
             ],
-            "reasoning": null,
-            "text": "",
+            "reasoning": "The user wants to know the weather in London. Let me call the get_weather function.",
+            "text": "The weather in London is quite classic for this time of year! Let me check for you.",
             "usage": {
-                "input_tokens": 464,
-                "output_tokens": 44
+                "input_tokens": 336,
+                "output_tokens": 82
             }
         }
     },
@@ -427,7 +153,8 @@
                     "role": "user"
                 },
                 {
-                    "content": "Let me check the weather in London for you.",
+                    "content": "The weather in London is quite classic for this time of year! Let me check for you.",
+                    "reasoning_content": "The user wants to know the weather in London. Let me call the get_weather function.",
                     "role": "assistant",
                     "tool_calls": [
                         {
@@ -435,7 +162,7 @@
                                 "arguments": "{\"location\":\"London\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_00_yd4pu0uD6i7VtktWOZBy5077",
+                            "id": "call_00_v2vxnOSEtQPnPeP4bnFN6734",
                             "type": "function"
                         }
                     ]
@@ -443,33 +170,7 @@
                 {
                     "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
                     "role": "tool",
-                    "tool_call_id": "call_00_yd4pu0uD6i7VtktWOZBy5077"
-                },
-                {
-                    "content": "The weather in London is currently **partly cloudy** with a temperature of **18°C**. There's a light breeze coming from the west. Pretty mild weather! 🌤️",
-                    "role": "assistant"
-                },
-                {
-                    "content": "and in paris?",
-                    "role": "user"
-                },
-                {
-                    "role": "assistant",
-                    "tool_calls": [
-                        {
-                            "function": {
-                                "arguments": "{\"location\":\"Paris\"}",
-                                "name": "get_weather"
-                            },
-                            "id": "call_00_axTb2PbwcoC3trWKqqkf5269",
-                            "type": "function"
-                        }
-                    ]
-                },
-                {
-                    "content": "Weather in Paris is sunny, 23°C, no wind.",
-                    "role": "tool",
-                    "tool_call_id": "call_00_axTb2PbwcoC3trWKqqkf5269"
+                    "tool_call_id": "call_00_v2vxnOSEtQPnPeP4bnFN6734"
                 }
             ],
             "model": "deepseek-v4-flash",
@@ -478,7 +179,7 @@
                 "include_usage": true
             },
             "thinking": {
-                "type": "disabled"
+                "type": "enabled"
             },
             "tools": [
                 {
@@ -506,7 +207,457 @@
         "response": {
             "content": [
                 {
-                    "text": "In",
+                    "text": "Here",
+                    "type": "text"
+                },
+                {
+                    "text": "'s",
+                    "type": "text"
+                },
+                {
+                    "text": " the",
+                    "type": "text"
+                },
+                {
+                    "text": " current",
+                    "type": "text"
+                },
+                {
+                    "text": " weather",
+                    "type": "text"
+                },
+                {
+                    "text": " in",
+                    "type": "text"
+                },
+                {
+                    "text": " **",
+                    "type": "text"
+                },
+                {
+                    "text": "London",
+                    "type": "text"
+                },
+                {
+                    "text": "**",
+                    "type": "text"
+                },
+                {
+                    "text": ":\n\n",
+                    "type": "text"
+                },
+                {
+                    "text": "-",
+                    "type": "text"
+                },
+                {
+                    "text": " **",
+                    "type": "text"
+                },
+                {
+                    "text": "Conditions",
+                    "type": "text"
+                },
+                {
+                    "text": ":**",
+                    "type": "text"
+                },
+                {
+                    "text": " ☁",
+                    "type": "text"
+                },
+                {
+                    "text": "️",
+                    "type": "text"
+                },
+                {
+                    "text": " Part",
+                    "type": "text"
+                },
+                {
+                    "text": "ly",
+                    "type": "text"
+                },
+                {
+                    "text": " cloudy",
+                    "type": "text"
+                },
+                {
+                    "text": "\n",
+                    "type": "text"
+                },
+                {
+                    "text": "-",
+                    "type": "text"
+                },
+                {
+                    "text": " **",
+                    "type": "text"
+                },
+                {
+                    "text": "Temperature",
+                    "type": "text"
+                },
+                {
+                    "text": ":**",
+                    "type": "text"
+                },
+                {
+                    "text": " 🌡",
+                    "type": "text"
+                },
+                {
+                    "text": "️",
+                    "type": "text"
+                },
+                {
+                    "text": " ",
+                    "type": "text"
+                },
+                {
+                    "text": "18",
+                    "type": "text"
+                },
+                {
+                    "text": "°",
+                    "type": "text"
+                },
+                {
+                    "text": "C",
+                    "type": "text"
+                },
+                {
+                    "text": "\n",
+                    "type": "text"
+                },
+                {
+                    "text": "-",
+                    "type": "text"
+                },
+                {
+                    "text": " **",
+                    "type": "text"
+                },
+                {
+                    "text": "Wind",
+                    "type": "text"
+                },
+                {
+                    "text": ":**",
+                    "type": "text"
+                },
+                {
+                    "text": " 🍃",
+                    "type": "text"
+                },
+                {
+                    "text": " Light",
+                    "type": "text"
+                },
+                {
+                    "text": " breeze",
+                    "type": "text"
+                },
+                {
+                    "text": " from",
+                    "type": "text"
+                },
+                {
+                    "text": " the",
+                    "type": "text"
+                },
+                {
+                    "text": " west",
+                    "type": "text"
+                },
+                {
+                    "text": "\n\n",
+                    "type": "text"
+                },
+                {
+                    "text": "It",
+                    "type": "text"
+                },
+                {
+                    "text": "'s",
+                    "type": "text"
+                },
+                {
+                    "text": " a",
+                    "type": "text"
+                },
+                {
+                    "text": " mild",
+                    "type": "text"
+                },
+                {
+                    "text": " and",
+                    "type": "text"
+                },
+                {
+                    "text": " pleasant",
+                    "type": "text"
+                },
+                {
+                    "text": " day",
+                    "type": "text"
+                },
+                {
+                    "text": " in",
+                    "type": "text"
+                },
+                {
+                    "text": " London",
+                    "type": "text"
+                },
+                {
+                    "text": "!",
+                    "type": "text"
+                }
+            ],
+            "reasoning": "The tool returned the weather information for London. Let me present it nicely to the user.",
+            "text": "Here's the current weather in **London**:\n\n- **Conditions:** ☁️ Partly cloudy\n- **Temperature:** 🌡️ 18°C\n- **Wind:** 🍃 Light breeze from the west\n\nIt's a mild and pleasant day in London!",
+            "usage": {
+                "input_tokens": 447,
+                "output_tokens": 75
+            }
+        }
+    },
+    {
+        "prompt": "and in paris?",
+        "request": {
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+                    "role": "system"
+                },
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "content": "The weather in London is quite classic for this time of year! Let me check for you.",
+                    "reasoning_content": "The user wants to know the weather in London. Let me call the get_weather function.",
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "{\"location\":\"London\"}",
+                                "name": "get_weather"
+                            },
+                            "id": "call_00_v2vxnOSEtQPnPeP4bnFN6734",
+                            "type": "function"
+                        }
+                    ]
+                },
+                {
+                    "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                    "role": "tool",
+                    "tool_call_id": "call_00_v2vxnOSEtQPnPeP4bnFN6734"
+                },
+                {
+                    "content": "Here's the current weather in **London**:\n\n- **Conditions:** ☁️ Partly cloudy\n- **Temperature:** 🌡️ 18°C\n- **Wind:** 🍃 Light breeze from the west\n\nIt's a mild and pleasant day in London!",
+                    "reasoning_content": "The tool returned the weather information for London. Let me present it nicely to the user.",
+                    "role": "assistant"
+                },
+                {
+                    "content": "and in paris?",
+                    "role": "user"
+                }
+            ],
+            "model": "deepseek-v4-flash",
+            "stream": true,
+            "stream_options": {
+                "include_usage": true
+            },
+            "thinking": {
+                "type": "enabled"
+            },
+            "tools": [
+                {
+                    "function": {
+                        "description": "Get the current weather for a given location",
+                        "name": "get_weather",
+                        "parameters": {
+                            "$comment": "WeatherToolArgs",
+                            "properties": {
+                                "location": {
+                                    "$comment": "City name, e.g. London",
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "location"
+                            ],
+                            "type": "object"
+                        }
+                    },
+                    "type": "function"
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "text": "Let",
+                    "type": "text"
+                },
+                {
+                    "text": " me",
+                    "type": "text"
+                },
+                {
+                    "text": " check",
+                    "type": "text"
+                },
+                {
+                    "text": " for",
+                    "type": "text"
+                },
+                {
+                    "text": " Paris",
+                    "type": "text"
+                },
+                {
+                    "text": " too",
+                    "type": "text"
+                },
+                {
+                    "text": "!",
+                    "type": "text"
+                },
+                {
+                    "arguments": {
+                        "location": "Paris"
+                    },
+                    "id": "call_00_8r7zmGJkbYN4AiekibrD8868",
+                    "name": "get_weather",
+                    "type": "tool_call"
+                }
+            ],
+            "reasoning": "The user wants to know the weather in Paris as well. Let me call the get_weather function for Paris.",
+            "text": "Let me check for Paris too!",
+            "usage": {
+                "input_tokens": 531,
+                "output_tokens": 74
+            }
+        }
+    },
+    {
+        "prompt": null,
+        "request": {
+            "max_tokens": 1024,
+            "messages": [
+                {
+                    "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
+                    "role": "system"
+                },
+                {
+                    "content": "how's the weather in london?",
+                    "role": "user"
+                },
+                {
+                    "content": "The weather in London is quite classic for this time of year! Let me check for you.",
+                    "reasoning_content": "The user wants to know the weather in London. Let me call the get_weather function.",
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "{\"location\":\"London\"}",
+                                "name": "get_weather"
+                            },
+                            "id": "call_00_v2vxnOSEtQPnPeP4bnFN6734",
+                            "type": "function"
+                        }
+                    ]
+                },
+                {
+                    "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
+                    "role": "tool",
+                    "tool_call_id": "call_00_v2vxnOSEtQPnPeP4bnFN6734"
+                },
+                {
+                    "content": "Here's the current weather in **London**:\n\n- **Conditions:** ☁️ Partly cloudy\n- **Temperature:** 🌡️ 18°C\n- **Wind:** 🍃 Light breeze from the west\n\nIt's a mild and pleasant day in London!",
+                    "reasoning_content": "The tool returned the weather information for London. Let me present it nicely to the user.",
+                    "role": "assistant"
+                },
+                {
+                    "content": "and in paris?",
+                    "role": "user"
+                },
+                {
+                    "content": "Let me check for Paris too!",
+                    "reasoning_content": "The user wants to know the weather in Paris as well. Let me call the get_weather function for Paris.",
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": "{\"location\":\"Paris\"}",
+                                "name": "get_weather"
+                            },
+                            "id": "call_00_8r7zmGJkbYN4AiekibrD8868",
+                            "type": "function"
+                        }
+                    ]
+                },
+                {
+                    "content": "Weather in Paris is sunny, 23°C, no wind.",
+                    "role": "tool",
+                    "tool_call_id": "call_00_8r7zmGJkbYN4AiekibrD8868"
+                }
+            ],
+            "model": "deepseek-v4-flash",
+            "stream": true,
+            "stream_options": {
+                "include_usage": true
+            },
+            "thinking": {
+                "type": "enabled"
+            },
+            "tools": [
+                {
+                    "function": {
+                        "description": "Get the current weather for a given location",
+                        "name": "get_weather",
+                        "parameters": {
+                            "$comment": "WeatherToolArgs",
+                            "properties": {
+                                "location": {
+                                    "$comment": "City name, e.g. London",
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "location"
+                            ],
+                            "type": "object"
+                        }
+                    },
+                    "type": "function"
+                }
+            ]
+        },
+        "response": {
+            "content": [
+                {
+                    "text": "Here",
+                    "type": "text"
+                },
+                {
+                    "text": "'s",
+                    "type": "text"
+                },
+                {
+                    "text": " the",
+                    "type": "text"
+                },
+                {
+                    "text": " weather",
+                    "type": "text"
+                },
+                {
+                    "text": " in",
                     "type": "text"
                 },
                 {
@@ -518,55 +669,71 @@
                     "type": "text"
                 },
                 {
-                    "text": "**,",
-                    "type": "text"
-                },
-                {
-                    "text": " it",
-                    "type": "text"
-                },
-                {
-                    "text": "'s",
-                    "type": "text"
-                },
-                {
-                    "text": " currently",
-                    "type": "text"
-                },
-                {
-                    "text": " **",
-                    "type": "text"
-                },
-                {
-                    "text": "sun",
-                    "type": "text"
-                },
-                {
-                    "text": "ny",
-                    "type": "text"
-                },
-                {
                     "text": "**",
                     "type": "text"
                 },
                 {
-                    "text": " with",
+                    "text": ":\n\n",
                     "type": "text"
                 },
                 {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " temperature",
-                    "type": "text"
-                },
-                {
-                    "text": " of",
+                    "text": "-",
                     "type": "text"
                 },
                 {
                     "text": " **",
+                    "type": "text"
+                },
+                {
+                    "text": "Conditions",
+                    "type": "text"
+                },
+                {
+                    "text": ":**",
+                    "type": "text"
+                },
+                {
+                    "text": " ☀",
+                    "type": "text"
+                },
+                {
+                    "text": "️",
+                    "type": "text"
+                },
+                {
+                    "text": " Sunny",
+                    "type": "text"
+                },
+                {
+                    "text": "\n",
+                    "type": "text"
+                },
+                {
+                    "text": "-",
+                    "type": "text"
+                },
+                {
+                    "text": " **",
+                    "type": "text"
+                },
+                {
+                    "text": "Temperature",
+                    "type": "text"
+                },
+                {
+                    "text": ":**",
+                    "type": "text"
+                },
+                {
+                    "text": " 🌡",
+                    "type": "text"
+                },
+                {
+                    "text": "️",
+                    "type": "text"
+                },
+                {
+                    "text": " ",
                     "type": "text"
                 },
                 {
@@ -582,11 +749,39 @@
                     "type": "text"
                 },
                 {
-                    "text": "**",
+                    "text": "\n",
                     "type": "text"
                 },
                 {
-                    "text": " and",
+                    "text": "-",
+                    "type": "text"
+                },
+                {
+                    "text": " **",
+                    "type": "text"
+                },
+                {
+                    "text": "Wind",
+                    "type": "text"
+                },
+                {
+                    "text": ":**",
+                    "type": "text"
+                },
+                {
+                    "text": " 🍃",
+                    "type": "text"
+                },
+                {
+                    "text": " Cal",
+                    "type": "text"
+                },
+                {
+                    "text": "m",
+                    "type": "text"
+                },
+                {
+                    "text": " /",
                     "type": "text"
                 },
                 {
@@ -598,43 +793,19 @@
                     "type": "text"
                 },
                 {
-                    "text": ".",
-                    "type": "text"
-                },
-                {
-                    "text": " A",
-                    "type": "text"
-                },
-                {
-                    "text": " lovely",
-                    "type": "text"
-                },
-                {
-                    "text": " day",
-                    "type": "text"
-                },
-                {
-                    "text": "!",
-                    "type": "text"
-                },
-                {
-                    "text": " ☀",
-                    "type": "text"
-                },
-                {
-                    "text": "️",
-                    "type": "text"
-                },
-                {
                     "text": "\n\n",
                     "type": "text"
                 },
                 {
-                    "text": "A",
+                    "text": "It",
                     "type": "text"
                 },
                 {
-                    "text": " bit",
+                    "text": "'s",
+                    "type": "text"
+                },
+                {
+                    "text": " even",
                     "type": "text"
                 },
                 {
@@ -654,7 +825,19 @@
                     "type": "text"
                 },
                 {
+                    "text": " in",
+                    "type": "text"
+                },
+                {
+                    "text": " Paris",
+                    "type": "text"
+                },
+                {
                     "text": " than",
+                    "type": "text"
+                },
+                {
+                    "text": " in",
                     "type": "text"
                 },
                 {
@@ -662,19 +845,55 @@
                     "type": "text"
                 },
                 {
-                    "text": " today",
+                    "text": "!",
                     "type": "text"
                 },
                 {
-                    "text": "!",
+                    "text": " A",
+                    "type": "text"
+                },
+                {
+                    "text": " lovely",
+                    "type": "text"
+                },
+                {
+                    "text": " day",
+                    "type": "text"
+                },
+                {
+                    "text": " to",
+                    "type": "text"
+                },
+                {
+                    "text": " be",
+                    "type": "text"
+                },
+                {
+                    "text": " out",
+                    "type": "text"
+                },
+                {
+                    "text": " and",
+                    "type": "text"
+                },
+                {
+                    "text": " about",
+                    "type": "text"
+                },
+                {
+                    "text": ".",
+                    "type": "text"
+                },
+                {
+                    "text": " 🌟",
                     "type": "text"
                 }
             ],
-            "reasoning": null,
-            "text": "In **Paris**, it's currently **sunny** with a temperature of **23°C** and no wind. A lovely day! ☀️\n\nA bit warmer and sunnier than London today!",
+            "reasoning": "Great, got the weather for Paris. Let me present it nicely.",
+            "text": "Here's the weather in **Paris**:\n\n- **Conditions:** ☀️ Sunny\n- **Temperature:** 🌡️ 23°C\n- **Wind:** 🍃 Calm / no wind\n\nIt's even warmer and sunnier in Paris than in London! A lovely day to be out and about. 🌟",
             "usage": {
-                "input_tokens": 533,
-                "output_tokens": 42
+                "input_tokens": 630,
+                "output_tokens": 82
             }
         }
     }

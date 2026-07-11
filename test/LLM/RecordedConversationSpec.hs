@@ -6,6 +6,7 @@ import LLM.Providers.DeepSeek (deepSeekProvider)
 import LLM.Providers.Gemini (geminiProvider)
 import LLM.Providers.Ollama (ollamaProvider)
 import LLM.Providers.OpenAI (openAIProvider)
+import LLM.TestKit (recordedDeepSeekThinking)
 import Test.Hspec (SpecWith, describe)
 
 ollamaConversationGeneratedFilePath :: String
@@ -46,6 +47,7 @@ spec =
         "Ollama"
         ollamaProvider
         "llama3.2:latest"
+        Nothing
         ollamaConversationGeneratedFilePath
         ollamaConversationStreamedFilePath
     createSpec $
@@ -53,6 +55,7 @@ spec =
         "Claude"
         (claudeProvider "")
         "claude-haiku-4-5-20251001"
+        Nothing
         claudeConversationGeneratedFilePath
         claudeConversationStreamedFilePath
     createSpec $
@@ -60,6 +63,7 @@ spec =
         "Gemini"
         (geminiProvider "")
         "gemini-2.5-flash"
+        Nothing
         geminiConversationGeneratedFilePath
         geminiConversationStreamedFilePath
     createSpec $
@@ -67,6 +71,7 @@ spec =
         "OpenAI"
         (openAIProvider "")
         "gpt-4.1-2025-04-14"
+        Nothing
         openAIConversationGeneratedFilePath
         openAIConversationStreamedFilePath
     createSpec $
@@ -74,5 +79,6 @@ spec =
         "DeepSeek"
         (deepSeekProvider "")
         "deepseek-v4-flash"
+        (Just recordedDeepSeekThinking)
         deepSeekConversationGeneratedFilePath
         deepSeekConversationStreamedFilePath

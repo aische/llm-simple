@@ -19,9 +19,6 @@ module LLM.Tools
     -- * FsConfig
     mkFsConfig,
     FsConfig (..),
-
-    -- * Weather tool - dummy tool for testing
-    weatherToolTyped,
   )
 where
 
@@ -39,5 +36,4 @@ import LLM.Tools.Readfile (readfileToolTyped)
 import LLM.Tools.RemoveDirectory (removeDirectoryToolTyped)
 import LLM.Tools.RemoveFile (removeFileToolTyped)
 import LLM.Tools.ReplaceInFile (replaceInFileToolTyped)
-import LLM.Tools.Weather (weatherToolTyped)
 import LLM.Tools.Writefile (writefileToolTyped)

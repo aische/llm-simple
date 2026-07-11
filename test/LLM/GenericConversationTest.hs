@@ -16,7 +16,7 @@ import LLM.TestKit
     mockProvider,
     streamChatLoop,
   )
-import LLM.Tools.Weather (weatherToolTyped)
+import LLM.WeatherTool (weatherToolTyped)
 import Test.Hspec (Spec, describe, it, shouldBe)
 
 data GenericConversationTextOps = GenericConversationTextOps

@@ -1,6 +1,6 @@
 # llm-simple
 
-Experimental Haskell library for talking to LLMs: multi-provider gateways, model fallbacks, agent tool loops, structured output, and built-in filesystem tools.
+An experimental Haskell **LLM toolbox** for trying out providers, tool loops, and workspace agents locally. It is meant to get you from zero to a working agent quickly — not to be a production agent platform.
 
 **Status:** early 0.1.x release. APIs may change.
 
@@ -54,19 +54,19 @@ The example loads `.env`, loads models from the catalog, wires up filesystem too
 
 Models are defined in a JSON array. Each entry maps a logical config name to a provider and model, plus runtime settings:
 
-| Field | Description |
-|-------|-------------|
-| `modelConfigName` | Name used in code to look up this config |
-| `providerName` | `"openai"`, `"claude"`, `"gemini"`, `"ollama"`, or `"deepseek"` |
-| `modelName` | Provider-specific model identifier |
-| `pricing` | `pricePerMillionInput` / `pricePerMillionOutput` for usage cost tracking |
-| `maxTokens` | Max tokens per request |
-| `temperature` | Sampling temperature (optional) |
-| `requestTimeout` | Request timeout in ms (optional) |
-| `throttleDelay` | Delay between requests in ms (optional) |
-| `retryCount` | Number of retries on failure |
-| `jitterBackoff` | Backoff jitter in ms between retries |
-| `thinking` | Extended thinking effort level (optional, provider-dependent) |
+| Field             | Description                                                              |
+| ----------------- | ------------------------------------------------------------------------ |
+| `modelConfigName` | Name used in code to look up this config                                 |
+| `providerName`    | `"openai"`, `"claude"`, `"gemini"`, `"ollama"`, or `"deepseek"`          |
+| `modelName`       | Provider-specific model identifier                                       |
+| `pricing`         | `pricePerMillionInput` / `pricePerMillionOutput` for usage cost tracking |
+| `maxTokens`       | Max tokens per request                                                   |
+| `temperature`     | Sampling temperature (optional)                                          |
+| `requestTimeout`  | Request timeout in ms (optional)                                         |
+| `throttleDelay`   | Delay between requests in ms (optional)                                  |
+| `retryCount`      | Number of retries on failure                                             |
+| `jitterBackoff`   | Backoff jitter in ms between retries                                     |
+| `thinking`        | Extended thinking effort level (optional, provider-dependent)            |
 
 A provider is only available if its API key is set (except Ollama, which is always available).
 
@@ -159,22 +159,22 @@ Define a `Tool` with a `ToolDef` (sent to the model) and an execution function, 
 
 `fsTools` registers these tools, all scoped to a workspace root:
 
-| Tool name | Purpose |
-|-----------|---------|
-| `copy_file` | Copy a file |
-| `create_directory` | Create a directory |
-| `directory_tree` | Show directory tree |
-| `file_info` | File metadata |
-| `find_files` | Find files by pattern |
-| `grep` | Search file contents |
-| `move_file` | Move/rename a file |
+| Tool name               | Purpose                                 |
+| ----------------------- | --------------------------------------- |
+| `copy_file`             | Copy a file                             |
+| `create_directory`      | Create a directory                      |
+| `directory_tree`        | Show directory tree                     |
+| `file_info`             | File metadata                           |
+| `find_files`            | Find files by pattern                   |
+| `grep`                  | Search file contents                    |
+| `move_file`             | Move/rename a file                      |
 | `multi_replace_in_file` | Multiple search-and-replace in one file |
-| `readdir` | List directory contents |
-| `read_file_paginated` | Read a file in pages |
-| `remove_directory` | Remove a directory |
-| `remove_file` | Remove a file |
-| `replace_in_file` | Search-and-replace in a file |
-| `writefile` | Write or overwrite a file |
+| `readdir`               | List directory contents                 |
+| `read_file_paginated`   | Read a file in pages                    |
+| `remove_directory`      | Remove a directory                      |
+| `remove_file`           | Remove a file                           |
+| `replace_in_file`       | Search-and-replace in a file            |
+| `writefile`             | Write or overwrite a file               |
 
 Use `fsTools'` to map tool results through a custom embedding function.
 
@@ -192,15 +192,15 @@ Filesystem tools enforce **workspace-relative path containment**: `..` escapes, 
 
 ## Module layout
 
-| Module | Purpose |
-|--------|---------|
-| `LLM` | Convenience re-exports for common types, generation, loaders, and tool wiring |
-| `LLM.Core` | Types, gateways, provider interface, usage tracking |
-| `LLM.Providers` | Provider implementations (OpenAI, Claude, Gemini, Ollama, DeepSeek) |
-| `LLM.Generate` | Single-request generation with fallbacks (`generateTextWithFallbacks`, `streamTextWithFallbacks`, `genObject`) |
-| `LLM.Agent` | Agent loops with tool execution (`generateText`, `streamText`) |
-| `LLM.Tools` | Built-in filesystem tool definitions |
-| `LLM.Load` | Model catalog loading, gateway init, `fsTools` |
+| Module          | Purpose                                                                                                        |
+| --------------- | -------------------------------------------------------------------------------------------------------------- |
+| `LLM`           | Convenience re-exports for common types, generation, loaders, and tool wiring                                  |
+| `LLM.Core`      | Types, gateways, provider interface, usage tracking                                                            |
+| `LLM.Providers` | Provider implementations (OpenAI, Claude, Gemini, Ollama, DeepSeek)                                            |
+| `LLM.Generate`  | Single-request generation with fallbacks (`generateTextWithFallbacks`, `streamTextWithFallbacks`, `genObject`) |
+| `LLM.Agent`     | Agent loops with tool execution (`generateText`, `streamText`)                                                 |
+| `LLM.Tools`     | Built-in filesystem tool definitions                                                                           |
+| `LLM.Load`      | Model catalog loading, gateway init, `fsTools`                                                                 |
 
 Import `LLM` for the common surface, or import sub-modules directly for agent loops, providers, and advanced configuration. Sub-module APIs are exposed but considered experimental in 0.1.x.
 

@@ -2,14 +2,14 @@
 
 Experimental Haskell library for talking to LLMs: multi-provider gateways, model fallbacks, agent tool loops, structured output, and built-in filesystem tools.
 
-**Status:** work in progress / proof of concept. APIs may change; this README may lag behind the code.
+**Status:** early 0.1.x release. APIs may change.
 
 ## Features
 
 - **Providers:** OpenAI, Claude, Gemini, Ollama, DeepSeek
 - **Generate:** single-request text, streaming, and structured object generation with model fallbacks, timeouts, retries, and throttling
 - **Agent:** multi-round tool loops (`generateText`, `streamText`, `generateObject`)
-- **Tools:** filesystem tool suite with workspace sandboxing
+- **Tools:** filesystem tool suite with workspace path sandboxing
 - **Load:** JSON model catalog and API-key gateway initialization
 - **Observability:** hooks, logging, and generation lifecycle events
 
@@ -19,7 +19,7 @@ Experimental Haskell library for talking to LLMs: multi-provider gateways, model
 cabal build
 ```
 
-Requires GHC with `GHC2021` (see `llm-simple.cabal`).
+Requires GHC 9.6+ with `GHC2021` (see `llm-simple.cabal`).
 
 ## Quick start
 
@@ -32,9 +32,11 @@ GEMINI_API_KEY=...
 DEEPSEEK_API_KEY=...
 ```
 
-Ollama needs no API key. Keys are read from the environment; `.env` is loaded automatically when gateways are initialized.
+Ollama needs no API key. The library reads keys from the **process environment**.
+Load `.env` yourself in `main` (the example executable does this), or call
+`loadGatewaysWithDotenv` when building gateways manually.
 
-2. Configure models in `model-catalog.json` (a bundled example is included).
+2. Configure models in `model-catalog.json` (an example is included in the repository and source distribution).
 
 3. Create a workspace directory for filesystem tools (the example uses `./user-workspace/`).
 
@@ -44,7 +46,7 @@ Ollama needs no API key. Keys are read from the environment; `.env` is loaded au
 cabal run llm-simple
 ```
 
-The example loads models from the catalog, wires up filesystem tools, and runs a small agent that asks about files in the workspace.
+The example loads `.env`, loads models from the catalog, wires up filesystem tools, and runs a small agent that asks about files in the workspace.
 
 ## Configuration
 
@@ -71,13 +73,18 @@ A provider is only available if its API key is set (except Ollama, which is alwa
 ### Loading models
 
 ```haskell
-(gemini, deepseek) <-
-  loadModelsOrThrow "./model-catalog.json" ("gemini_2_5_flash", "deepseek4flash")
+import Configuration.Dotenv (defaultConfig, loadFile)
+import Control.Exception (SomeException, catch)
+import LLM.Load (loadModelsOrThrow)
 
-let models = ModelWithFallbacks { mwfModel = gemini, mwfFallbacks = [deepseek] }
+main = do
+  loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
+  (gemini, deepseek) <-
+    loadModelsOrThrow "./model-catalog.json" ("gemini_2_5_flash", "deepseek4flash")
+  ...
 ```
 
-`loadModelsOrThrow` takes a filepath and a tuple of config names, returning a tuple of `ModelConfig` values. Use `loadModelOrThrow` for a single model.
+`loadModelsOrThrow` takes a filepath and a tuple of config names, returning a tuple of `ModelConfig` values. Use `loadModelOrThrow` for a single model. On failure it throws a catchable `LoadConfigError`.
 
 ## Usage
 
@@ -86,14 +93,18 @@ let models = ModelWithFallbacks { mwfModel = gemini, mwfFallbacks = [deepseek] }
 An agent runs a loop: the model may call tools, results are fed back, and the loop continues until the model finishes or `agMaxToolRounds` is reached.
 
 ```haskell
+import Configuration.Dotenv (defaultConfig, loadFile)
+import Control.Exception (SomeException, catch)
 import Heptapod (generate)
-import LLM.Agent
+import LLM.Agent (Agent (..), RuntimeArgs (..), generateText, noEventObserver)
 import LLM.Core (Turn (UserTurn))
-import LLM.Generate (ModelWithFallbacks (..), defaultDebugHooks, llmHooks)
+import LLM.Generate (ModelWithFallbacks (..), Hooks (..), llmHooks, noHooks)
 import LLM.Load (fsTools, loadModelsOrThrow)
 
 main :: IO ()
 main = do
+  loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
+
   (gemini, deepseek) <-
     loadModelsOrThrow "./model-catalog.json" ("gemini_2_5_flash", "deepseek4flash")
 
@@ -114,8 +125,8 @@ main = do
         RuntimeArgs
           { rtGenerationId = genId,
             rtAbortSignal = Nothing,
-            rtLLMHooks = llmHooks defaultDebugHooks,
-            rtHooks = defaultDebugHooks,
+            rtLLMHooks = llmHooks noHooks,
+            rtHooks = noHooks,
             rtOnEvent = noEventObserver,
             rtReadonly = False
           }
@@ -124,7 +135,9 @@ main = do
   print r
 ```
 
-Set `rtReadonly = True` to prevent mutating filesystem tools from making changes.
+Set `rtReadonly = True` to omit mutating tools from the schema sent to the model.
+
+For local debugging, `defaultDebugHooks` enables stderr logging and writes request/response JSON to `./dumps` — avoid that in production or shared environments.
 
 ### Single request (no agent loop)
 
@@ -165,18 +178,30 @@ Define a `Tool` with a `ToolDef` (sent to the model) and an execution function, 
 
 Use `fsTools'` to map tool results through a custom embedding function.
 
+### Filesystem sandbox
+
+Filesystem tools enforce **workspace-relative path containment**: `..` escapes, absolute paths outside the workspace, and symlinks pointing outside are rejected. Recursive tools skip symlinks rather than following them.
+
+**Limitations (0.1.x):**
+
+- The sandbox is **path-scoped**, not kernel-level isolation. Use a dedicated, disposable workspace directory — not your home directory or a production tree.
+- A **time-of-check/time-of-use (TOCTOU)** window exists between path validation and file open; a concurrent process inside the workspace could theoretically plant a symlink between those steps.
+- There is no denylist for sensitive in-workspace files (`.env`, `.git/config`, etc.). Anything inside the workspace is accessible to tools the model can call.
+- `rtReadonly` filters which tools are advertised to the model; it does not add a separate execution-time write guard.
+
 ## Module layout
 
 | Module | Purpose |
 |--------|---------|
+| `LLM` | Convenience re-exports for common types, generation, loaders, and tool wiring |
 | `LLM.Core` | Types, gateways, provider interface, usage tracking |
 | `LLM.Providers` | Provider implementations (OpenAI, Claude, Gemini, Ollama, DeepSeek) |
 | `LLM.Generate` | Single-request generation with fallbacks (`generateTextWithFallbacks`, `streamTextWithFallbacks`, `genObject`) |
 | `LLM.Agent` | Agent loops with tool execution (`generateText`, `streamText`) |
-| `LLM.Tools` | Tool definitions (filesystem, weather, etc.) |
+| `LLM.Tools` | Built-in filesystem tool definitions |
 | `LLM.Load` | Model catalog loading, gateway init, `fsTools` |
 
-Import everything from the top-level `LLM` module, or import sub-modules directly.
+Import `LLM` for the common surface, or import sub-modules directly for agent loops, providers, and advanced configuration. Sub-module APIs are exposed but considered experimental in 0.1.x.
 
 **Note:** Workflow support was removed from this repo and moved elsewhere.
 

@@ -2,11 +2,21 @@ cabal-version:      3.0
 
 name:               llm-simple
 
-version:            0.1.0.0
+version:            0.1.0.1
 
-synopsis:           A simple LLM library
+synopsis:
+    Multi-provider LLM library with agent tool loops and filesystem tools
 
-description:        A simple LLM library
+-- Note: 'description' is free-form Markdown.
+description:
+    Experimental Haskell library for talking to LLMs.
+    .
+    Features multi-provider gateways (OpenAI, Claude, Gemini, Ollama, DeepSeek),
+    single-shot text/stream/object generation with model fallbacks, agent tool
+    loops, structured output via Autodocodec, JSON model-catalog loading, and
+    workspace-scoped filesystem tools.
+    .
+    Status: early 0.1.x release — APIs may change.
 
 license:            BSD-3-Clause
 
@@ -16,11 +26,27 @@ author:             Daniel van den Eijkel
 
 maintainer:         1515314+aische@users.noreply.github.com
 
-category:           unknown
+category:           AI
+
+homepage:           https://github.com/aische/llm-simple#readme
+
+bug-reports:        https://github.com/aische/llm-simple/issues
+
 build-type:         Simple
 
--- Extra doc files to be distributed with the package, such as a CHANGELOG or a README.
--- extra-doc-files:    CHANGELOG.md
+extra-doc-files:
+    CHANGELOG.md
+    Readme.md
+
+extra-source-files:
+    model-catalog.json
+
+tested-with:
+    GHC ==9.6.7
+
+source-repository head
+    type:     git
+    location: https://github.com/aische/llm-simple
 
 common opts
     default-language: GHC2021
@@ -130,7 +156,7 @@ library
         time           >=1.11  && <1.15,
         unordered-containers >=0.2 && < 0.3,
         uuid-types     >=1.0   && <1.1,
-        vector         >=0.13,
+        vector         >=0.13  && <0.14,
 
 executable llm-simple
     import: opts

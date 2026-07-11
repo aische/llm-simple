@@ -15,7 +15,7 @@ where
 
 import Autodocodec qualified as AC
 import Autodocodec.Schema (jsonSchemaVia)
-import Control.Exception (SomeException, try)
+import Control.Exception (SomeException, fromException, try)
 import Data.Aeson (FromJSON)
 import Data.Aeson qualified as AE
 import Data.Map qualified as Map
@@ -45,6 +45,7 @@ import LLM.Generate.Types
     GenerateError (..),
     GenerateResult,
   )
+import LLM.Tools.FsConfig (SandboxViolation, formatSandboxViolation)
 
 -- | Execute a single tool call by looking it up in the tool list
 executeTool :: Hooks -> ToolContext -> [Tool Text] -> ToolCall -> IO ToolResult
@@ -58,8 +59,9 @@ executeTool hooks ctx tools tc = case lookup tc.tcName toolMap of
         hooks.onToolResult tc.tcName text
         pure $ toolResult tc text
       Left (e :: SomeException) -> do
-        hooks.onToolError tc.tcName (T.pack (show e))
-        pure $ toolResult tc ("Tool error: " <> T.pack (show e))
+        let msg = formatToolException e
+        hooks.onToolError tc.tcName msg
+        pure $ toolResult tc ("Tool error: " <> msg)
   where
     toolMap = [(t.toolDef.toolName, t.toolExecute) | t <- tools]
 
@@ -176,3 +178,9 @@ embedTextTool embed tool =
         result <- tool.toolExecute ctx args
         pure $ embed result
     }
+
+formatToolException :: SomeException -> Text
+formatToolException e =
+  case fromException e of
+    Just (sv :: SandboxViolation) -> formatSandboxViolation sv
+    Nothing -> T.pack (show e)

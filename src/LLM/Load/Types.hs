@@ -1,5 +1,6 @@
 module LLM.Load.Types where
 
+import Control.Exception (Exception)
 import Data.Text (Text)
 
 data LoadConfigError
@@ -7,3 +8,5 @@ data LoadConfigError
   | LoadModelConfigError Text
   | LoadSystemPromptError Text
   deriving (Show)
+
+instance Exception LoadConfigError

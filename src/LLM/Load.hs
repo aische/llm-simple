@@ -35,7 +35,10 @@
 --    * "deepseek"
 --
 --
--- If a model (resp. its provider) requires an API key, it must be set in the environment variables:
+-- If a model (resp. its provider) requires an API key, it must be set in the
+-- process environment. This module does not load a @.env@ file automatically;
+-- use @Configuration.Dotenv.loadFile@ in your @main@ or call
+-- 'loadGatewaysWithDotenv' when building gateways yourself.
 --
 -- @
 --    GEMINI_API_KEY=...
@@ -47,6 +50,8 @@ module LLM.Load
   ( loadModelsOrThrow,
     loadModelOrThrow,
     LoadConfigError (..),
+    loadGateways,
+    loadGatewaysWithDotenv,
     loadModelCatalog,
     ModelCatalogItem (..),
     ModelCatalogMap,
@@ -56,6 +61,7 @@ module LLM.Load
 where
 
 import LLM.Load.FsTools (fsTools, fsTools')
+import LLM.Load.LoadGateways (loadGateways, loadGatewaysWithDotenv)
 import LLM.Load.LoadModels (loadModelOrThrow, loadModelsOrThrow)
 import LLM.Load.ModelCatalog (ModelCatalogItem (..), ModelCatalogMap, loadModelCatalog)
 import LLM.Load.Types (LoadConfigError (..))

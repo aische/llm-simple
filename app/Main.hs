@@ -2,6 +2,8 @@
 
 module Main where
 
+import Configuration.Dotenv (defaultConfig, loadFile)
+import Control.Exception (SomeException, catch)
 import Heptapod (generate)
 import LLM.Agent
   ( Agent (..),
@@ -24,6 +26,7 @@ import LLM.Load
 
 main :: IO ()
 main = do
+  loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
   (_gpt, llama, _haiku, gemini, mistral, deepseek) <-
     loadModelsOrThrow
       "./model-catalog.json"

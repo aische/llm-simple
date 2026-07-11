@@ -10,6 +10,7 @@ module LLM.Load.LoadModels
   )
 where
 
+import Control.Exception (throwIO)
 import Control.Lens (Each (each), mapMOf)
 import Control.Monad (forM)
 import Control.Monad.Except (ExceptT, MonadError (throwError), liftEither, runExceptT)
@@ -74,7 +75,7 @@ loadModelsOrThrow_ :: (Each s t Text ModelConfig) => FilePath -> s -> IO (t, Mod
 loadModelsOrThrow_ filePath s = do
   r <- runExceptT $ loadModels filePath s
   case r of
-    Left err -> error (show err)
+    Left err -> throwIO err
     Right result -> pure result
 
 -- | Load a single model from a json file and throw an error if the model is not found
@@ -86,8 +87,11 @@ loadModelOrThrow_ :: FilePath -> Text -> IO (ModelConfig, ModelConfigMap, Gatewa
 loadModelOrThrow_ filePath modelConfigName = do
   r <- runExceptT $ loadModelConfigMap filePath
   case r of
-    Left err -> error (show err)
+    Left err -> throwIO err
     Right (modelConfigMap, gatewayMap) -> do
       case Map.lookup modelConfigName modelConfigMap of
-        Nothing -> error ("Model not found: " <> show modelConfigName)
+        Nothing ->
+          throwIO $
+            LoadModelConfigError $
+              "Model not found: " <> modelConfigName
         Just modelConfig -> pure (modelConfig, modelConfigMap, gatewayMap)

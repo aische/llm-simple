@@ -1,6 +1,7 @@
 module LLM.Tools.FsConfig
   ( FsConfig (..),
     SandboxViolation (..),
+    formatSandboxViolation,
     mkFsConfig,
     sandboxPath,
     sandboxWritePath,
@@ -12,6 +13,8 @@ where
 import Control.Exception (Exception, IOException, throwIO, try)
 import Control.Monad (when)
 import Data.List (foldl')
+import Data.Text (Text)
+import Data.Text qualified as T
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesPathExist, pathIsSymbolicLink)
 import System.FilePath (addTrailingPathSeparator, dropTrailingPathSeparator, equalFilePath, joinPath, normalise, splitDirectories, splitFileName, takeDirectory, (</>))
 
@@ -29,6 +32,20 @@ data SandboxViolation = SandboxViolation
   deriving (Show)
 
 instance Exception SandboxViolation
+
+-- | Model-facing message for a sandbox escape attempt. Paths are shown
+-- relative to the workspace root so host layout is not leaked.
+formatSandboxViolation :: SandboxViolation -> Text
+formatSandboxViolation (SandboxViolation attempted base) =
+  case stripPathPrefix
+    (splitDirectories (dropTrailingPathSeparator base))
+    (splitDirectories attempted) of
+    Just [] -> "Sandbox violation: path is outside the workspace"
+    Just relComps ->
+      "Sandbox violation: path is outside the workspace: "
+        <> T.pack (joinPath relComps)
+    Nothing ->
+      "Sandbox violation: path is outside the workspace"
 
 -- | Create an 'FsConfig' by canonicalizing the given base directory.
 -- The directory must already exist.

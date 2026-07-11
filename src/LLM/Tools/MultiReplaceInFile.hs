@@ -8,6 +8,7 @@ import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath)
+import LLM.Tools.FsLimits (maxReadBytes, readBoundedTextFile)
 
 data Replacement = Replacement
   { _repOld :: Text,
@@ -46,7 +47,10 @@ multiReplaceInFileToolTyped cfg =
       ttoolDescription =
         "Apply multiple text replacements to a file in order. "
           <> "Each 'old' string must appear exactly once in the file at the time it is applied. "
-          <> "Returns an error if any string is not found or appears more than once.",
+          <> "Returns an error if any string is not found or appears more than once. "
+          <> "Files larger than "
+          <> T.pack (show maxReadBytes)
+          <> " bytes are refused.",
       ttoolReadonly = False,
       ttoolExecute = const (replaceExecTyped cfg)
     }
@@ -55,12 +59,18 @@ replaceExecTyped :: FsConfig -> MultiReplaceInFileToolArgs -> IO Text
 replaceExecTyped cfg args = do
   let MultiReplaceInFileToolArgs {_mrifPath, _mrifReplacements} = args
   resolved <- sandboxPath cfg (T.unpack _mrifPath)
-  content <- TIO.readFile resolved
-  case applyReplacements _mrifReplacements content of
-    Left err -> pure err
-    Right result -> do
-      TIO.writeFile resolved result
-      pure $ "Successfully applied " <> T.pack (show (length _mrifReplacements)) <> " replacement(s) in " <> _mrifPath
+  contentE <- readBoundedTextFile resolved _mrifPath maxReadBytes
+  case contentE of
+    Left err -> pure $ "Error: " <> err
+    Right content -> case applyReplacements _mrifReplacements content of
+      Left err -> pure err
+      Right result -> do
+        TIO.writeFile resolved result
+        pure $
+          "Successfully applied "
+            <> T.pack (show (length _mrifReplacements))
+            <> " replacement(s) in "
+            <> _mrifPath
 
 -- | Apply a list of replacements sequentially, failing on the first error.
 applyReplacements :: [Replacement] -> Text -> Either Text Text

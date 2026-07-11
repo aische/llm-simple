@@ -51,19 +51,25 @@ import LLM.Tools.FsConfig (SandboxViolation, formatSandboxViolation)
 executeTool :: Hooks -> ToolContext -> [Tool Text] -> ToolCall -> IO ToolResult
 executeTool hooks ctx tools tc = case lookup tc.tcName toolMap of
   Nothing -> pure $ toolResult tc ("Unknown tool: " <> tc.tcName)
-  Just exec -> do
-    hooks.onToolCall tc.tcName (AE.toJSON tc.tcArguments)
-    result <- try (exec ctx tc.tcArguments)
-    case result of
-      Right text -> do
-        hooks.onToolResult tc.tcName text
-        pure $ toolResult tc text
-      Left (e :: SomeException) -> do
-        let msg = formatToolException e
+  Just tool -> do
+    if ctx.tcRuntimeArgs.rtReadonly && not tool.toolDef.toolReadonly
+      then do
+        let msg = "Error: tool is not available in readonly mode: " <> tc.tcName
         hooks.onToolError tc.tcName msg
-        pure $ toolResult tc ("Tool error: " <> msg)
+        pure $ toolResult tc msg
+      else do
+        hooks.onToolCall tc.tcName (AE.toJSON tc.tcArguments)
+        result <- try (tool.toolExecute ctx tc.tcArguments)
+        case result of
+          Right text -> do
+            hooks.onToolResult tc.tcName text
+            pure $ toolResult tc text
+          Left (e :: SomeException) -> do
+            let msg = formatToolException e
+            hooks.onToolError tc.tcName msg
+            pure $ toolResult tc ("Tool error: " <> msg)
   where
-    toolMap = [(t.toolDef.toolName, t.toolExecute) | t <- tools]
+    toolMap = [(t.toolDef.toolName, t) | t <- tools]
 
 -- | Execute all tool calls from a response
 executeTools :: Hooks -> ToolContext -> [Tool Text] -> [ToolCall] -> IO [ToolResult]

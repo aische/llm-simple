@@ -215,6 +215,8 @@ test-suite llm-simple-test
                         LLM.ChatSpec
                         LLM.DeepSeekSpec
                         LLM.FsConfigSpec
+                        LLM.FsLimitsSpec
+                        LLM.ToolUtilsSpec
                         LLM.TestKit
                         LLM.WeatherTool
     hs-source-dirs:     test

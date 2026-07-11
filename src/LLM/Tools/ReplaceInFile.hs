@@ -8,6 +8,7 @@ import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath)
+import LLM.Tools.FsLimits (maxReadBytes, readBoundedTextFile)
 
 data ReplaceInFileToolArgs = ReplaceInFileToolArgs
   { _rifPath :: Text,
@@ -33,7 +34,10 @@ replaceInFileToolTyped cfg =
       ttoolDescription =
         "Replace the first occurrence of a string in a file. "
           <> "The 'old' string must appear exactly once in the file. "
-          <> "Returns an error if the string is not found or appears more than once.",
+          <> "Returns an error if the string is not found or appears more than once. "
+          <> "Files larger than "
+          <> T.pack (show maxReadBytes)
+          <> " bytes are refused.",
       ttoolReadonly = False,
       ttoolExecute = const (replaceExecTyped cfg)
     }
@@ -43,19 +47,20 @@ replaceExecTyped cfg args = do
   let ReplaceInFileToolArgs {_rifPath, _rifOld, _rifNew} = args
       p = _rifPath
   resolved <- sandboxPath cfg (T.unpack p)
-  content <- TIO.readFile resolved
-  let occurrences = countOccurrences _rifOld content
-  case occurrences of
-    0 -> pure "Error: the 'old' string was not found in the file"
-    1 -> do
-      let replaced = replaceFirst _rifOld _rifNew content
-      TIO.writeFile resolved replaced
-      pure $ "Successfully replaced text in " <> p
-    n ->
-      pure $
-        "Error: the 'old' string was found "
-          <> T.pack (show n)
-          <> " times; it must appear exactly once"
+  contentE <- readBoundedTextFile resolved p maxReadBytes
+  case contentE of
+    Left err -> pure $ "Error: " <> err
+    Right content -> case countOccurrences _rifOld content of
+      0 -> pure "Error: the 'old' string was not found in the file"
+      1 -> do
+        let replaced = replaceFirst _rifOld _rifNew content
+        TIO.writeFile resolved replaced
+        pure $ "Successfully replaced text in " <> p
+      n ->
+        pure $
+          "Error: the 'old' string was found "
+            <> T.pack (show n)
+            <> " times; it must appear exactly once"
 
 -- | Count non-overlapping occurrences of needle in haystack.
 countOccurrences :: Text -> Text -> Int

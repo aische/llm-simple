@@ -6,14 +6,13 @@ where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)
-import Data.ByteString qualified as BS
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath)
-import LLM.Tools.FsLimits (binarySniffBytes)
+import LLM.Tools.FsLimits (detectBinary, maxPaginatedFileBytes)
 import System.IO
   ( Handle,
     IOMode (ReadMode),
@@ -66,7 +65,9 @@ readFilePaginatedToolTyped cfg =
       ttoolDescription =
         "Read a slice of a text file by line range (path relative to the workspace). "
           <> "Use 'offset' (1-based line number, default 1) and 'limit' (default 200, max 2000) "
-          <> "to walk through large files one page at a time. The response header reports the "
+          <> "to walk through large files one page at a time. Source files larger than "
+          <> T.pack (show maxPaginatedFileBytes)
+          <> " bytes are refused. The response header reports the "
           <> "file's byte size, the line range returned, and whether more lines remain along "
           <> "with the next offset to use. The tool is stateless: pass the next offset on the "
           <> "following call. Binary files are refused.",
@@ -89,8 +90,19 @@ execute cfg args = do
           <> " appears to be a binary file; read_file_paginated only supports text files."
     else do
       size <- withBinaryFile resolved ReadMode hFileSize
-      (lns, hasMore) <- readPage resolved offset limit
-      pure $ renderPage args._rfpPath size offset lns hasMore
+      if size > maxPaginatedFileBytes
+        then
+          pure $
+            "Error: "
+              <> args._rfpPath
+              <> " is "
+              <> T.pack (show size)
+              <> " bytes, which exceeds the "
+              <> T.pack (show maxPaginatedFileBytes)
+              <> "-byte cap for read_file_paginated."
+        else do
+          (lns, hasMore) <- readPage resolved offset limit
+          pure $ renderPage args._rfpPath size offset lns hasMore
 
 -- | Skip @offset - 1@ lines, take up to @limit@ lines, then probe one
 -- past the last returned line to determine whether more content remains.
@@ -158,9 +170,3 @@ fmtLine n line =
       pad = T.replicate (max 0 (6 - T.length s)) " "
    in pad <> s <> "| " <> line
 
--- | A NUL byte in the first few KB is a robust, cheap binary heuristic
--- (the same one used by git diff and grep).
-detectBinary :: FilePath -> IO Bool
-detectBinary path = withBinaryFile path ReadMode $ \h -> do
-  bs <- BS.hGet h binarySniffBytes
-  pure (BS.elem 0 bs)

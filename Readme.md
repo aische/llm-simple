@@ -135,7 +135,7 @@ main = do
   print r
 ```
 
-Set `rtReadonly = True` to omit mutating tools from the schema sent to the model.
+Set `rtReadonly = True` to omit mutating tools from the schema sent to the model and to block them at execution time.
 
 For local debugging, `defaultDebugHooks` enables stderr logging and writes request/response JSON to `./dumps` — avoid that in production or shared environments.
 
@@ -187,7 +187,8 @@ Filesystem tools enforce **workspace-relative path containment**: `..` escapes, 
 - The sandbox is **path-scoped**, not kernel-level isolation. Use a dedicated, disposable workspace directory — not your home directory or a production tree.
 - A **time-of-check/time-of-use (TOCTOU)** window exists between path validation and file open; a concurrent process inside the workspace could theoretically plant a symlink between those steps.
 - There is no denylist for sensitive in-workspace files (`.env`, `.git/config`, etc.). Anything inside the workspace is accessible to tools the model can call.
-- `rtReadonly` filters which tools are advertised to the model; it does not add a separate execution-time write guard.
+- Read tools enforce byte caps: whole-file and edit tools use a 1 MiB limit; `read_file_paginated` accepts source files up to 10 MiB.
+- `rtReadonly` omits mutating tools from the model schema and blocks them at execution time if they are invoked anyway.
 
 ## Module layout
 

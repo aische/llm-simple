@@ -17,13 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streaming tool-call phase detection uses conversation context instead of stream
   ordering heuristics.
 - Top-level `LLM` module export surface refined.
+- `replace_in_file` and `multi_replace_in_file` refuse files larger than 1 MiB.
+- `read_file_paginated` refuses source files larger than 10 MiB before line skipping.
+- `rtReadonly` now blocks mutating tools at execution time, not only in the tool schema.
 
 ### Added
 
 - `loadGatewaysWithDotenv` for explicit `.env` loading.
 - `formatSandboxViolation` for workspace-relative sandbox error messages.
+- `readBoundedTextFile` and `maxPaginatedFileBytes` filesystem resource limits.
 - DeepSeek recorded conversation fixtures and `record-conversation` executable.
-- Filesystem sandbox tests (`FsConfigSpec`).
+- Filesystem sandbox tests (`FsConfigSpec`, `FsLimitsSpec`, `ToolUtilsSpec`).
 
 ### Removed
 

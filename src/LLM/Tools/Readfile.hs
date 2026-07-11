@@ -1,18 +1,13 @@
 module LLM.Tools.Readfile (readfileToolTyped, ReadfileToolArgs (..)) where
 
 import Autodocodec qualified as AC
-import Control.Exception (IOException, try)
 import Data.Aeson (FromJSON)
-import Data.ByteString qualified as BS
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Encoding (decodeUtf8With)
-import Data.Text.Encoding.Error (lenientDecode)
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath)
-import LLM.Tools.FsLimits (detectBinary, maxReadBytes)
-import System.IO (IOMode (ReadMode), hFileSize, withBinaryFile)
+import LLM.Tools.FsLimits (maxReadBytes, readBoundedTextFile)
 
 newtype ReadfileToolArgs = ReadfileToolArgs
   { _rfPath :: Text
@@ -43,44 +38,7 @@ readfileExecTyped :: FsConfig -> ReadfileToolArgs -> IO Text
 readfileExecTyped cfg args = do
   let p = args._rfPath
   resolved <- sandboxPath cfg (T.unpack p)
-  isBinary <- detectBinary resolved
-  if isBinary
-    then
-      pure $
-        "Error: "
-          <> p
-          <> " appears to be a binary file; readfile only supports text files."
-    else do
-      sizeRes <-
-        try (withBinaryFile resolved ReadMode hFileSize) ::
-          IO (Either IOException Integer)
-      case sizeRes of
-        Left e -> pure $ "Error: could not stat " <> p <> ": " <> T.pack (show e)
-        Right sz
-          | sz > fromIntegral maxReadBytes ->
-              pure $
-                "Error: "
-                  <> p
-                  <> " is "
-                  <> T.pack (show sz)
-                  <> " bytes, which exceeds the "
-                  <> T.pack (show maxReadBytes)
-                  <> "-byte cap for readfile; use read_file_paginated."
-          | otherwise -> do
-              -- Strict bounded read: avoids lazy-IO handle linger (see R1)
-              -- and bounds the byte buffer at the cap even if the file
-              -- grew between the size check and the open (TOCTOU on size).
-              bsRes <-
-                try (withBinaryFile resolved ReadMode (`BS.hGet` (maxReadBytes + 1))) ::
-                  IO (Either IOException BS.ByteString)
-              case bsRes of
-                Left e -> pure $ "Error: could not read " <> p <> ": " <> T.pack (show e)
-                Right bs
-                  | BS.length bs > maxReadBytes ->
-                      pure $
-                        "Error: "
-                          <> p
-                          <> " grew past the "
-                          <> T.pack (show maxReadBytes)
-                          <> "-byte cap during the read; use read_file_paginated."
-                  | otherwise -> pure (decodeUtf8With lenientDecode bs)
+  result <- readBoundedTextFile resolved p maxReadBytes
+  pure $ case result of
+    Left err -> "Error: " <> err
+    Right content -> content

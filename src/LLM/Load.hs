@@ -47,6 +47,9 @@ module LLM.Load
   ( loadModelsOrThrow,
     loadModelOrThrow,
     LoadConfigError (..),
+    loadModelCatalog,
+    ModelCatalogItem (..),
+    ModelCatalogMap,
     fsTools,
     fsTools',
   )
@@ -54,4 +57,5 @@ where
 
 import LLM.Load.FsTools (fsTools, fsTools')
 import LLM.Load.LoadModels (loadModelOrThrow, loadModelsOrThrow)
+import LLM.Load.ModelCatalog (ModelCatalogItem (..), ModelCatalogMap, loadModelCatalog)
 import LLM.Load.Types (LoadConfigError (..))

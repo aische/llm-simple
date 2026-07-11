@@ -107,6 +107,10 @@ createToolContext agent messages roundUsage rt =
 getSchema :: (AC.HasCodec t, FromJSON t) => m ToolContext t -> AC.JSONCodec t
 getSchema _ = AC.codec
 
+-- | Convert a 'TypedTool' into a 'Tool' with JSON Schema parameters.
+--
+-- The executor receives parsed arguments (Autodocodec 'FromJSON'); invalid
+-- JSON from the model returns an error string to the model without throwing.
 toTool :: (AC.HasCodec args, FromJSON args) => TypedTool ToolContext args -> Tool Text
 toTool t@(TypedTool name descr readonly exec) =
   Tool
@@ -149,6 +153,11 @@ findNthUserFromEnd n conv = go (length conv - 1) n
           UserTurn _ -> go (idx - 1) (remaining - 1)
           _ -> go (idx - 1) remaining
 
+-- | Build a 'GenRequest' from agent configuration and runtime state.
+--
+-- Applies context windowing ('windowOffset'), resolves tools from the
+-- 'ToolMap' (including auto-injected @get_history@ when windowed), and
+-- respects 'RuntimeArgs.rtReadonly' when selecting tool definitions.
 createGenRequest :: (Text -> result) -> Agent -> ToolMap result -> RuntimeArgs -> [Turn] -> GenRequest
 createGenRequest embed agent toolMap rt messages =
   let offset = windowOffset agent.agContextWindow messages

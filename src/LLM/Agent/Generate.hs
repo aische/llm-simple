@@ -42,7 +42,12 @@ import LLM.Generate.Types
     StreamChunk (..),
   )
 
--- | Run the agent loop until a final or failed result.
+-- | Run the agent loop until the model returns final text or the run fails.
+--
+-- On success, 'gtrNewMessages' contains only the turns produced during this
+-- call (assistant and tool turns), not the input conversation.
+-- Tool rounds continue until the model responds without tool calls or
+-- 'Agent.agMaxToolRounds' is exceeded.
 generateText ::
   Agent ->
   ModelWithFallbacks ->
@@ -59,6 +64,11 @@ generateText agent models toolMap rt initialTurns =
     rt
     initialTurns
 
+-- | Like 'generateText', but streams token deltas via the callback.
+--
+-- The callback receives 'StreamChunk' values as the provider responds.
+-- Tool rounds still run to completion; streaming applies to each model call.
+-- Returns the same 'GenerateTextResult' / 'GenerateErrorResult' as 'generateText'.
 streamText ::
   (StreamChunk -> IO ()) ->
   Agent ->

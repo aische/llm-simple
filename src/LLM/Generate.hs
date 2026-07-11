@@ -1,4 +1,11 @@
--- | Single-request generation functions.
+-- | Single provider requests with retries and model fallbacks.
+--
+-- These functions perform one logical LLM call (possibly retried, possibly
+-- falling through 'ModelWithFallbacks') but do __not__ run a tool loop.
+-- For automatic tool execution use 'LLM.Agent.generateText' instead.
+--
+-- Lower-level entry points 'generateTextLLM' and 'streamTextLLM' target a
+-- single 'ModelConfig' without fallback orchestration.
 module LLM.Generate
   ( generateTextLLM,
     streamTextLLM,

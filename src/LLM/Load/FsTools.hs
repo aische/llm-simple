@@ -22,6 +22,12 @@ import LLM.Tools.RemoveFile (removeFileToolTyped)
 import LLM.Tools.ReplaceInFile (replaceInFileToolTyped)
 import LLM.Tools.Writefile (writefileToolTyped)
 
+-- | Build the bundled filesystem 'ToolMap' rooted at @filePath@.
+--
+-- All paths are resolved inside a canonical sandbox ('LLM.Tools.FsConfig').
+-- Mutating tools refuse paths that escape the workspace; reads are bounded
+-- (1 MiB for edits, 10 MiB for paginated reads). Include desired names in
+-- 'Agent.agTools' to expose them to the model.
 fsTools :: FilePath -> IO (ToolMap Text)
 fsTools filePath = do
   cfg <- mkFsConfig filePath
@@ -44,6 +50,10 @@ fsTools filePath = do
         ("writefile", toTool $ writefileToolTyped cfg)
       ]
 
+-- | Like 'fsTools', but embed each tool's 'Text' result via @embed@.
+--
+-- Use when your 'ToolMap' carries a custom result type (e.g. structured
+-- tool outcomes) instead of plain 'Text'.
 fsTools' :: (Text -> result) -> FilePath -> IO (ToolMap result)
 fsTools' embed filePath = do
   m <- fsTools filePath

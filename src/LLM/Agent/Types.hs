@@ -24,26 +24,42 @@ import LLM.Core.Usage (Usage)
 import LLM.Generate.Logger (Hooks)
 import LLM.Generate.Types (GenerateError, GenerateErrorResult, GenerateTextResult)
 
--- | Agent configuration
+-- | Static agent configuration shared across requests.
 data Agent = Agent
-  { agName :: Text,
+  { -- | Display name used in logs and debug hooks.
+    agName :: Text,
+    -- | Optional system prompt prepended to every provider request.
     agSystemPrompt :: Maybe Text,
+    -- | Tool names from the 'ToolMap' that may be sent to the model.
+    -- Only these names are exposed; the map may contain additional tools.
     agTools :: [Text],
+    -- | Maximum number of model→tool rounds before returning 'GErrToolExceeded'.
     agMaxToolRounds :: Int,
-    agContextWindow :: Maybe Int -- max recent turns sent to the model; Nothing = all
+    -- | When 'Just', only the last @n@ user messages (and their follow-on
+    -- turns) are sent to the provider. Older turns remain in 'ToolContext' and
+    -- can be retrieved via the auto-injected @get_history@ tool.
+    agContextWindow :: Maybe Int
   }
 
--- | Runtime arguments
+-- | Per-generation runtime state and callbacks.
 data RuntimeArgs = RuntimeArgs
-  { rtGenerationId :: UUID,
+  { -- | Correlates lifecycle events and result records for one run.
+    rtGenerationId :: UUID,
+    -- | When fired, in-flight generation and tool execution stop cooperatively.
     rtAbortSignal :: Maybe AbortSignal,
+    -- | Provider wire hooks (request/response JSON). See 'LLMHooks'.
     rtLLMHooks :: LLMHooks,
+    -- | Application hooks: logging, tool tracing, JSON dumps. See 'Hooks'.
     rtHooks :: Hooks,
+    -- | Observer for 'GenerateEvent' lifecycle notifications (UI, telemetry).
     rtOnEvent :: EventObserver,
+    -- | When 'True', mutating tools are rejected at execution time even if
+    -- they appear in 'Agent.agTools'. Read-only tools still run.
     rtReadonly :: Bool
   }
 
 -- | A tool: its definition (sent to the model) paired with its implementation.
+--
 -- 'toolExecute' receives a 'ToolContext' (full conversation + usage) and
 -- the JSON arguments from the model.
 data Tool result = Tool
@@ -51,6 +67,7 @@ data Tool result = Tool
     toolExecute :: ToolContext -> Value -> IO result
   }
 
+-- | Map from tool name to implementation. Built manually or via 'fsTools'.
 type ToolMap result = Map Text (Tool result)
 
 -- | Context passed to tool implementations during execution.
@@ -61,28 +78,37 @@ data ToolContext = ToolContext
     tcUsage :: Usage,
     -- | Index into 'tcConversation' where the visible window starts.
     -- Everything before this index is hidden from the model.
-    -- A @get_history@ tool can use this to serve paginated history.
+    -- The @get_history@ tool uses this to serve paginated history.
     tcWindowOffset :: Int,
     tcRuntimeArgs :: RuntimeArgs
   }
 
--- | Generation lifecycle event
+-- | Generation lifecycle event tagged with the run's 'rtGenerationId'.
 data GenerateEvent = GenerateEvent
   { geGenerationId :: UUID,
     geDetail :: GenerateEventDetail
   }
   deriving (Show, Eq)
 
--- | Generation lifecycle event details
+-- | Details carried by a 'GenerateEvent'.
 data GenerateEventDetail
-  = GenerationStarted
-  | GenerationFinished GenerateTextResult
-  | GenerationFailed GenerateError GenerateErrorResult
-  | MessageCreated Turn
-  | MessageUpdated UUID Text
-  | MessageFinalized Turn
-  | ToolRoundStarted Int
-  | ToolRoundFinished Int
+  = -- | The agent loop has started.
+    GenerationStarted
+  | -- | Final assistant text is ready.
+    GenerationFinished GenerateTextResult
+  | -- | The run failed; partial turns and usage are in the 'GenerateErrorResult'.
+    GenerationFailed GenerateError GenerateErrorResult
+  | -- | A new turn was appended (assistant tool-call round or tool results).
+    MessageCreated Turn
+  | -- | Streaming update to an in-flight assistant message (unused by default loop).
+    MessageUpdated UUID Text
+  | -- | The final assistant turn for a successful run.
+    MessageFinalized Turn
+  | -- | Tool execution for round @n@ is about to start.
+    ToolRoundStarted Int
+  | -- | Tool execution for round @n@ finished.
+    ToolRoundFinished Int
   deriving (Show, Eq)
 
+-- | Callback invoked for each 'GenerateEvent' during a run.
 type EventObserver = GenerateEvent -> IO ()

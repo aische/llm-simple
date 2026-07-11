@@ -35,6 +35,10 @@ import LLM.Generate.Types
     StreamChunk (..),
   )
 
+-- | Generate text with retries and model fallbacks.
+--
+-- Tries 'mwfModel' first, then each fallback in order. Returns a provider
+-- 'ChatResponse' on success; does not execute tools.
 generateTextWithFallbacks ::
   GenRequest ->
   ModelWithFallbacks ->
@@ -48,6 +52,8 @@ generateTextWithFallbacks gr models =
         let usage = usageWithModelCost mc (fromMaybe emptyUsage resp.respUsage)
          in pure $ Right resp {respUsage = Just usage}
 
+-- | Like 'generateTextWithFallbacks', but streams 'StreamChunk' values
+-- through @onChunk@ as the provider responds.
 streamTextWithFallbacks ::
   (StreamChunk -> IO ()) ->
   GenRequest ->

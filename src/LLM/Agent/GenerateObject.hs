@@ -17,6 +17,9 @@ import LLM.Generate.ModelConfig
   )
 import LLM.Generate.Types (GeneratableObject, GenerateErrorResult)
 
+-- | Generate a typed Haskell value from the model via Autodocodec.
+--
+-- Tools are not used; conversation context is taken from @turns@ only.
 generateObject ::
   (GeneratableObject t) =>
   Agent ->
@@ -26,6 +29,7 @@ generateObject ::
   IO (Either GenerateErrorResult (t, Usage))
 generateObject a m r t = genObject (createGenRequest id a Map.empty r t) m
 
+-- | Generate a JSON 'Value' from the model using a caller-supplied schema.
 generateObjectUntyped ::
   Agent ->
   ModelWithFallbacks ->

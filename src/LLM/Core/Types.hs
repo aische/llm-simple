@@ -28,11 +28,18 @@ import Data.Text (Text)
 import GHC.Generics (Generic)
 import LLM.Core.Usage (Usage)
 
--- | A gateway to an LLM provider
+-- | Provider adapter for one LLM backend.
+--
+-- Implement the three callbacks to add a custom provider, or use the
+-- bundled constructors in 'LLM.Providers'.
 data LLMGateway = LLMGateway
-  { gwName :: Text,
+  { -- | Short name used in logs and hooks (e.g. @openai@).
+    gwName :: Text,
+    -- | Non-streaming chat completion.
     gwGenerateText :: LLMHooks -> ChatRequest -> IO LLMTextResult,
+    -- | Streaming chat; invoke the callback for each 'StreamEvent'.
     gwStreamText :: LLMHooks -> ChatRequest -> (StreamEvent -> IO ()) -> IO LLMTextResult,
+    -- | Structured JSON output against a caller-supplied schema.
     gwGenerateObject :: LLMHooks -> Value -> ChatRequest -> IO LLMObjectResult
   }
 
@@ -43,7 +50,10 @@ type LLMTextResult = LLMResult ChatResponse
 
 type LLMObjectResult = LLMResult (Value, Maybe Usage)
 
--- | Hooks for observing LLMProvider
+-- | Hooks for observing raw provider request and response JSON on the wire.
+--
+-- Distinct from 'LLM.Generate.Logger.Hooks', which covers application-level
+-- logging and tool tracing. Bridge to this type via 'llmHooks'.
 data LLMHooks = LLMHooks
   { onLLMRequest :: Text -> Value -> IO (),
     onLLMResponse :: Text -> Value -> IO (),
@@ -84,10 +94,16 @@ data ToolDef = ToolDef
   { toolName :: Text,
     toolDescription :: Text,
     toolParameters :: Value, -- JSON Schema object
+    -- | When 'True', the tool is advertised as read-only and remains available
+    -- when 'RuntimeArgs.rtReadonly' is set. Mutating tools should use 'False'.
     toolReadonly :: Bool
   }
   deriving (Show, Eq)
 
+-- | Typed tool definition before conversion to 'Tool' via 'toTool'.
+--
+-- Define one with an Autodocodec argument type; 'toTool' derives the JSON
+-- Schema for 'ToolDef.toolParameters' automatically.
 data TypedTool c a = TypedTool
   { ttoolName :: Text,
     ttoolDescription :: Text,

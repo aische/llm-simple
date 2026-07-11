@@ -5,6 +5,7 @@ module LLM.Generate.Types
     GenerateErrorResult (..),
     GenerateTextResult (..),
     StreamChunk (..),
+    RoundTextRole (..),
     GeneratableObject,
   )
 where
@@ -58,6 +59,9 @@ data GenerateError
   | GErrParseObjectError Text
   deriving (Show, Eq)
 
+data RoundTextRole = AnswerRole | PreambleRole
+  deriving (Show, Eq)
+
 data StreamChunk
   = -- | Final answer text for the pre-allocated assistant message.
     AnswerDelta Text
@@ -65,6 +69,11 @@ data StreamChunk
     ReasoningDelta Text
   | -- | Text from an LLM round that also issued tool calls.
     PreambleDelta Text
+  | -- | Unclassified text while the round role is still unknown.
+    TextDelta Text
+  | -- | Signals that prior 'TextDelta' chunks (or misclassified deltas) belong
+    -- to the given role for this round.
+    RoundTextRoleCommitted RoundTextRole
   | -- | A complete tool call from the provider stream.
     StreamToolCallChunk ToolCall
   deriving (Show, Eq)

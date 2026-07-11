@@ -14,6 +14,7 @@ module LLM.Generate
     GenerateErrorResult (..),
     GenerateTextResult (..),
     StreamChunk (..),
+    RoundTextRole (..),
     GeneratableObject,
     Hooks (..),
     Logger,

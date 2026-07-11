@@ -7,6 +7,7 @@ module LLM.Generate.Generate
   )
 where
 
+import Control.Monad (unless, when)
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Maybe (fromMaybe)
 import LLM.Core.Types
@@ -14,6 +15,7 @@ import LLM.Core.Types
     LLMGateway (..),
     LLMTextResult,
     StreamEvent (..),
+    Turn (..),
   )
 import LLM.Core.Usage (emptyUsage)
 import LLM.Generate.GenerateUtils
@@ -29,6 +31,7 @@ import LLM.Generate.ModelConfig
 import LLM.Generate.Types
   ( GenRequest (..),
     GenerateResult,
+    RoundTextRole (..),
     StreamChunk (..),
   )
 
@@ -70,29 +73,51 @@ streamTextLLM onChunk gr mc =
   callWithRetryTimeout gr mc $
     let request = mkRequest gr mc
      in do
-          onProviderEvent <- mkProviderStreamCallback gr onChunk
-          mc.mcGateway.gwStreamText gr.grLLMHooks request onProviderEvent
+          ProviderStreamCallback {pscOnEvent, pscFinalize} <-
+            mkProviderStreamCallback gr onChunk
+          result <- mc.mcGateway.gwStreamText gr.grLLMHooks request pscOnEvent
+          case result of
+            Right _ -> pscFinalize >> pure result
+            Left err -> pure (Left err)
 
-data StreamChannel
-  = AnswerChannel
-  | PreambleChannel
+data RoundPhase = Unclassified | Preamble | Answer
+  deriving (Eq)
+
+data ProviderStreamCallback = ProviderStreamCallback
+  { pscOnEvent :: StreamEvent -> IO (),
+    pscFinalize :: IO ()
+  }
+
+initialPhase :: [Turn] -> RoundPhase
+initialPhase turns =
+  case reverse turns of
+    ToolTurn _ : _ -> Answer
+    _ -> Unclassified
 
 mkProviderStreamCallback ::
   GenRequest ->
   (StreamChunk -> IO ()) ->
-  IO (StreamEvent -> IO ())
-mkProviderStreamCallback _gr onChunk = do
-  -- TODO: this is not a good implementation
-  channelRef <- newIORef AnswerChannel
-  pure $ \case
-    StreamReasoningDelta txt -> onChunk (ReasoningDelta txt)
-    StreamDelta txt -> do
-      channel <- readIORef channelRef
-      case channel of
-        AnswerChannel -> do
-          let chunk = AnswerDelta txt
-          onChunk chunk
-        PreambleChannel -> onChunk (PreambleDelta txt)
-    StreamToolCall tc -> do
-      writeIORef channelRef PreambleChannel
-      onChunk (StreamToolCallChunk tc)
+  IO ProviderStreamCallback
+mkProviderStreamCallback gr onChunk = do
+  phaseRef <- newIORef (initialPhase gr.grMessages)
+  pure
+    ProviderStreamCallback
+      { pscOnEvent = \case
+          StreamReasoningDelta txt -> onChunk (ReasoningDelta txt)
+          StreamDelta txt -> do
+            phase <- readIORef phaseRef
+            case phase of
+              Answer -> onChunk (AnswerDelta txt)
+              Preamble -> onChunk (PreambleDelta txt)
+              Unclassified -> onChunk (TextDelta txt)
+          StreamToolCall tc -> do
+            phase <- readIORef phaseRef
+            unless (phase == Preamble) $
+              onChunk (RoundTextRoleCommitted PreambleRole)
+            writeIORef phaseRef Preamble
+            onChunk (StreamToolCallChunk tc),
+        pscFinalize = do
+          phase <- readIORef phaseRef
+          when (phase == Unclassified) $
+            onChunk (RoundTextRoleCommitted AnswerRole)
+      }

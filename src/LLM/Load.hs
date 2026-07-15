@@ -22,9 +22,10 @@
 --
 -- @
 --
--- available providers are defined in @providers.json@ (bundled with the package).
--- Place a custom @providers.json@ next to your model catalog to add
--- OpenAI-compatible providers or override endpoints.
+-- available providers come from built-in defaults. Place an optional
+-- @providers.json@ next to your model catalog to add OpenAI-compatible
+-- providers or override built-in endpoints; file entries merge on top of
+-- the defaults.
 --
 -- If a model (resp. its provider) requires an API key, it must be set in the
 -- process environment. This module does not load a @.env@ file automatically;

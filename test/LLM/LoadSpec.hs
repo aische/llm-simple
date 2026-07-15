@@ -16,6 +16,7 @@ import LLM.Load.ProviderCatalog
     ProviderProtocol (..),
     defaultProviderCatalogMap,
     loadProviderCatalog,
+    loadProviderCatalogForModelCatalog,
   )
 import LLM.Load.Types (LoadConfigError (..))
 import System.FilePath ((</>))
@@ -35,6 +36,9 @@ ollamaCatalog = "./test/fixtures/ollama-catalog.json"
 
 providersOllamaOnly :: FilePath
 providersOllamaOnly = "./test/fixtures/providers-ollama-only.json"
+
+providersOpenrouterOnly :: FilePath
+providersOpenrouterOnly = "./test/fixtures/providers-openrouter-only.json"
 
 spec :: Spec
 spec = describe "Load" $ do
@@ -110,6 +114,33 @@ spec = describe "Load" $ do
       Map.member "openai" defaultProviderCatalogMap `shouldBe` True
       Map.member "ollama" defaultProviderCatalogMap `shouldBe` True
 
+    it "merges a partial providers.json with built-in defaults" $
+      withProviderCatalogDir providersOpenrouterOnly $ \catalogPath -> do
+        result <- runExceptT $ loadProviderCatalogForModelCatalog catalogPath
+        case result of
+          Left err -> expectationFailure $ show err
+          Right catalog -> do
+            Map.member "openrouter" catalog `shouldBe` True
+            Map.member "openai" catalog `shouldBe` True
+            Map.member "ollama" catalog `shouldBe` True
+
+    it "lets providers.json override a built-in provider" $
+      withProviderCatalogDir providersOllamaOnly $ \catalogPath -> do
+        result <- runExceptT $ loadProviderCatalogForModelCatalog catalogPath
+        case result of
+          Left err -> expectationFailure $ show err
+          Right catalog -> do
+            Map.lookup "ollama" catalog
+              `shouldBe` Just
+                ProviderCatalogItem
+                  { providerName = "ollama",
+                    protocol = OllamaProtocol,
+                    baseUrl = "http://localhost:11434",
+                    apiKeyEnv = Nothing,
+                    baseUrlEnv = Nothing
+                  }
+            Map.member "openai" catalog `shouldBe` True
+
   describe "invalid catalog JSON" $ do
     it "reports a catalog parse/load error" $ withTempCatalog "[not valid json" $ \path -> do
       result <- try @LoadConfigError (loadModelOrThrow path "x")
@@ -124,3 +155,13 @@ withTempCatalog contents act =
     let path = root </> "catalog.json"
     writeFile path contents
     act path `catch` \(_ :: IOException) -> act path
+
+withProviderCatalogDir :: FilePath -> (FilePath -> IO a) -> IO a
+withProviderCatalogDir providersFixture act =
+  withSystemTempDirectory "llm-simple-providers" $ \root -> do
+    let catalogPath = root </> "model-catalog.json"
+        providersPath = root </> "providers.json"
+    writeFile catalogPath "[]"
+    providersJson <- readFile providersFixture
+    writeFile providersPath providersJson
+    act catalogPath `catch` \(_ :: IOException) -> act catalogPath

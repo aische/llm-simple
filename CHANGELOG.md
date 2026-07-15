@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Partial `providers.json` files are merged with built-in provider defaults;
+  file entries add or override providers by `providerName`.
+
 ### Added
 
 - `providers.json` provider catalog: configure provider endpoints, API key env

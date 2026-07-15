@@ -74,9 +74,11 @@ A provider is only available if its API key is set (except Ollama, which is alwa
 
 ### Provider catalog
 
-Providers are defined in `providers.json` (bundled with the package). When you
-load a model catalog, the loader looks for `providers.json` in the same
-directory; if it is missing, the bundled defaults are used.
+Providers are defined in `providers.json` (bundled with the package as a
+reference). Built-in providers are always available. When you load a model
+catalog, the loader looks for `providers.json` in the same directory; if present,
+its entries are merged on top of the built-ins — adding new providers or
+overriding built-ins with the same `providerName`.
 
 | Field         | Description                                                                 |
 | ------------- | --------------------------------------------------------------------------- |

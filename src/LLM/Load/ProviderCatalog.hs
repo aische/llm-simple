@@ -117,10 +117,18 @@ loadProviderCatalog filePath =
   Map.fromList . fmap (\item -> (item.providerName, item))
     <$> decodeJsonFile filePath (LoadProviderCatalogError . T.pack)
 
+-- | Load providers for a model catalog path.
+--
+-- Built-in providers are always available. When @providers.json@ exists in the
+-- same directory as the model catalog, its entries are merged on top: file
+-- entries add new providers or override built-ins with the same
+-- @providerName@.
 loadProviderCatalogForModelCatalog :: FilePath -> ExceptT LoadConfigError IO ProviderCatalogMap
 loadProviderCatalogForModelCatalog modelCatalogPath = do
   let providerPath = takeDirectory modelCatalogPath </> "providers.json"
   exists <- liftIO $ doesFileExist providerPath
-  if exists
-    then loadProviderCatalog providerPath
-    else pure defaultProviderCatalogMap
+  fileCatalog <-
+    if exists
+      then loadProviderCatalog providerPath
+      else pure Map.empty
+  pure $ Map.union fileCatalog defaultProviderCatalogMap

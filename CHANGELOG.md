@@ -7,10 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- Partial `providers.json` files are merged with built-in provider defaults;
-  file entries add or override providers by `providerName`.
+## [0.1.0.2] - 2026-07-15
 
 ### Added
 
@@ -19,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `loadProviderCatalog`, `ProviderCatalogItem`, and `loadGatewaysFromCatalog`
   for explicit provider catalog loading.
 - Optional `baseUrlEnv` overrides for OpenAI, DeepSeek, and Ollama.
+
+### Changed
+
+- Partial `providers.json` files are merged with built-in provider defaults;
+  file entries add or override providers by `providerName`.
 
 ## [0.1.0.1] - 2026-07-11
 
@@ -57,5 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   DeepSeek), single-shot generation with fallbacks, agent tool loops, structured
   output, JSON model catalog loading, and workspace-scoped filesystem tools.
 
+[0.1.0.2]: https://github.com/aische/llm-simple/compare/v0.1.0.1...v0.1.0.2
 [0.1.0.1]: https://github.com/aische/llm-simple/compare/v0.1.0.0...v0.1.0.1
 [0.1.0.0]: https://github.com/aische/llm-simple/releases/tag/v0.1.0.0

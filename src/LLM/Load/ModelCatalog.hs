@@ -13,7 +13,7 @@ import LLM.Load.Utils (decodeJsonFile)
 
 data ModelCatalogItem = ModelCatalogItem
   { modelConfigName :: Text,
-    providerName :: Text, -- provider name: "openai", "claude", "gemini", "ollama"
+    providerName :: Text, -- key from providers.json (built-in or custom)
     modelName :: Text,
     pricing :: PricingInfo,
     maxTokens :: Int,

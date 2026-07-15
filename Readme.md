@@ -2,7 +2,7 @@
 
 An experimental Haskell **LLM toolbox** for trying out providers, tool loops, and workspace agents locally. It is meant to get you from zero to a working agent quickly — not to be a production agent platform.
 
-The API stays small on purpose: a JSON model catalog, bundled filesystem tools, and a straight line from `loadModelOrThrow` to `generateText`. Under that surface you still get multi-provider gateways, fallbacks, streaming, structured output, and sandboxed workspace tools — enough to prototype and compare ideas without assembling the pieces yourself.
+The API stays small on purpose: JSON model and provider catalogs, bundled filesystem tools, and a straight line from `loadModelOrThrow` to `generateText`. Under that surface you still get multi-provider gateways, fallbacks, streaming, structured output, and sandboxed workspace tools — enough to prototype and compare ideas without assembling the pieces yourself.
 
 **Status:** early 0.1.x release. APIs may change.
 
@@ -12,7 +12,7 @@ The API stays small on purpose: a JSON model catalog, bundled filesystem tools, 
 - **Generate:** single-request text, streaming, and structured object generation with model fallbacks, timeouts, retries, and throttling
 - **Agent:** multi-round tool loops (`generateText`, `streamText`, `generateObject`)
 - **Tools:** filesystem tool suite with workspace path sandboxing
-- **Load:** JSON model catalog and API-key gateway initialization
+- **Load:** JSON model and provider catalogs, API-key gateway initialization
 - **Observability:** hooks, logging, and generation lifecycle events
 
 ## Install
@@ -94,6 +94,10 @@ entry with `"protocol": "openai"`, set `baseUrl` and `apiKeyEnv`, then reference
 
 Optional base URL overrides for built-in providers: `OPENAI_BASE_URL`,
 `DEEPSEEK_BASE_URL`, `OLLAMA_BASE_URL`.
+
+`loadGateways` and `loadGatewaysWithDotenv` always use built-in provider defaults.
+Custom providers from a co-located `providers.json` apply when loading models via
+`loadModelOrThrow` or `loadModelsOrThrow`.
 
 ### Loading models
 
@@ -225,7 +229,7 @@ Filesystem tools enforce **workspace-relative path containment**: `..` escapes, 
 | `LLM.Generate`  | Single-request generation with fallbacks (`generateTextWithFallbacks`, `streamTextWithFallbacks`, `genObject`) |
 | `LLM.Agent`     | Agent loops with tool execution (`generateText`, `streamText`)                                                 |
 | `LLM.Tools`     | Built-in filesystem tool definitions                                                                           |
-| `LLM.Load`      | Model catalog loading, gateway init, `fsTools`                                                                 |
+| `LLM.Load`      | Model and provider catalog loading, gateway init, `fsTools`                                                    |
 
 Import `LLM` for the common surface, or import sub-modules directly for agent loops, providers, and advanced configuration. Sub-module APIs are exposed but considered experimental in 0.1.x.
 

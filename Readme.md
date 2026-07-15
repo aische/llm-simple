@@ -59,7 +59,7 @@ Models are defined in a JSON array. Each entry maps a logical config name to a p
 | Field             | Description                                                              |
 | ----------------- | ------------------------------------------------------------------------ |
 | `modelConfigName` | Name used in code to look up this config                                 |
-| `providerName`    | `"openai"`, `"claude"`, `"gemini"`, `"ollama"`, or `"deepseek"`          |
+| `providerName`    | Provider key defined in `providers.json`                                   |
 | `modelName`       | Provider-specific model identifier                                       |
 | `pricing`         | `pricePerMillionInput` / `pricePerMillionOutput` for usage cost tracking |
 | `maxTokens`       | Max tokens per request                                                   |
@@ -71,6 +71,27 @@ Models are defined in a JSON array. Each entry maps a logical config name to a p
 | `thinking`        | Extended thinking effort level (optional, provider-dependent)            |
 
 A provider is only available if its API key is set (except Ollama, which is always available).
+
+### Provider catalog
+
+Providers are defined in `providers.json` (bundled with the package). When you
+load a model catalog, the loader looks for `providers.json` in the same
+directory; if it is missing, the bundled defaults are used.
+
+| Field         | Description                                                                 |
+| ------------- | --------------------------------------------------------------------------- |
+| `providerName`| Key referenced by `providerName` in model catalog entries                   |
+| `protocol`    | `"openai"`, `"claude"`, `"gemini"`, `"ollama"`, or `"deepseek"`             |
+| `baseUrl`     | Provider host/base URL (OpenAI-compatible protocols append `/v1/chat/completions`) |
+| `apiKeyEnv`   | Environment variable holding the API key (omit for keyless providers)       |
+| `baseUrlEnv`  | Optional env var that overrides `baseUrl` at runtime                      |
+
+To add an OpenAI-compatible provider (OpenRouter, Groq, Together, etc.), add an
+entry with `"protocol": "openai"`, set `baseUrl` and `apiKeyEnv`, then reference
+`providerName` from your model catalog.
+
+Optional base URL overrides for built-in providers: `OPENAI_BASE_URL`,
+`DEEPSEEK_BASE_URL`, `OLLAMA_BASE_URL`.
 
 ### Loading models
 

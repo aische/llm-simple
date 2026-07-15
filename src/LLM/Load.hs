@@ -22,23 +22,16 @@
 --
 -- @
 --
--- available providers:
---
---    * "openai"
---
---    * "claude"
---
---    * "gemini"
---
---    * "ollama"
---
---    * "deepseek"
---
+-- available providers are defined in @providers.json@ (bundled with the package).
+-- Place a custom @providers.json@ next to your model catalog to add
+-- OpenAI-compatible providers or override endpoints.
 --
 -- If a model (resp. its provider) requires an API key, it must be set in the
 -- process environment. This module does not load a @.env@ file automatically;
 -- use @Configuration.Dotenv.loadFile@ in your @main@ or call
 -- 'loadGatewaysWithDotenv' when building gateways yourself.
+--
+-- Built-in API key environment variables:
 --
 -- @
 --    GEMINI_API_KEY=...
@@ -46,22 +39,36 @@
 --    OPENAI_API_KEY=...
 --    DEEPSEEK_API_KEY=...
 -- @
+--
+-- Optional base URL overrides: @OPENAI_BASE_URL@, @DEEPSEEK_BASE_URL@,
+-- @OLLAMA_BASE_URL@.
 module LLM.Load
   ( loadModelsOrThrow,
     loadModelOrThrow,
     LoadConfigError (..),
     loadGateways,
     loadGatewaysWithDotenv,
+    loadGatewaysFromCatalog,
     loadModelCatalog,
+    loadProviderCatalog,
     ModelCatalogItem (..),
     ModelCatalogMap,
+    ProviderCatalogItem (..),
+    ProviderCatalogMap,
+    ProviderProtocol (..),
     fsTools,
     fsTools',
   )
 where
 
 import LLM.Load.FsTools (fsTools, fsTools')
-import LLM.Load.LoadGateways (loadGateways, loadGatewaysWithDotenv)
+import LLM.Load.LoadGateways (loadGateways, loadGatewaysFromCatalog, loadGatewaysWithDotenv)
 import LLM.Load.LoadModels (loadModelOrThrow, loadModelsOrThrow)
 import LLM.Load.ModelCatalog (ModelCatalogItem (..), ModelCatalogMap, loadModelCatalog)
+import LLM.Load.ProviderCatalog
+  ( ProviderCatalogItem (..),
+    ProviderCatalogMap,
+    ProviderProtocol (..),
+    loadProviderCatalog,
+  )
 import LLM.Load.Types (LoadConfigError (..))

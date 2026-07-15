@@ -20,15 +20,17 @@ import Data.Map qualified as Map
 import Data.Text (Text)
 import LLM.Core.Types (ThinkingMode (..))
 import LLM.Generate.ModelConfig (ModelConfig (..))
-import LLM.Load.LoadGateways (GatewayMap, loadGateways)
+import LLM.Load.LoadGateways (GatewayMap, loadGatewaysFromCatalogOrThrow)
 import LLM.Load.ModelCatalog (ModelCatalogItem (..), loadModelCatalog)
+import LLM.Load.ProviderCatalog (loadProviderCatalogForModelCatalog)
 import LLM.Load.Types (LoadConfigError (LoadModelConfigError))
 
 type ModelConfigMap = Map Text ModelConfig
 
 loadModelConfigMap :: FilePath -> ExceptT LoadConfigError IO (ModelConfigMap, GatewayMap)
 loadModelConfigMap filePath = do
-  gatewayMap <- liftIO loadGateways
+  providerCatalog <- loadProviderCatalogForModelCatalog filePath
+  gatewayMap <- liftIO $ loadGatewaysFromCatalogOrThrow providerCatalog
   modelCatalogMap <- loadModelCatalog filePath
   modelConfigs <- forM (Map.toList modelCatalogMap) $ \(modelConfigName, item) -> do
     case Map.lookup item.providerName gatewayMap of

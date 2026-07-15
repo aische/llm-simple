@@ -1,8 +1,10 @@
 module LLM.Providers.OpenAI
   ( openAIGateway,
     openAIGatewayWith,
+    openAIGatewayWithName,
     openAIProvider,
     openAIProviderWith,
+    openAIProviderWithName,
     parseOpenAIResponse,
     parseOpenAIUsage,
     buildMessages,
@@ -85,16 +87,23 @@ openAIGateway apiKey = toGateway $ openAIProvider apiKey
 
 -- | Create an OpenAI-compatible client with a custom base URL.
 openAIGatewayWith :: Url scheme -> Option scheme -> Text -> LLMGateway
-openAIGatewayWith baseUrl baseOpts apiKey = toGateway (openAIProviderWith baseUrl baseOpts apiKey)
+openAIGatewayWith = openAIGatewayWithName "openai"
+
+-- | Create an OpenAI-compatible client with a custom provider name and base URL.
+openAIGatewayWithName :: Text -> Url scheme -> Option scheme -> Text -> LLMGateway
+openAIGatewayWithName name baseUrl baseOpts apiKey = toGateway (openAIProviderWithName name baseUrl baseOpts apiKey)
 
 -- | Create an OpenAI provider. Takes the API key as a parameter.
 openAIProvider :: Text -> LLMProvider
 openAIProvider = openAIProviderWith (https "api.openai.com") mempty
 
 openAIProviderWith :: Url scheme -> Option scheme -> Text -> LLMProvider
-openAIProviderWith baseUrl baseOpts apiKey =
+openAIProviderWith = openAIProviderWithName "openai"
+
+openAIProviderWithName :: Text -> Url scheme -> Option scheme -> Text -> LLMProvider
+openAIProviderWithName name baseUrl baseOpts apiKey =
   LLMProvider
-    { providerName = "openai",
+    { providerName = name,
       buildBody = openAIBuildBody,
       sendRequest = sendRequest,
       sendStreamRequest = \body callback ->

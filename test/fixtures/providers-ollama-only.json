@@ -1,0 +1,7 @@
+[
+    {
+        "providerName": "ollama",
+        "protocol": "ollama",
+        "baseUrl": "http://localhost:11434"
+    }
+]

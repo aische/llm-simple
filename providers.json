@@ -1,0 +1,34 @@
+[
+    {
+        "providerName": "openai",
+        "protocol": "openai",
+        "baseUrl": "https://api.openai.com",
+        "apiKeyEnv": "OPENAI_API_KEY",
+        "baseUrlEnv": "OPENAI_BASE_URL"
+    },
+    {
+        "providerName": "claude",
+        "protocol": "claude",
+        "baseUrl": "https://api.anthropic.com",
+        "apiKeyEnv": "CLAUDE_API_KEY"
+    },
+    {
+        "providerName": "gemini",
+        "protocol": "gemini",
+        "baseUrl": "https://generativelanguage.googleapis.com",
+        "apiKeyEnv": "GEMINI_API_KEY"
+    },
+    {
+        "providerName": "deepseek",
+        "protocol": "deepseek",
+        "baseUrl": "https://api.deepseek.com",
+        "apiKeyEnv": "DEEPSEEK_API_KEY",
+        "baseUrlEnv": "DEEPSEEK_BASE_URL"
+    },
+    {
+        "providerName": "ollama",
+        "protocol": "ollama",
+        "baseUrl": "http://localhost:11434",
+        "baseUrlEnv": "OLLAMA_BASE_URL"
+    }
+]

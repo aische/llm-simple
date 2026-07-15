@@ -35,7 +35,6 @@ import Network.HTTP.Req
   ( Option,
     POST (POST),
     ReqBodyJson (ReqBodyJson),
-    Scheme (Http),
     Url,
     http,
     jsonResponse,
@@ -53,7 +52,7 @@ ollamaGateway :: LLMGateway
 ollamaGateway = toGateway ollamaProvider
 
 -- | Create a LLMGateway for a custom Ollama instance.
-ollamaGatewayWith :: Url 'Http -> Option 'Http -> LLMGateway
+ollamaGatewayWith :: Url scheme -> Option scheme -> LLMGateway
 ollamaGatewayWith baseUrl baseOpts = toGateway (ollamaProviderWith baseUrl baseOpts)
 
 -- | Default Ollama provider at localhost:11434.

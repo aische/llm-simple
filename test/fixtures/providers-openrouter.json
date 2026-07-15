@@ -1,0 +1,8 @@
+[
+    {
+        "providerName": "openrouter",
+        "protocol": "openai",
+        "baseUrl": "https://openrouter.ai/api",
+        "apiKeyEnv": "OPENROUTER_API_KEY"
+    }
+]

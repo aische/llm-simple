@@ -7,6 +7,8 @@ import Data.Text (Text)
 data LoadConfigError
   = -- | The catalog file is missing or contains invalid JSON.
     LoadModelCatalogError Text
+  | -- | The provider catalog file is missing or contains invalid JSON.
+    LoadProviderCatalogError Text
   | -- | A catalog entry references an unknown model or provider.
     LoadModelConfigError Text
   | -- | A @file:@ system prompt path could not be read.

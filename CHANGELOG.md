@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `providers.json` provider catalog: configure provider endpoints, API key env
+  vars, and protocols without hardcoding providers in Haskell.
+- `loadProviderCatalog`, `ProviderCatalogItem`, and `loadGatewaysFromCatalog`
+  for explicit provider catalog loading.
+- Optional `baseUrlEnv` overrides for OpenAI, DeepSeek, and Ollama.
+
 ## [0.1.0.1] - 2026-07-11
 
 ### Changed

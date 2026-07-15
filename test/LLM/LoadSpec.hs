@@ -1,14 +1,22 @@
 module LLM.LoadSpec (spec) where
 
 import Control.Exception (IOException, SomeException, catch, displayException, fromException, try)
+import Control.Monad.Except (runExceptT)
 import Data.Aeson (Value (Array), eitherDecodeFileStrict')
 import Data.Map qualified as Map
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
+import LLM.Core.Types (LLMGateway (..))
 import LLM.Generate.ModelConfig (ModelConfig (..))
-import LLM.Load.LoadGateways (loadGateways)
+import LLM.Load.LoadGateways (buildGateway, loadGateways, loadGatewaysFromCatalog, parseProviderBaseUrl)
 import LLM.Load.LoadModels (loadModelOrThrow, loadModelOrThrow_, loadModelsOrThrow)
+import LLM.Load.ProviderCatalog
+  ( ProviderCatalogItem (..),
+    ProviderProtocol (..),
+    defaultProviderCatalogMap,
+    loadProviderCatalog,
+  )
 import LLM.Load.Types (LoadConfigError (..))
 import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
@@ -24,6 +32,9 @@ import Test.Hspec
 
 ollamaCatalog :: FilePath
 ollamaCatalog = "./test/fixtures/ollama-catalog.json"
+
+providersOllamaOnly :: FilePath
+providersOllamaOnly = "./test/fixtures/providers-ollama-only.json"
 
 spec :: Spec
 spec = describe "Load" $ do
@@ -65,6 +76,39 @@ spec = describe "Load" $ do
     it "always includes ollama" $ do
       gateways <- loadGateways
       Map.member "ollama" gateways `shouldBe` True
+
+    it "builds an openai-compatible gateway from a custom provider catalog" $ do
+      let item =
+            ProviderCatalogItem
+              { providerName = "openrouter",
+                protocol = OpenAIProtocol,
+                baseUrl = "https://openrouter.ai/api",
+                apiKeyEnv = Just "OPENROUTER_API_KEY",
+                baseUrlEnv = Nothing
+              }
+      Right baseUrl <- pure $ parseProviderBaseUrl item.baseUrl
+      let gateway = buildGateway item baseUrl "test-key"
+          LLMGateway {gwName = name} = gateway
+      name `shouldBe` "openrouter"
+
+    it "loads gateways from a provider catalog file" $ do
+      result <- runExceptT $ loadProviderCatalog providersOllamaOnly
+      case result of
+        Left err -> expectationFailure $ show err
+        Right catalog -> do
+          gateways <- loadGatewaysFromCatalog catalog
+          Map.keys gateways `shouldSatisfy` ("ollama" `elem`)
+
+  describe "provider catalog JSON" $ do
+    it "parses the bundled provider catalog" $ do
+      result <- eitherDecodeFileStrict' "./providers.json"
+      case result of
+        Right (Array xs) -> length xs `shouldSatisfy` (> 0)
+        _ -> expectationFailure "expected a JSON array"
+
+    it "includes built-in providers in the default catalog" $ do
+      Map.member "openai" defaultProviderCatalogMap `shouldBe` True
+      Map.member "ollama" defaultProviderCatalogMap `shouldBe` True
 
   describe "invalid catalog JSON" $ do
     it "reports a catalog parse/load error" $ withTempCatalog "[not valid json" $ \path -> do

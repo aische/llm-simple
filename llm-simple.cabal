@@ -40,6 +40,7 @@ extra-doc-files:
 
 extra-source-files:
     model-catalog.json
+    providers.json
 
 tested-with:
     GHC ==9.6.7
@@ -127,6 +128,7 @@ library
         LLM.Load
         LLM.Load.LoadGateways
         LLM.Load.ModelCatalog
+        LLM.Load.ProviderCatalog
         LLM.Load.LoadModels
         LLM.Load.Types
         LLM.Load.Utils
@@ -239,5 +241,6 @@ test-suite llm-simple-test
         hspec          >=2.10  && <2.12,
         heptapod       >=1.1   && <1.2,
         llm-simple,
+        mtl            >=2.3   && <2.4,
         retry          >=0.9   && <0.10
     build-tool-depends: hspec-discover:hspec-discover

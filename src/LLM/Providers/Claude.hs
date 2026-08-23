@@ -1,6 +1,8 @@
 module LLM.Providers.Claude
   ( claudeGateway,
+    claudeGatewayWith,
     claudeProvider,
+    claudeProviderWith,
     parseClaudeResponse,
     parseClaudeUsage,
   )
@@ -53,7 +55,6 @@ import Network.HTTP.Req
   ( Option,
     POST (POST),
     ReqBodyJson (ReqBodyJson),
-    Scheme (Https),
     Url,
     header,
     https,
@@ -66,51 +67,57 @@ import Network.HTTP.Req
     (/:),
   )
 
--- | Create a LLMGateway for the Claude provider. Takes the API key as a parameter.
+-- | Create a LLMGateway for the Claude provider at api.anthropic.com.
 claudeGateway :: Text -> LLMGateway
 claudeGateway apiKey = toGateway $ claudeProvider apiKey
 
--- | Create a LLMProvider for the Claude provider. Takes the API key as a parameter.
+-- | Create a Claude-compatible client with a custom base URL (origin).
+-- The library appends @/v1/messages@.
+claudeGatewayWith :: Url scheme -> Option scheme -> Text -> LLMGateway
+claudeGatewayWith baseUrl baseOpts apiKey = toGateway (claudeProviderWith baseUrl baseOpts apiKey)
+
+-- | Create a LLMProvider for the Claude provider at api.anthropic.com.
 claudeProvider :: Text -> LLMProvider
-claudeProvider apiKey =
+claudeProvider = claudeProviderWith (https "api.anthropic.com") mempty
+
+-- | Claude-compatible provider with a custom base URL (origin).
+-- The library appends @/v1/messages@.
+claudeProviderWith :: Url scheme -> Option scheme -> Text -> LLMProvider
+claudeProviderWith baseUrl baseOpts apiKey =
   LLMProvider
     { providerName = "claude",
       buildBody = claudeBuildBody,
       sendRequest = sendRequest,
       sendStreamRequest = \body callback ->
-        runReq lenientConfig $
-          reqBr POST claudeUrl (ReqBodyJson body) (claudeOpts apiKey) $ \resp ->
+        runReq lenientConfig $ do
+          let url = baseUrl /: "v1" /: "messages"
+              opts = baseOpts <> claudeAuthOpts apiKey
+          reqBr POST url (ReqBodyJson body) opts $ \resp ->
             handleStreamResponse resp (`parseClaudeStream` callback),
       parseResponse = pure . parseClaudeResponse,
-      -- buildObjectBody _ r schema = claudeBuildBody False (r {reqConversation = reqConversation r <> Conversation [UserTurn ("Generate a JSON object matching this schema: " <> T.pack (show schema))]})
       buildObjectBody = \r schema ->
         let schemaText = TL.toStrict . decodeUtf8 $ encode schema
             instruction = "Respond with a raw JSON object matching this schema. No markdown, no explanation, no code fences:\n" <> schemaText
             conv' = r.reqConversation <> [UserTurn instruction]
          in claudeBuildBody False (r {reqConversation = conv'}),
       sendObjectRequest = sendRequest,
-      -- parseObjectResponse _ = parseClaudeObjectResponse
       parseObjectResponse = parseClaudeObjectResponse
     }
   where
     sendRequest body =
       runReq lenientConfig $ do
-        resp <- req POST claudeUrl (ReqBodyJson body) jsonResponse (claudeOpts apiKey)
+        let url = baseUrl /: "v1" /: "messages"
+            opts = baseOpts <> claudeAuthOpts apiKey
+        resp <- req POST url (ReqBodyJson body) jsonResponse opts
         pure (responseStatusCode resp, responseBody resp)
 
 -- Internal helpers
 
-claudeUrl :: Url 'Https
-claudeUrl = https "api.anthropic.com" /: "v1" /: "messages"
-
-claudeOpts :: Text -> Option 'Https
-claudeOpts apiKey =
+claudeAuthOpts :: Text -> Option scheme
+claudeAuthOpts apiKey =
   header "x-api-key" (encodeUtf8 apiKey)
     <> header "anthropic-version" "2023-06-01"
 
--- | Create an LLMClient from Claude credentials
--- claudeGateway :: Text -> LLMGateway
--- claudeGateway apiKey = toGateway (Claude apiKey)
 parseClaudeStream :: HC.BodyReader -> (StreamEvent -> IO ()) -> IO LLMTextResult
 parseClaudeStream reader callback = do
   blocksRef <- newIORef ([] :: [ContentBlock])

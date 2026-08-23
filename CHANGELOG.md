@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Claude and Gemini gateways honor catalog `baseUrl` / `baseUrlEnv` (previously
+  ignored; always hit the public Anthropic/Google hosts). New
+  `claudeGatewayWith` / `geminiGatewayWith` constructors; optional
+  `CLAUDE_BASE_URL` and `GEMINI_BASE_URL` env overrides.
+
 ### Changed
 
 - Example `model-catalog.json`: default Gemini entry is `gemini_lite` (`gemini-3.1-flash-lite`);

@@ -85,7 +85,7 @@ defaultProviderCatalogMap =
           protocol = ClaudeProtocol,
           baseUrl = "https://api.anthropic.com",
           apiKeyEnv = Just "CLAUDE_API_KEY",
-          baseUrlEnv = Nothing
+          baseUrlEnv = Just "CLAUDE_BASE_URL"
         }
     geminiItem =
       ProviderCatalogItem
@@ -93,7 +93,7 @@ defaultProviderCatalogMap =
           protocol = GeminiProtocol,
           baseUrl = "https://generativelanguage.googleapis.com",
           apiKeyEnv = Just "GEMINI_API_KEY",
-          baseUrlEnv = Nothing
+          baseUrlEnv = Just "GEMINI_BASE_URL"
         }
     deepseekItem =
       ProviderCatalogItem

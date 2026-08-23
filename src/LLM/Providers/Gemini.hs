@@ -1,6 +1,8 @@
 module LLM.Providers.Gemini
   ( geminiGateway,
+    geminiGatewayWith,
     geminiProvider,
+    geminiProviderWith,
     parseGeminiResponse,
     parseGeminiUsage,
   )
@@ -53,8 +55,10 @@ import LLM.Core.Types
 import LLM.Core.Usage (Usage (..))
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Req
-  ( POST (POST),
+  ( Option,
+    POST (POST),
     ReqBodyJson (ReqBodyJson),
+    Url,
     header,
     https,
     jsonResponse,
@@ -67,13 +71,23 @@ import Network.HTTP.Req
     (=:),
   )
 
--- | Create a LLMGateway for the Gemini provider. Takes the API key as a parameter.
+-- | Create a LLMGateway for the Gemini provider at generativelanguage.googleapis.com.
 geminiGateway :: Text -> LLMGateway
 geminiGateway apiKey = toGateway (geminiProvider apiKey)
 
--- | Create a LLMProvider for the Gemini provider. Takes the API key as a parameter.
+-- | Create a Gemini-compatible client with a custom base URL (origin).
+-- The library appends @/v1beta/models/{model}:generateContent@ (and the stream variant).
+geminiGatewayWith :: Url scheme -> Option scheme -> Text -> LLMGateway
+geminiGatewayWith baseUrl baseOpts apiKey = toGateway (geminiProviderWith baseUrl baseOpts apiKey)
+
+-- | Create a LLMProvider for the Gemini provider at generativelanguage.googleapis.com.
 geminiProvider :: Text -> LLMProvider
-geminiProvider apiKey =
+geminiProvider = geminiProviderWith (https "generativelanguage.googleapis.com") mempty
+
+-- | Gemini-compatible provider with a custom base URL (origin).
+-- The library appends @/v1beta/models/{model}:generateContent@ (and the stream variant).
+geminiProviderWith :: Url scheme -> Option scheme -> Text -> LLMProvider
+geminiProviderWith baseUrl baseOpts apiKey =
   LLMProvider
     { providerName = "gemini",
       buildBody = const geminiBuildBody,
@@ -82,11 +96,12 @@ geminiProvider apiKey =
         runReq lenientConfig $ do
           let model = extractModel body
               url =
-                https "generativelanguage.googleapis.com"
+                baseUrl
                   /: "v1beta"
                   /: "models"
                   /: (model <> ":streamGenerateContent")
-          reqBr POST url (ReqBodyJson (stripBoundsAndComments $ stripModel body)) (header "x-goog-api-key" (encodeUtf8 apiKey) <> "alt" =: ("sse" :: Text)) $ \resp ->
+              opts = baseOpts <> geminiAuthOpts apiKey <> "alt" =: ("sse" :: Text)
+          reqBr POST url (ReqBodyJson (stripBoundsAndComments $ stripModel body)) opts $ \resp ->
             handleStreamResponse resp (`parseGeminiStream` callback),
       parseResponse = parseGeminiResponse,
       buildObjectBody = \r schema ->
@@ -118,12 +133,16 @@ geminiProvider apiKey =
         -- We extract it from the request body JSON since the LLMProvider only passes Value.
         let model = extractModel body
             url =
-              https "generativelanguage.googleapis.com"
+              baseUrl
                 /: "v1beta"
                 /: "models"
                 /: (model <> ":generateContent")
-        resp <- req POST url (ReqBodyJson (stripBoundsAndComments $ stripModel body)) jsonResponse (header "x-goog-api-key" (encodeUtf8 apiKey))
+            opts = baseOpts <> geminiAuthOpts apiKey
+        resp <- req POST url (ReqBodyJson (stripBoundsAndComments $ stripModel body)) jsonResponse opts
         pure (responseStatusCode resp, responseBody resp)
+
+geminiAuthOpts :: Text -> Option scheme
+geminiAuthOpts apiKey = header "x-goog-api-key" (encodeUtf8 apiKey)
 
 -- | Extract model name stashed in the request body by geminiBuildBody.
 extractModel :: Value -> Text

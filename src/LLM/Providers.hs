@@ -6,11 +6,15 @@ module LLM.Providers
 
     -- * Gemini
     geminiProvider,
+    geminiProviderWith,
     geminiGateway,
+    geminiGatewayWith,
 
     -- * Claude
     claudeProvider,
+    claudeProviderWith,
     claudeGateway,
+    claudeGatewayWith,
 
     -- * Ollama
     ollamaProvider,
@@ -22,8 +26,8 @@ module LLM.Providers
   )
 where
 
-import LLM.Providers.Claude (claudeGateway, claudeProvider)
+import LLM.Providers.Claude (claudeGateway, claudeGatewayWith, claudeProvider, claudeProviderWith)
 import LLM.Providers.DeepSeek (deepSeekGateway, deepSeekProvider)
-import LLM.Providers.Gemini (geminiGateway, geminiProvider)
+import LLM.Providers.Gemini (geminiGateway, geminiGatewayWith, geminiProvider, geminiProviderWith)
 import LLM.Providers.Ollama (ollamaGateway, ollamaProvider)
 import LLM.Providers.OpenAI (openAIGateway, openAIProvider)

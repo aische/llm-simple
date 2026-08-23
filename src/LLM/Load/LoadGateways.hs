@@ -29,9 +29,9 @@ import LLM.Load.ProviderCatalog
     defaultProviderCatalogMap,
   )
 import LLM.Load.Types (LoadConfigError (LoadModelConfigError))
-import LLM.Providers.Claude (claudeGateway)
+import LLM.Providers.Claude (claudeGatewayWith)
 import LLM.Providers.DeepSeek (deepSeekGatewayWith)
-import LLM.Providers.Gemini (geminiGateway)
+import LLM.Providers.Gemini (geminiGatewayWith)
 import LLM.Providers.Ollama (ollamaGatewayWith)
 import LLM.Providers.OpenAI (openAIGatewayWithName)
 import Network.HTTP.Client qualified as HC
@@ -91,8 +91,12 @@ parseProviderBaseUrl urlText =
 buildGateway :: ProviderCatalogItem -> ProviderBaseUrl -> Text -> LLMGateway
 buildGateway item baseUrl apiKey =
   case item.protocol of
-    ClaudeProtocol -> claudeGateway apiKey
-    GeminiProtocol -> geminiGateway apiKey
+    ClaudeProtocol -> case baseUrl of
+      HttpsProviderBase url opts -> claudeGatewayWith url opts apiKey
+      HttpProviderBase url opts -> claudeGatewayWith url opts apiKey
+    GeminiProtocol -> case baseUrl of
+      HttpsProviderBase url opts -> geminiGatewayWith url opts apiKey
+      HttpProviderBase url opts -> geminiGatewayWith url opts apiKey
     OpenAIProtocol -> case baseUrl of
       HttpsProviderBase url opts -> openAIGatewayWithName item.providerName url opts apiKey
       HttpProviderBase url opts -> openAIGatewayWithName item.providerName url opts apiKey

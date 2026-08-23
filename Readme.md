@@ -84,7 +84,7 @@ overriding built-ins with the same `providerName`.
 | ------------- | --------------------------------------------------------------------------- |
 | `providerName`| Key referenced by `providerName` in model catalog entries                   |
 | `protocol`    | `"openai"`, `"claude"`, `"gemini"`, `"ollama"`, or `"deepseek"`             |
-| `baseUrl`     | Provider host/base URL (OpenAI-compatible protocols append `/v1/chat/completions`) |
+| `baseUrl`     | Provider origin (scheme+host[+port[+optional path prefix]]). OpenAI/DeepSeek/Ollama append `/v1/chat/completions`; Claude appends `/v1/messages`; Gemini appends `/v1beta/models/{model}:generateContent` |
 | `apiKeyEnv`   | Environment variable holding the API key (omit for keyless providers)       |
 | `baseUrlEnv`  | Optional env var that overrides `baseUrl` at runtime                      |
 
@@ -93,8 +93,9 @@ entry with `"protocol": "openai"`, set `baseUrl` and `apiKeyEnv`, then reference
 `providerName` from your model catalog.
 
 Optional base URL overrides for built-in providers: `OPENAI_BASE_URL`,
-`DEEPSEEK_BASE_URL`, `OLLAMA_BASE_URL`.
-
+`CLAUDE_BASE_URL`, `GEMINI_BASE_URL`, `DEEPSEEK_BASE_URL`, `OLLAMA_BASE_URL`.
+Do not include the protocol path (`/v1/...` or `/v1beta/...`) in `baseUrl`; the
+library appends it.
 `loadGateways` and `loadGatewaysWithDotenv` always use built-in provider defaults.
 Custom providers from a co-located `providers.json` apply when loading models via
 `loadModelOrThrow` or `loadModelsOrThrow`.

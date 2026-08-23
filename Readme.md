@@ -109,7 +109,7 @@ import LLM.Load (loadModelsOrThrow)
 main = do
   loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
   (gemini, deepseek) <-
-    loadModelsOrThrow "./model-catalog.json" ("gemini_2_5_flash", "deepseek4flash")
+    loadModelsOrThrow "./model-catalog.json" ("gemini_lite", "deepseek4flash")
   ...
 ```
 
@@ -135,7 +135,7 @@ main = do
   loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
 
   (gemini, deepseek) <-
-    loadModelsOrThrow "./model-catalog.json" ("gemini_2_5_flash", "deepseek4flash")
+    loadModelsOrThrow "./model-catalog.json" ("gemini_lite", "deepseek4flash")
 
   let models = ModelWithFallbacks { mwfModel = gemini, mwfFallbacks = [deepseek] }
 

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Example `model-catalog.json`: default Gemini entry is `gemini_lite` (`gemini-3.1-flash-lite`);
+  removed deprecated `gemini-2.5-flash` config; raised example `maxTokens` to 4096; added
+  optional `gpt_5_6_terra` (`gpt-5.6-terra`); corrected `gemini_lite` and `deepseek4flash`
+  pricing (DeepSeek rates are peak cache-miss; off-peak is half).
+
 ## [0.1.0.2] - 2026-07-15
 
 ### Added

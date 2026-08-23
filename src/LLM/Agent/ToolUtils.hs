@@ -9,6 +9,7 @@ module LLM.Agent.ToolUtils
     getResolvedTools,
     windowOffset,
     createGenRequest,
+    createGenRequestNoTools,
     embedTextTool,
   )
 where
@@ -165,6 +166,23 @@ createGenRequest embed agent toolMap rt messages =
    in GenRequest
         { grSystemPrompt = agent.agSystemPrompt,
           grTools = map (\x -> x.toolDef) tools,
+          grMessages = drop offset messages,
+          grAbortSignal = rt.rtAbortSignal,
+          grLLMHooks = rt.rtLLMHooks,
+          grHooks = rt.rtHooks
+        }
+
+-- | Like 'createGenRequest', but never attaches tool definitions.
+--
+-- Still applies 'agContextWindow' truncation to 'grMessages'. Use this for
+-- structured-output paths ('generateObject' / 'generateObjectUntyped'), which
+-- cannot execute tools and must not advertise @get_history@.
+createGenRequestNoTools :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
+createGenRequestNoTools agent rt messages =
+  let offset = windowOffset agent.agContextWindow messages
+   in GenRequest
+        { grSystemPrompt = agent.agSystemPrompt,
+          grTools = [],
           grMessages = drop offset messages,
           grAbortSignal = rt.rtAbortSignal,
           grLLMHooks = rt.rtLLMHooks,

@@ -13,10 +13,6 @@ import LLM.Core.Usage
     addUsage,
     emptyUsage,
     estimateCost,
-    pricePerMillionInput,
-    pricePerMillionOutput,
-    usageInputTokens,
-    usageOutputTokens,
   )
 import LLM.Core.Utils
   ( getToolCalls,

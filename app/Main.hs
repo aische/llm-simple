@@ -30,7 +30,7 @@ main = do
   (_gpt, llama, _haiku, gemini, mistral, deepseek) <-
     loadModelsOrThrow
       "./model-catalog.json"
-      ("gpt_4_1", "llama_3_2", "haiku_4_5", "gemini_2_5_flash", "mistral", "deepseek4flash")
+      ("gpt_4_1", "llama_3_2", "haiku_4_5", "gemini_lite", "mistral", "deepseek4flash")
 
   let _models1 = ModelWithFallbacks {mwfModel = llama, mwfFallbacks = []}
       _models2 = ModelWithFallbacks {mwfModel = mistral, mwfFallbacks = []}

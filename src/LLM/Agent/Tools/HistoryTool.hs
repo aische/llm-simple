@@ -42,7 +42,8 @@ historyToolTyped =
       ttoolDescription =
         "Retrieve earlier conversation history that is not in your current context window. "
           <> "Pass chunk=0 for the most recent hidden history, chunk=1 for the one before that, etc. "
-          <> "Returns an empty result when there is no more history.",
+          <> "Returns \"(no earlier history)\" when nothing is hidden, and \"(no more history)\" "
+          <> "when the chunk index is out of range.",
       ttoolReadonly = True,
       ttoolExecute = getHistoryExecTyped
     }
@@ -59,15 +60,23 @@ isUserTurn _ = False
 -- backward from the end. Each page starts at a 'UserTurn'.
 -- Chunk 0 is the most recent page, chunk 1 the one before, etc.
 -- The oldest chunk (highest index) may contain fewer than @n@ user messages.
+--
+-- When @n <= 0@ (e.g. the visible window has no user turns), paging is
+-- disabled and the whole conversation is returned as a single chunk.
+-- This avoids an infinite loop in the page walker when @start == end@.
 chunkBackward :: Int -> [Turn] -> [[Turn]]
 chunkBackward _ [] = []
-chunkBackward n conv = reverse (go (length conv) [])
+chunkBackward n conv
+  | n <= 0 = [conv]
+  | otherwise = reverse (go (length conv) [])
   where
     go 0 acc = acc
     go end acc =
       let start = findNthUserBack n (take end conv)
           page = slice start end conv
-       in go start (page : acc)
+       in if start >= end
+            then page : acc -- should not happen for n > 0; refuse to loop
+            else go start (page : acc)
 
 -- | Find the start index for a page containing @n@ user messages,
 -- scanning backward from the end of the given prefix.

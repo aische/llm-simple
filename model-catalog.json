@@ -7,7 +7,22 @@
             "pricePerMillionInput": 2.0,
             "pricePerMillionOutput": 8.0
         },
-        "maxTokens": 1024,
+        "maxTokens": 4096,
+        "temperature": 0.5,
+        "requestTimeout": 10000,
+        "throttleDelay": 1000,
+        "retryCount": 3,
+        "jitterBackoff": 1000
+    },
+    {
+        "modelConfigName": "gpt_5_6_terra",
+        "providerName": "openai",
+        "modelName": "gpt-5.6-terra",
+        "pricing": {
+            "pricePerMillionInput": 2.0,
+            "pricePerMillionOutput": 12.0
+        },
+        "maxTokens": 4096,
         "temperature": 0.5,
         "requestTimeout": 10000,
         "throttleDelay": 1000,
@@ -22,7 +37,7 @@
             "pricePerMillionInput": 0.0,
             "pricePerMillionOutput": 0.0
         },
-        "maxTokens": 1024,
+        "maxTokens": 4096,
         "temperature": 0.5,
         "requestTimeout": 3000,
         "throttleDelay": 1000,
@@ -37,24 +52,9 @@
             "pricePerMillionInput": 0.0,
             "pricePerMillionOutput": 0.0
         },
-        "maxTokens": 1024,
+        "maxTokens": 4096,
         "temperature": 0.5,
         "requestTimeout": 30000,
-        "throttleDelay": 1000,
-        "retryCount": 3,
-        "jitterBackoff": 1000
-    },
-    {
-        "modelConfigName": "gemini_2_5_flash",
-        "providerName": "gemini",
-        "modelName": "gemini-2.5-flash",
-        "pricing": {
-            "pricePerMillionInput": 0.1,
-            "pricePerMillionOutput": 0.4
-        },
-        "maxTokens": 1024,
-        "temperature": 0.5,
-        "requestTimeout": 10000,
         "throttleDelay": 1000,
         "retryCount": 3,
         "jitterBackoff": 1000
@@ -64,10 +64,10 @@
         "providerName": "gemini",
         "modelName": "gemini-3.1-flash-lite",
         "pricing": {
-            "pricePerMillionInput": 0.1,
-            "pricePerMillionOutput": 0.4
+            "pricePerMillionInput": 0.25,
+            "pricePerMillionOutput": 1.5
         },
-        "maxTokens": 1024,
+        "maxTokens": 4096,
         "temperature": 0.5,
         "requestTimeout": 10000,
         "throttleDelay": 1000,
@@ -82,7 +82,7 @@
             "pricePerMillionInput": 1,
             "pricePerMillionOutput": 5
         },
-        "maxTokens": 1024,
+        "maxTokens": 4096,
         "temperature": 0.5,
         "requestTimeout": 30000,
         "throttleDelay": 5000,
@@ -94,10 +94,10 @@
         "providerName": "deepseek",
         "modelName": "deepseek-v4-flash",
         "pricing": {
-            "pricePerMillionInput": 0.14,
-            "pricePerMillionOutput": 0.28
+            "pricePerMillionInput": 0.44,
+            "pricePerMillionOutput": 1.32
         },
-        "maxTokens": 1024,
+        "maxTokens": 4096,
         "temperature": 0.5,
         "requestTimeout": 20000,
         "throttleDelay": 3000,

@@ -21,7 +21,7 @@ The API stays small on purpose: JSON model and provider catalogs, bundled filesy
 cabal build
 ```
 
-Requires GHC 9.6+ with `GHC2021` (see `llm-simple.cabal`).
+Requires GHC 9.6–9.12 with `GHC2021` (see `tested-with` in `llm-simple.cabal`).
 
 ## Quick start
 
@@ -84,7 +84,7 @@ overriding built-ins with the same `providerName`.
 | ------------- | --------------------------------------------------------------------------- |
 | `providerName`| Key referenced by `providerName` in model catalog entries                   |
 | `protocol`    | `"openai"`, `"claude"`, `"gemini"`, `"ollama"`, or `"deepseek"`             |
-| `baseUrl`     | Provider host/base URL (OpenAI-compatible protocols append `/v1/chat/completions`) |
+| `baseUrl`     | Provider origin (scheme+host[+port[+optional path prefix]]). OpenAI/DeepSeek/Ollama append `/v1/chat/completions`; Claude appends `/v1/messages`; Gemini appends `/v1beta/models/{model}:generateContent` |
 | `apiKeyEnv`   | Environment variable holding the API key (omit for keyless providers)       |
 | `baseUrlEnv`  | Optional env var that overrides `baseUrl` at runtime                      |
 
@@ -93,8 +93,9 @@ entry with `"protocol": "openai"`, set `baseUrl` and `apiKeyEnv`, then reference
 `providerName` from your model catalog.
 
 Optional base URL overrides for built-in providers: `OPENAI_BASE_URL`,
-`DEEPSEEK_BASE_URL`, `OLLAMA_BASE_URL`.
-
+`CLAUDE_BASE_URL`, `GEMINI_BASE_URL`, `DEEPSEEK_BASE_URL`, `OLLAMA_BASE_URL`.
+Do not include the protocol path (`/v1/...` or `/v1beta/...`) in `baseUrl`; the
+library appends it.
 `loadGateways` and `loadGatewaysWithDotenv` always use built-in provider defaults.
 Custom providers from a co-located `providers.json` apply when loading models via
 `loadModelOrThrow` or `loadModelsOrThrow`.
@@ -109,7 +110,7 @@ import LLM.Load (loadModelsOrThrow)
 main = do
   loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
   (gemini, deepseek) <-
-    loadModelsOrThrow "./model-catalog.json" ("gemini_2_5_flash", "deepseek4flash")
+    loadModelsOrThrow "./model-catalog.json" ("gemini_lite", "deepseek4flash")
   ...
 ```
 
@@ -135,7 +136,7 @@ main = do
   loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
 
   (gemini, deepseek) <-
-    loadModelsOrThrow "./model-catalog.json" ("gemini_2_5_flash", "deepseek4flash")
+    loadModelsOrThrow "./model-catalog.json" ("gemini_lite", "deepseek4flash")
 
   let models = ModelWithFallbacks { mwfModel = gemini, mwfFallbacks = [deepseek] }
 

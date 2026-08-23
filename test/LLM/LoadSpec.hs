@@ -95,6 +95,34 @@ spec = describe "Load" $ do
           LLMGateway {gwName = name} = gateway
       name `shouldBe` "openrouter"
 
+    it "builds a claude gateway from a custom baseUrl origin" $ do
+      let item =
+            ProviderCatalogItem
+              { providerName = "claude",
+                protocol = ClaudeProtocol,
+                baseUrl = "https://claude-proxy.example.com",
+                apiKeyEnv = Just "CLAUDE_API_KEY",
+                baseUrlEnv = Nothing
+              }
+      Right baseUrl <- pure $ parseProviderBaseUrl item.baseUrl
+      let gateway = buildGateway item baseUrl "test-key"
+          LLMGateway {gwName = name} = gateway
+      name `shouldBe` "claude"
+
+    it "builds a gemini gateway from a custom baseUrl origin" $ do
+      let item =
+            ProviderCatalogItem
+              { providerName = "gemini",
+                protocol = GeminiProtocol,
+                baseUrl = "https://gemini-proxy.example.com",
+                apiKeyEnv = Just "GEMINI_API_KEY",
+                baseUrlEnv = Nothing
+              }
+      Right baseUrl <- pure $ parseProviderBaseUrl item.baseUrl
+      let gateway = buildGateway item baseUrl "test-key"
+          LLMGateway {gwName = name} = gateway
+      name `shouldBe` "gemini"
+
     it "loads gateways from a provider catalog file" $ do
       result <- runExceptT $ loadProviderCatalog providersOllamaOnly
       case result of

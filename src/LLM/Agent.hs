@@ -26,6 +26,7 @@ module LLM.Agent
     noEventObserver,
     toTool,
     createGenRequest,
+    createGenRequestNoTools,
   )
 where
 

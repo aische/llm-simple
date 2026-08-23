@@ -19,7 +19,7 @@ import LLM.Core.Types
   )
 import LLM.Core.Usage (Usage (..), estimateCost)
 import LLM.Core.Utils (withRetry, withTimeout)
-import LLM.Generate.Logger (Hooks (..), LogLevel (..), onLog)
+import LLM.Generate.Logger (Hooks (..), LogLevel (..))
 import LLM.Generate.ModelConfig
   ( ModelConfig (..),
     ModelWithFallbacks (..),

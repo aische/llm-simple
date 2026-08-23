@@ -10,13 +10,15 @@
         "providerName": "claude",
         "protocol": "claude",
         "baseUrl": "https://api.anthropic.com",
-        "apiKeyEnv": "CLAUDE_API_KEY"
+        "apiKeyEnv": "CLAUDE_API_KEY",
+        "baseUrlEnv": "CLAUDE_BASE_URL"
     },
     {
         "providerName": "gemini",
         "protocol": "gemini",
         "baseUrl": "https://generativelanguage.googleapis.com",
-        "apiKeyEnv": "GEMINI_API_KEY"
+        "apiKeyEnv": "GEMINI_API_KEY",
+        "baseUrlEnv": "GEMINI_BASE_URL"
     },
     {
         "providerName": "deepseek",

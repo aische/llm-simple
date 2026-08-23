@@ -44,6 +44,9 @@ extra-source-files:
 
 tested-with:
     GHC ==9.6.7
+  , GHC ==9.8.4
+  , GHC ==9.10.2
+  , GHC ==9.12.2
 
 source-repository head
     type:     git
@@ -142,9 +145,9 @@ library
         aeson-pretty   >=0.8   && <0.9,
         autodocodec    >=0.5 && < 0.6,
         autodocodec-schema >=0.2 && <0.3,
-        base           ^>=4.18,
-        bytestring     >=0.11  && <0.12,
-        containers     ^>=0.6.7,
+        base           >=4.18  && <4.22,
+        bytestring     >=0.11  && <0.13,
+        containers     >=0.6.7 && <0.8,
         directory      >=1.3   && <1.4,
         dotenv         >=0.9   && <0.13,
         filepath       >=1.4   && <1.6,
@@ -169,9 +172,9 @@ executable llm-simple
         aeson          >=2.0   && <2.3,
         autodocodec    >=0.5 && < 0.6,
         autodocodec-schema >=0.2 && <0.3,
-        base           ^>=4.18,
-        bytestring     >=0.11 && <0.12,
-        containers     ^>=0.6.7,
+        base           >=4.18  && <4.22,
+        bytestring     >=0.11  && <0.13,
+        containers     >=0.6.7 && <0.8,
         dotenv         >=0.9   && <0.13,
         directory      >=1.3   && <1.4,
         filepath       >=1.4   && <1.6,
@@ -193,9 +196,9 @@ executable record-conversation
         aeson          >=2.0   && <2.3,
         aeson-pretty   >=0.8   && <0.9,
         autodocodec    >=0.5 && < 0.6,
-        base           ^>=4.18,
-        bytestring     >=0.11 && <0.12,
-        containers     ^>=0.6.7,
+        base           >=4.18  && <4.22,
+        bytestring     >=0.11  && <0.13,
+        containers     >=0.6.7 && <0.8,
         dotenv         >=0.9   && <0.13,
         directory      >=1.3   && <1.4,
         filepath       >=1.4   && <1.6,
@@ -228,8 +231,8 @@ test-suite llm-simple-test
                         LLM.WeatherTool
     hs-source-dirs:     test
     build-depends:
-        base           ^>=4.18,
-        containers ^>=0.6.7,
+        base           >=4.18  && <4.22,
+        containers     >=0.6.7 && <0.8,
         directory      >=1.3   && <1.4,
         filepath       >=1.4   && <1.6,
         temporary      >=1.3   && <1.4,
@@ -237,7 +240,7 @@ test-suite llm-simple-test
         aeson          >=2.0   && <2.3,
         aeson-pretty   >=0.8   && <0.9,
         autodocodec    >=0.5 && < 0.6,
-        bytestring     >=0.11  && <0.12,
+        bytestring     >=0.11  && <0.13,
         hspec          >=2.10  && <2.12,
         heptapod       >=1.1   && <1.2,
         llm-simple,

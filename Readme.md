@@ -21,7 +21,7 @@ The API stays small on purpose: JSON model and provider catalogs, bundled filesy
 cabal build
 ```
 
-Requires GHC 9.6+ with `GHC2021` (see `llm-simple.cabal`).
+Requires GHC 9.6–9.12 with `GHC2021` (see `tested-with` in `llm-simple.cabal`).
 
 ## Quick start
 

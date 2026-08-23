@@ -92,8 +92,7 @@ windowedAgent :: Agent
 windowedAgent = noWindowAgent {agContextWindow = Just 1}
 
 runHistory :: Agent -> [Turn] -> Int -> IO Text
-runHistory agent conv chunk =
-  runHistoryAtOffset (windowOffset agent.agContextWindow conv) conv chunk
+runHistory agent conv = runHistoryAtOffset (windowOffset agent.agContextWindow conv) conv
 
 runHistoryAtOffset :: Int -> [Turn] -> Int -> IO Text
 runHistoryAtOffset offset conv chunk = do

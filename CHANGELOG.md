@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Widen dependency bounds for GHC 9.8–9.12 (`base`, `bytestring`, `containers`).
+  `tested-with`: GHC 9.6.7, 9.8.4, 9.10.2, 9.12.2. GitHub Actions CI runs
+  `cabal test` and `cabal haddock` on that matrix.
+
 ### Fixed
 
 - Claude and Gemini gateways honor catalog `baseUrl` / `baseUrlEnv` (previously

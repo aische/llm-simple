@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ignored; always hit the public Anthropic/Google hosts). New
   `claudeGatewayWith` / `geminiGatewayWith` constructors; optional
   `CLAUDE_BASE_URL` and `GEMINI_BASE_URL` env overrides.
+- `get_history` no longer hangs when the visible context window has zero user
+  turns (page size 0); `chunkBackward` treats `n <= 0` as a single unpaged chunk.
+- `generateObject` / `generateObjectUntyped` never advertise tools (including
+  auto-injected `get_history`), even when `agContextWindow` is set. New
+  `createGenRequestNoTools` helper; windowing still truncates messages.
 
 ### Changed
 
@@ -20,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removed deprecated `gemini-2.5-flash` config; raised example `maxTokens` to 4096; added
   optional `gpt_5_6_terra` (`gpt-5.6-terra`); corrected `gemini_lite` and `deepseek4flash`
   pricing (DeepSeek rates are peak cache-miss; off-peak is half).
-
+- `get_history` tool description now documents the `"(no earlier history)"` /
+  `"(no more history)"` sentinels instead of claiming an empty result.
 ## [0.1.0.2] - 2026-07-15
 
 ### Added

@@ -3,13 +3,14 @@
 module LLM.GenerateObjectSpec (spec) where
 
 import Data.Aeson (Value, object, (.=))
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Heptapod (generate)
 import LLM.Agent.GenerateObject (generateObject, generateObjectUntyped)
 import LLM.Agent.Types (Agent (..), RuntimeArgs (..))
 import LLM.Core.Abort (AbortSignal, abort, newAbortSignal)
-import LLM.Core.Types (ChatResponse (..), LLMError (..), LLMGateway (..), LLMHooks (..), Turn (..))
+import LLM.Core.Types (ChatRequest (..), ChatResponse (..), LLMError (..), LLMGateway (..), LLMHooks (..), Turn (..))
 import LLM.Core.Usage (PricingInfo (..), Usage (..))
 import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig
@@ -88,6 +89,26 @@ spec = describe "GenerateObject" $ do
           T.unpack msg `shouldContain` "Can't decode object"
         _ -> expectationFailure "expected GErrParseObjectError"
 
+    it "does not advertise tools even when agContextWindow would inject get_history" $ do
+      captured <- newIORef Nothing
+      let gw = capturingObjectGateway captured (object ["location" .= ("Paris" :: Text)]) (Usage 1 0 0)
+          models = ModelWithFallbacks (mockModel gw) []
+          agent = defaultAgent {agContextWindow = Just 1}
+          conv =
+            [ UserTurn "first",
+              AssistantTurn "a1" Nothing [],
+              UserTurn "second"
+            ]
+      rt <- mkRuntime Nothing
+      result <- generateObjectUntyped agent models rt conv (object ["type" .= ("object" :: Text)])
+      case result of
+        Right _ -> do
+          mReq <- readIORef captured
+          case mReq of
+            Nothing -> expectationFailure "expected gwGenerateObject to be called"
+            Just req -> req.reqTools `shouldBe` []
+        Left err -> expectationFailure $ show err
+
 objectGateway :: Value -> Usage -> LLMGateway
 objectGateway value usage =
   LLMGateway
@@ -95,6 +116,15 @@ objectGateway value usage =
       gwGenerateText = \_ _ -> pure (Right (ChatResponse "" [] Nothing Nothing)),
       gwStreamText = \_ _ _ -> pure (Right (ChatResponse "" [] Nothing Nothing)),
       gwGenerateObject = \_ _ _ -> pure (Right (value, Just usage))
+    }
+
+-- | Mock that records the 'ChatRequest' seen by 'gwGenerateObject'.
+capturingObjectGateway :: IORef (Maybe ChatRequest) -> Value -> Usage -> LLMGateway
+capturingObjectGateway ref value usage =
+  (objectGateway value usage)
+    { gwGenerateObject = \_ _ req -> do
+        writeIORef ref (Just req)
+        pure (Right (value, Just usage))
     }
 
 errorObjectGateway :: LLMError -> LLMGateway

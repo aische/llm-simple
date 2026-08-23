@@ -52,6 +52,22 @@ spec = describe "HistoryTool" $ do
       result <- runHistory windowedAgent sampleConversation 9
       result `shouldBe` "(no more history)"
 
+    -- When the visible window has zero UserTurns, page size is 0. Previously
+    -- chunkBackward looped forever; it now returns the whole hidden prefix as
+    -- a single chunk.
+    it "returns the full hidden prefix when the visible window has no user turns" $ do
+      let conv =
+            [ UserTurn "hidden question",
+              AssistantTurn "hidden answer" Nothing [],
+              AssistantTurn "visible assistant only" Nothing []
+            ]
+          -- Offset past both user+assistant hidden turns; visible slice is
+          -- assistant-only so countUserTurns == 0.
+          offset = 2
+      result <- runHistoryAtOffset offset conv 0
+      T.unpack result `shouldContain` "[User] hidden question"
+      T.unpack result `shouldContain` "[Assistant] hidden answer"
+
 sampleConversation :: [Turn]
 sampleConversation =
   [ UserTurn "first question",
@@ -76,10 +92,13 @@ windowedAgent :: Agent
 windowedAgent = noWindowAgent {agContextWindow = Just 1}
 
 runHistory :: Agent -> [Turn] -> Int -> IO Text
-runHistory agent conv chunk = do
+runHistory agent conv chunk =
+  runHistoryAtOffset (windowOffset agent.agContextWindow conv) conv chunk
+
+runHistoryAtOffset :: Int -> [Turn] -> Int -> IO Text
+runHistoryAtOffset offset conv chunk = do
   genId <- generate
-  let offset = windowOffset agent.agContextWindow conv
-      ctx =
+  let ctx =
         ToolContext
           { tcConversation = conv,
             tcUsage = mempty,

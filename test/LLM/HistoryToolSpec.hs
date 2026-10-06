@@ -9,7 +9,7 @@ import Heptapod (generate)
 import LLM.Agent.ToolUtils (toTool, windowOffset)
 import LLM.Agent.Tools.HistoryTool (historyToolTyped)
 import LLM.Agent.Types (Agent (..), RuntimeArgs (..), Tool (..), ToolContext (..))
-import LLM.Core.Types (Turn (..))
+import LLM.Core.Types (Turn (..), assistantTurn, pattern UserTurn)
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
 import Test.Hspec
@@ -58,8 +58,8 @@ spec = describe "HistoryTool" $ do
     it "returns the full hidden prefix when the visible window has no user turns" $ do
       let conv =
             [ UserTurn "hidden question",
-              AssistantTurn "hidden answer" Nothing [],
-              AssistantTurn "visible assistant only" Nothing []
+              assistantTurn "hidden answer" Nothing [],
+              assistantTurn "visible assistant only" Nothing []
             ]
           -- Offset past both user+assistant hidden turns; visible slice is
           -- assistant-only so countUserTurns == 0.
@@ -71,11 +71,11 @@ spec = describe "HistoryTool" $ do
 sampleConversation :: [Turn]
 sampleConversation =
   [ UserTurn "first question",
-    AssistantTurn "first answer" Nothing [],
+    assistantTurn "first answer" Nothing [],
     UserTurn "second question",
-    AssistantTurn "second answer" Nothing [],
+    assistantTurn "second answer" Nothing [],
     UserTurn "third question",
-    AssistantTurn "third answer" Nothing []
+    assistantTurn "third answer" Nothing []
   ]
 
 noWindowAgent :: Agent

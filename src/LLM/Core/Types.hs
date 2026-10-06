@@ -1,21 +1,45 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 module LLM.Core.Types
-  ( Turn (..),
+  ( -- * Conversation turns
+    Turn (..),
+    pattern UserTurn,
     assistantTurn,
-    ContentBlock (..),
+    ContentPart (..),
+    PartBody (..),
+    ThinkingContent (..),
+    ProviderOpaque (..),
+    textPart,
+    thinkingPart,
+    toolCallPart,
+    projectText,
+    projectReasoning,
+    turnToolCalls,
+    coalesceAdjacentTextParts,
+    validateTurn,
+    opaqueForProvider,
+    stripForeignOpaque,
+
+    -- * Chat
     ChatRequest (..),
     ChatResponse (..),
+    mkChatResponse,
     LLMError (..),
     LLMTextResult,
     LLMObjectResult,
     LLMResult,
+
+    -- * Tools
     ToolDef (..),
     ToolCall (..),
     mkToolCall,
-    LLMGateway (..),
     ToolResult (..),
-    StreamEvent (..),
     TypedTool (..),
+
+    -- * Provider surface
+    LLMGateway (..),
     LLMHooks (..),
+    StreamEvent (..),
     ThinkingMode (..),
     MessageEncodeOptions (..),
     defaultMessageEncodeOptions,
@@ -23,8 +47,11 @@ module LLM.Core.Types
   )
 where
 
-import Data.Aeson (FromJSON, ToJSON, Value)
+import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
+import Data.Aeson.Types (Parser)
+import Data.Maybe (mapMaybe)
 import Data.Text (Text)
+import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Usage (Usage)
 
@@ -60,10 +87,10 @@ data LLMHooks = LLMHooks
     onLLMResponseError :: Text -> Text -> IO ()
   }
 
--- | DeepSeek thinking mode configuration.
+-- | Thinking / reasoning mode configuration shared across providers.
 data ThinkingMode = ThinkingMode
   { tmEnabled :: Bool,
-    tmEffort :: Maybe Text -- e.g. @high@ or @max@
+    tmEffort :: Maybe Text -- e.g. @high@, @max@, or a provider-specific token budget
   }
   deriving (Show, Eq)
 
@@ -79,15 +106,212 @@ defaultMessageEncodeOptions = MessageEncodeOptions {meoIncludeReasoning = False}
 deepSeekMessageEncodeOptions :: MessageEncodeOptions
 deepSeekMessageEncodeOptions = MessageEncodeOptions {meoIncludeReasoning = True}
 
--- | A single turn in a conversation
-data Turn
-  = UserTurn Text
-  | AssistantTurn Text (Maybe Text) [ToolCall] -- content, reasoning_content, tool calls
-  | ToolTurn [ToolResult]
+-- | Opaque, provider-owned payload that must round-trip for replay.
+--
+-- Used for Claude thinking signatures, Gemini thought signatures, and any
+-- similar provider-bound state. Consumers must treat 'poPayload' as opaque.
+data ProviderOpaque = ProviderOpaque
+  { poProvider :: Text,
+    poModel :: Maybe Text,
+    poPayload :: Value
+  }
+  deriving (Show, Eq, Generic)
+
+instance ToJSON ProviderOpaque where
+  toJSON po =
+    object $
+      [ "provider" .= po.poProvider,
+        "payload" .= po.poPayload
+      ]
+        ++ ["model" .= m | Just m <- [po.poModel]]
+
+instance FromJSON ProviderOpaque where
+  parseJSON = withObject "ProviderOpaque" $ \o ->
+    ProviderOpaque
+      <$> o .: "provider"
+      <*> o .:? "model"
+      <*> o .: "payload"
+
+-- | Displayable and/or opaque thinking content for one assistant part.
+data ThinkingContent = ThinkingContent
+  { thinkingText :: Maybe Text,
+    thinkingOpaque :: Maybe ProviderOpaque
+  }
   deriving (Show, Eq, Generic, FromJSON, ToJSON)
 
+-- | Body of one ordered content part.
+data PartBody
+  = TextPart Text
+  | ThinkingPart ThinkingContent
+  | ToolCallPart ToolCall
+  deriving (Show, Eq, Generic)
+
+instance ToJSON PartBody where
+  toJSON (TextPart t) = object ["type" .= ("text" :: Text), "text" .= t]
+  toJSON (ThinkingPart tc) =
+    object $
+      ["type" .= ("thinking" :: Text)]
+        ++ ["text" .= t | Just t <- [tc.thinkingText]]
+        ++ ["opaque" .= o | Just o <- [tc.thinkingOpaque]]
+  toJSON (ToolCallPart tc) =
+    object
+      [ "type" .= ("tool_call" :: Text),
+        "tool_call" .= tc
+      ]
+
+instance FromJSON PartBody where
+  parseJSON = withObject "PartBody" $ \o -> do
+    typ <- o .: "type" :: Parser Text
+    case typ of
+      "text" -> TextPart <$> o .: "text"
+      "thinking" -> do
+        mText <- o .:? "text"
+        mOpaque <- o .:? "opaque"
+        pure $ ThinkingPart (ThinkingContent mText mOpaque)
+      "tool_call" -> ToolCallPart <$> o .: "tool_call"
+      _ -> fail $ "Unknown part type: " <> T.unpack typ
+
+-- | One ordered content part in a user or assistant message.
+data ContentPart = ContentPart
+  { partBody :: PartBody
+  }
+  deriving (Show, Eq, Generic, FromJSON, ToJSON)
+
+textPart :: Text -> ContentPart
+textPart t = ContentPart (TextPart t)
+
+thinkingPart :: ThinkingContent -> ContentPart
+thinkingPart tc = ContentPart (ThinkingPart tc)
+
+toolCallPart :: ToolCall -> ContentPart
+toolCallPart tc = ContentPart (ToolCallPart tc)
+
+-- | A single turn in a conversation.
+--
+-- Prefer 'UserTurn' / 'assistantTurn' for simple text construction. Match
+-- 'UserMessage' / 'AssistantMessage' when inspecting arbitrary ordered parts.
+data Turn
+  = UserMessage [ContentPart]
+  | AssistantMessage [ContentPart]
+  | ToolTurn [ToolResult]
+  deriving (Show, Eq, Generic)
+
+instance ToJSON Turn where
+  toJSON (UserMessage parts) =
+    object ["role" .= ("user" :: Text), "content" .= parts]
+  toJSON (AssistantMessage parts) =
+    object ["role" .= ("assistant" :: Text), "content" .= parts]
+  toJSON (ToolTurn results) =
+    object ["role" .= ("tool" :: Text), "results" .= results]
+
+instance FromJSON Turn where
+  parseJSON = withObject "Turn" $ \o -> do
+    role <- o .: "role" :: Parser Text
+    case role of
+      "user" -> UserMessage <$> o .: "content"
+      "assistant" -> AssistantMessage <$> o .: "content"
+      "tool" -> ToolTurn <$> o .: "results"
+      _ -> fail $ "Unknown turn role: " <> T.unpack role
+
+-- | Bidirectional pattern for a single unannotated user text part.
+pattern UserTurn :: Text -> Turn
+pattern UserTurn text = UserMessage [ContentPart (TextPart text)]
+
+{-# COMPLETE UserMessage, AssistantMessage, ToolTurn #-}
+
+-- | Migration helper: emit thinking (if any), then text, then tool calls.
+--
+-- Does not recover arbitrary provider block order; use 'AssistantMessage'
+-- with 'respContent' when replaying authoritative ordered parts.
 assistantTurn :: Text -> Maybe Text -> [ToolCall] -> Turn
-assistantTurn = AssistantTurn
+assistantTurn text mReasoning calls =
+  AssistantMessage $
+    [ thinkingPart (ThinkingContent (Just r) Nothing)
+      | Just r <- [mReasoning],
+        not (T.null r)
+    ]
+      ++ [textPart text | not (T.null text)]
+      ++ map toolCallPart calls
+
+-- | Concatenate text parts in order.
+projectText :: [ContentPart] -> Text
+projectText = T.concat . mapMaybe go
+  where
+    go (ContentPart (TextPart t)) = Just t
+    go _ = Nothing
+
+-- | First non-empty thinking text, if any.
+projectReasoning :: [ContentPart] -> Maybe Text
+projectReasoning = go
+  where
+    go [] = Nothing
+    go (ContentPart (ThinkingPart tc) : rest) =
+      case tc.thinkingText of
+        Just t | not (T.null t) -> Just t
+        _ -> go rest
+    go (_ : rest) = go rest
+
+-- | Tool calls in part order.
+turnToolCalls :: [ContentPart] -> [ToolCall]
+turnToolCalls = mapMaybe go
+  where
+    go (ContentPart (ToolCallPart tc)) = Just tc
+    go _ = Nothing
+
+-- | Merge runs of adjacent text parts (e.g. streamed token deltas).
+coalesceAdjacentTextParts :: [ContentPart] -> [ContentPart]
+coalesceAdjacentTextParts = go
+  where
+    go [] = []
+    go (ContentPart (TextPart t1) : ContentPart (TextPart t2) : rest) =
+      go (ContentPart (TextPart (t1 <> t2)) : rest)
+    go (p : rest) = p : go rest
+
+-- | Validate role/part combinations for a turn.
+--
+-- User messages may contain text parts; assistant messages may contain text,
+-- thinking, and tool-call parts. Returns 'Left' with an error message when
+-- the combination is invalid.
+validateTurn :: Turn -> Either Text ()
+validateTurn (UserMessage parts) =
+  mapM_ userPart parts
+  where
+    userPart (ContentPart (TextPart _)) = Right ()
+    userPart (ContentPart (ThinkingPart _)) =
+      Left "user messages may not contain thinking parts"
+    userPart (ContentPart (ToolCallPart _)) =
+      Left "user messages may not contain tool-call parts"
+validateTurn (AssistantMessage parts) =
+  mapM_ assistantPart parts
+  where
+    assistantPart (ContentPart (TextPart _)) = Right ()
+    assistantPart (ContentPart (ThinkingPart _)) = Right ()
+    assistantPart (ContentPart (ToolCallPart _)) = Right ()
+validateTurn (ToolTurn _) = Right ()
+
+-- | Keep opaque metadata only when it belongs to @provider@.
+opaqueForProvider :: Text -> Maybe ProviderOpaque -> Maybe ProviderOpaque
+opaqueForProvider provider (Just o)
+  | o.poProvider == provider = Just o
+opaqueForProvider _ _ = Nothing
+
+-- | Drop foreign opaque state from thinking parts and tool-call metadata.
+--
+-- Used by provider encoders during fallback so stored history is not mutated.
+stripForeignOpaque :: Text -> ContentPart -> ContentPart
+stripForeignOpaque provider (ContentPart (ThinkingPart tc)) =
+  ContentPart $
+    ThinkingPart
+      tc
+        { thinkingOpaque = opaqueForProvider provider tc.thinkingOpaque
+        }
+stripForeignOpaque provider (ContentPart (ToolCallPart tc)) =
+  ContentPart $
+    ToolCallPart
+      tc
+        { tcProviderMeta = opaqueForProvider provider tc.tcProviderMeta
+        }
+stripForeignOpaque _ p = p
 
 -- | A tool definition sent to the model
 data ToolDef = ToolDef
@@ -113,20 +337,33 @@ data TypedTool c a = TypedTool
 
 -- | A tool invocation returned by the model.
 --
--- 'tcProviderMeta' is an opaque, provider-owned JSON bag that must round-trip
--- back to the provider on subsequent requests when this tool call is replayed
--- as part of the conversation history. It exists because some providers
--- (currently Gemini 2.5 thinking models, with their @thoughtSignature@) bind
--- internal state to a specific tool-call part and reject the request if it
--- isn't echoed back verbatim. Each provider is responsible for the shape of
--- its own metadata; consumers should treat it as opaque.
+-- 'tcProviderMeta' is opaque, provider-owned state that must round-trip back
+-- to the same provider (and usually the same model) when this tool call is
+-- replayed. Gemini thought signatures are the current example.
 data ToolCall = ToolCall
   { tcId :: Text, -- provider-specific call id
     tcName :: Text,
     tcArguments :: Value,
-    tcProviderMeta :: Maybe Value
+    tcProviderMeta :: Maybe ProviderOpaque
   }
-  deriving (Show, Eq, Generic, FromJSON, ToJSON)
+  deriving (Show, Eq, Generic)
+
+instance ToJSON ToolCall where
+  toJSON tc =
+    object $
+      [ "id" .= tc.tcId,
+        "name" .= tc.tcName,
+        "arguments" .= tc.tcArguments
+      ]
+        ++ ["provider_meta" .= m | Just m <- [tc.tcProviderMeta]]
+
+instance FromJSON ToolCall where
+  parseJSON = withObject "ToolCall" $ \o ->
+    ToolCall
+      <$> o .: "id"
+      <*> o .: "name"
+      <*> o .: "arguments"
+      <*> o .:? "provider_meta"
 
 -- | Smart constructor for a 'ToolCall' with no provider metadata. Use this
 -- everywhere except when a provider parser is attaching its own metadata.
@@ -164,20 +401,30 @@ data ChatRequest = ChatRequest
   }
   deriving (Show, Eq)
 
--- | A content block in a response — either text or a tool call
-data ContentBlock
-  = TextBlock Text
-  | ToolCallBlock ToolCall
-  deriving (Show, Eq)
-
--- | A response from an LLM provider
+-- | A response from an LLM provider.
+--
+-- 'respContent' is authoritative ordered content. 'respText' and
+-- 'respReasoning' are convenience projections and may be lossy.
 data ChatResponse = ChatResponse
   { respText :: Text,
-    respContent :: [ContentBlock],
+    respContent :: [ContentPart],
     respUsage :: Maybe Usage,
     respReasoning :: Maybe Text
   }
   deriving (Show, Eq)
+
+-- | Build a 'ChatResponse' with text/reasoning projections derived from parts.
+--
+-- Adjacent text parts are coalesced so streamed deltas become one part.
+mkChatResponse :: [ContentPart] -> Maybe Usage -> ChatResponse
+mkChatResponse parts usage =
+  let coalesced = coalesceAdjacentTextParts parts
+   in ChatResponse
+        { respText = projectText coalesced,
+          respContent = coalesced,
+          respUsage = usage,
+          respReasoning = projectReasoning coalesced
+        }
 
 -- | Events emitted during streaming
 data StreamEvent

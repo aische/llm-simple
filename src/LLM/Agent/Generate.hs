@@ -124,32 +124,32 @@ agentLoop call agent models toolMap rt initialTurns = do
                       toolCalls = getToolCalls resp
                       roundUsage = fromMaybe emptyUsage resp.respUsage
                       newUsage = currentUsage <> roundUsage
+                      -- Authoritative ordered parts from the provider response.
+                      assistantMsg = AssistantMessage resp.respContent
 
                   case toolCalls of
                     [] -> do
-                      let finalTurn = AssistantTurn txt resp.respReasoning []
-                          finalTurnsAcc = newTurnsAcc ++ [finalTurn]
+                      let finalTurnsAcc = newTurnsAcc ++ [assistantMsg]
                           successResult = GenerateTextResult rt.rtGenerationId finalTurnsAcc txt newUsage
-                      emitEvent rt (MessageFinalized finalTurn)
+                      emitEvent rt (MessageFinalized assistantMsg)
                       emitEvent rt (GenerationFinished successResult)
                       pure $ Right successResult
                     _ -> do
-                      let assistantTurn = AssistantTurn txt resp.respReasoning toolCalls
-                          toolContext = createToolContext agent currentTurns newUsage rt
+                      let toolContext = createToolContext agent currentTurns newUsage rt
                           tools = getResolvedTools id agent toolMap rt
-                      emitEvent rt (MessageCreated assistantTurn)
+                      emitEvent rt (MessageCreated assistantMsg)
                       emitEvent rt (ToolRoundStarted loopCount)
 
                       toolResultsE <- executeToolsWithAbort rt.rtAbortSignal rt.rtHooks toolContext tools toolCalls
 
                       case toolResultsE of
                         Left err -> do
-                          let errResult = GenerateErrorResult err (newTurnsAcc ++ [assistantTurn]) newUsage
+                          let errResult = GenerateErrorResult err (newTurnsAcc ++ [assistantMsg]) newUsage
                           emitEvent rt (GenerationFailed err errResult)
                           pure $ Left errResult
                         Right toolResults -> do
                           let toolTurn = ToolTurn toolResults
                           emitEvent rt (MessageCreated toolTurn)
                           emitEvent rt (ToolRoundFinished loopCount)
-                          let turnsToAdd = [assistantTurn, toolTurn]
+                          let turnsToAdd = [assistantMsg, toolTurn]
                           go (currentTurns ++ turnsToAdd) (newTurnsAcc ++ turnsToAdd) newUsage (loopCount + 1)

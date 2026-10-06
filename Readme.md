@@ -127,7 +127,7 @@ import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Exception (SomeException, catch)
 import Heptapod (generate)
 import LLM.Agent (Agent (..), RuntimeArgs (..), generateText, noEventObserver)
-import LLM.Core (Turn (UserTurn))
+import LLM.Core (pattern UserTurn)
 import LLM.Generate (ModelWithFallbacks (..), Hooks (..), llmHooks, noHooks)
 import LLM.Load (fsTools, loadModelsOrThrow)
 

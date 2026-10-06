@@ -3,9 +3,15 @@ module LLM.TypesSpec (spec) where
 import Data.Aeson (object, (.=))
 import LLM.Core.Types
   ( ChatResponse (ChatResponse),
-    ContentBlock (TextBlock, ToolCallBlock),
     LLMError (EmptyResponse, HttpError, NetworkError),
+    ThinkingContent (..),
+    Turn (..),
     mkToolCall,
+    pattern UserTurn,
+    textPart,
+    thinkingPart,
+    toolCallPart,
+    validateTurn,
   )
 import LLM.Core.Usage
   ( PricingInfo (..),
@@ -51,15 +57,26 @@ spec = describe "Types" $ do
 
   describe "hasToolCalls / getToolCalls" $ do
     it "returns False for text-only response" $ do
-      let resp = ChatResponse "hello" [TextBlock "hello"] Nothing Nothing
+      let resp = ChatResponse "hello" [textPart "hello"] Nothing Nothing
       hasToolCalls resp `shouldBe` False
       getToolCalls resp `shouldBe` []
 
     it "returns True when tool calls present" $ do
       let tc = mkToolCall "id1" "get_weather" (object ["location" .= ("London" :: String)])
-          resp = ChatResponse "" [ToolCallBlock tc] Nothing Nothing
+          resp = ChatResponse "" [toolCallPart tc] Nothing Nothing
       hasToolCalls resp `shouldBe` True
       getToolCalls resp `shouldBe` [tc]
+
+  describe "UserTurn / validateTurn" $ do
+    it "UserTurn constructs a single text user message" $ do
+      UserTurn "hi" `shouldBe` UserMessage [textPart "hi"]
+
+    it "rejects thinking parts on user messages" $ do
+      validateTurn
+        ( UserMessage
+            [thinkingPart (ThinkingContent (Just "nope") Nothing)]
+        )
+        `shouldBe` Left "user messages may not contain thinking parts"
 
   describe "isRetryable" $ do
     it "retries on 429" $ do

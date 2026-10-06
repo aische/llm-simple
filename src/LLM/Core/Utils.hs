@@ -21,11 +21,18 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import LLM.Core.Types
   ( ChatResponse (..),
-    ContentBlock (..),
+    ContentPart (..),
     LLMError (..),
     LLMResult,
+    PartBody (..),
+    ProviderOpaque (..),
+    ThinkingContent (..),
     ToolCall (..),
     ToolResult (..),
+    mkChatResponse,
+    projectReasoning,
+    thinkingPart,
+    turnToolCalls,
   )
 import LLM.Core.Usage (Usage (..))
 import System.Timeout (timeout)
@@ -40,10 +47,7 @@ hasToolCalls = not . null . getToolCalls
 
 -- | Extract tool calls from a response
 getToolCalls :: ChatResponse -> [ToolCall]
-getToolCalls r = concatMap go r.respContent
-  where
-    go (ToolCallBlock tc) = [tc]
-    go _ = []
+getToolCalls r = turnToolCalls r.respContent
 
 -- | Whether an error is worth retrying
 isRetryable :: LLMError -> Bool
@@ -82,20 +86,32 @@ streamResponseJson :: ChatResponse -> Value
 streamResponseJson r =
   object
     [ "text" .= r.respText,
-      "content" .= map blockToJson r.respContent,
+      "content" .= map partToJson r.respContent,
       "usage" .= fmap usageToJson r.respUsage,
       "reasoning" .= r.respReasoning
     ]
   where
-    blockToJson (TextBlock t) = object ["type" .= ("text" :: Text), "text" .= t]
-    blockToJson (ToolCallBlock tc) =
+    partToJson (ContentPart (TextPart t)) =
+      object ["type" .= ("text" :: Text), "text" .= t]
+    partToJson (ContentPart (ThinkingPart tc)) =
+      object $
+        ["type" .= ("thinking" :: Text)]
+          ++ ["text" .= t | Just t <- [tc.thinkingText]]
+          ++ ["opaque" .= opaqueToJson o | Just o <- [tc.thinkingOpaque]]
+    partToJson (ContentPart (ToolCallPart tc)) =
       object $
         [ "type" .= ("tool_call" :: Text),
           "id" .= tc.tcId,
           "name" .= tc.tcName,
           "arguments" .= tc.tcArguments
         ]
-          ++ ["provider_meta" .= m | Just m <- [tc.tcProviderMeta]]
+          ++ ["provider_meta" .= opaqueToJson m | Just m <- [tc.tcProviderMeta]]
+    opaqueToJson o =
+      object $
+        [ "provider" .= o.poProvider,
+          "payload" .= o.poPayload
+        ]
+          ++ ["model" .= m | Just m <- [o.poModel]]
     usageToJson u =
       object
         [ "input_tokens" .= u.usageInputTokens,
@@ -104,29 +120,39 @@ streamResponseJson r =
 
 parseChatResponse :: Value -> Parser ChatResponse
 parseChatResponse = AE.withObject "ChatResponse" $ \v -> do
-  text <- v AE..: "text"
-  content <- v AE..: "content" >>= mapM parseContentBlock
+  content <- v AE..: "content" >>= mapM parseContentPart
   usage <- v AE..:? "usage" >>= mapM parseUsage
-  reasoning <- v AE..:? "reasoning"
-  pure
-    ChatResponse
-      { respText = text,
-        respContent = content,
-        respUsage = usage,
-        respReasoning = reasoning
-      }
+  -- Synthetic stream summaries store reasoning beside content blocks.
+  mReasoning <- v AE..:? "reasoning"
+  let contentWithReasoning =
+        case (projectReasoning content, mReasoning) of
+          (Nothing, Just rc)
+            | not (T.null rc) ->
+                thinkingPart (ThinkingContent (Just rc) Nothing) : content
+          _ -> content
+  pure $ mkChatResponse contentWithReasoning usage
   where
-    parseContentBlock = AE.withObject "ContentBlock" $ \o -> do
+    parseContentPart = AE.withObject "ContentPart" $ \o -> do
       t <- o AE..: "type"
       case (t :: Text) of
-        "text" -> TextBlock <$> o AE..: "text"
+        "text" -> ContentPart . TextPart <$> o AE..: "text"
+        "thinking" -> do
+          mText <- o AE..:? "text"
+          mOpaque <- o AE..:? "opaque" >>= mapM parseOpaque
+          pure $ ContentPart (ThinkingPart (ThinkingContent mText mOpaque))
         "tool_call" -> do
           tcId <- o AE..: "id"
           tcName <- o AE..: "name"
           tcArgs <- o AE..: "arguments"
-          tcMeta <- o AE..:? "provider_meta"
-          pure $ ToolCallBlock $ ToolCall tcId tcName tcArgs tcMeta
-        _ -> fail "Unknown content block type"
+          tcMeta <- o AE..:? "provider_meta" >>= mapM parseOpaque
+          pure $ ContentPart (ToolCallPart (ToolCall tcId tcName tcArgs tcMeta))
+        _ -> fail "Unknown content part type"
+
+    parseOpaque = AE.withObject "ProviderOpaque" $ \o ->
+      ProviderOpaque
+        <$> o AE..: "provider"
+        <*> o AE..:? "model"
+        <*> o AE..: "payload"
 
     parseUsage = AE.withObject "Usage" $ \o -> do
       input <- o AE..: "input_tokens"

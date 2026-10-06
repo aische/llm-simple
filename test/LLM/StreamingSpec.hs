@@ -7,11 +7,14 @@ import Data.IORef (modifyIORef', newIORef, readIORef)
 import Data.Text (Text)
 import LLM.Core.Types
   ( ChatResponse (..),
-    ContentBlock (TextBlock, ToolCallBlock),
     LLMGateway (..),
     StreamEvent (..),
     Turn (..),
+    assistantTurn,
     mkToolCall,
+    pattern UserTurn,
+    textPart,
+    toolCallPart,
   )
 import LLM.Core.Usage (PricingInfo (..), Usage (..))
 import LLM.Generate.Generate (streamTextLLM)
@@ -32,7 +35,7 @@ spec = describe "Streaming" $ do
       let gw =
             streamGateway
               [StreamDelta "hello"]
-              (ChatResponse "hello" [TextBlock "hello"] (Just (Usage 1 1 0)) Nothing)
+              (ChatResponse "hello" [textPart "hello"] (Just (Usage 1 1 0)) Nothing)
       chunks <- runStream gw []
       reverse chunks
         `shouldBe` [ TextDelta "hello",
@@ -40,11 +43,11 @@ spec = describe "Streaming" $ do
                    ]
 
     it "routes text to answer after a tool turn" $ do
-      let prior = [UserTurn "q", AssistantTurn "" Nothing [mkToolCall "1" "t" (object [])], ToolTurn []]
+      let prior = [UserTurn "q", assistantTurn "" Nothing [mkToolCall "1" "t" (object [])], ToolTurn []]
           gw =
             streamGateway
               [StreamDelta "done"]
-              (ChatResponse "done" [TextBlock "done"] (Just (Usage 1 1 0)) Nothing)
+              (ChatResponse "done" [textPart "done"] (Just (Usage 1 1 0)) Nothing)
       chunks <- runStream gw prior
       reverse chunks `shouldBe` [AnswerDelta "done"]
 
@@ -53,7 +56,7 @@ spec = describe "Streaming" $ do
           gw =
             streamGateway
               [StreamDelta "searching", StreamToolCall tc]
-              (ChatResponse "" [ToolCallBlock tc] (Just (Usage 2 0 0)) Nothing)
+              (ChatResponse "" [toolCallPart tc] (Just (Usage 2 0 0)) Nothing)
       chunks <- runStream gw [UserTurn "find x"]
       reverse chunks
         `shouldBe` [ TextDelta "searching",
@@ -65,7 +68,7 @@ spec = describe "Streaming" $ do
       let gw =
             streamGateway
               [StreamReasoningDelta "think"]
-              (ChatResponse "ok" [TextBlock "ok"] Nothing Nothing)
+              (ChatResponse "ok" [textPart "ok"] Nothing Nothing)
       chunks <- runStream gw []
       reverse chunks `shouldBe` [ReasoningDelta "think", RoundTextRoleCommitted AnswerRole]
 

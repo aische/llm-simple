@@ -1,0 +1,28 @@
+{
+    "id": "msg_thinking_tool",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-haiku-4-5-20251001",
+    "content": [
+        {
+            "type": "thinking",
+            "thinking": "I should call the weather tool.",
+            "signature": "sig_thinking_abc123"
+        },
+        {
+            "type": "text",
+            "text": "Checking the weather."
+        },
+        {
+            "type": "tool_use",
+            "id": "toolu_weather_1",
+            "name": "get_weather",
+            "input": { "location": "London" }
+        }
+    ],
+    "stop_reason": "tool_use",
+    "usage": {
+        "input_tokens": 40,
+        "output_tokens": 60
+    }
+}

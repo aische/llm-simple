@@ -6,9 +6,13 @@ import Data.Aeson.KeyMap qualified as KM
 import Data.Text (Text)
 import LLM.Core.Types
   ( ChatRequest (..),
-    ChatResponse (respReasoning, respText),
+    ChatResponse (respContent, respReasoning, respText),
+    ContentPart (..),
+    PartBody (..),
+    ThinkingContent (..),
     ThinkingMode (..),
     Turn (..),
+    assistantTurn,
     deepSeekMessageEncodeOptions,
     defaultMessageEncodeOptions,
     mkToolCall,
@@ -22,7 +26,7 @@ spec = describe "DeepSeek thinking mode" $ do
   describe "message encoding" $ do
     it "includes reasoning_content when replaying assistant tool turns" $ do
       let turn =
-            AssistantTurn
+            assistantTurn
               "Let me check."
               (Just "I should call the weather tool.")
               [mkToolCall "call_1" "get_weather" (object ["location" .= ("London" :: Text)])]
@@ -30,7 +34,7 @@ spec = describe "DeepSeek thinking mode" $ do
       lookupText "reasoning_content" msg `shouldBe` Just "I should call the weather tool."
 
     it "omits reasoning_content for OpenAI-compatible default encoding" $ do
-      let turn = AssistantTurn "Hello" (Just "thinking") []
+      let turn = assistantTurn "Hello" (Just "thinking") []
           msg = head (encodeTurn defaultMessageEncodeOptions turn)
       lookupText "reasoning_content" msg `shouldBe` Nothing
 
@@ -75,6 +79,11 @@ spec = describe "DeepSeek thinking mode" $ do
         Right resp -> do
           resp.respReasoning `shouldBe` Just "Let me think."
           resp.respText `shouldBe` "The answer is 42."
+          case resp.respContent of
+            [ ContentPart (ThinkingPart (ThinkingContent (Just "Let me think.") Nothing)),
+              ContentPart (TextPart "The answer is 42.")
+              ] -> pure ()
+            other -> fail $ "unexpected ordered parts: " <> show other
         Left err -> fail $ show err
 
 sampleRequest :: ChatRequest
@@ -82,7 +91,7 @@ sampleRequest =
   ChatRequest
     { reqModel = "deepseek-v4-pro",
       reqConversation =
-        [ AssistantTurn "Hi" (Just "CoT") [mkToolCall "c1" "get_date" (object [])],
+        [ assistantTurn "Hi" (Just "CoT") [mkToolCall "c1" "get_date" (object [])],
           ToolTurn []
         ],
       reqSystem = Nothing,

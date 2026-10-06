@@ -2,14 +2,44 @@
 
 module LLM.ClaudeSpec (spec) where
 
-import Data.Aeson (eitherDecodeFileStrict')
+import Data.Aeson
+  ( Value (Array, Number, Object, String),
+    eitherDecodeFileStrict',
+    object,
+    (.=),
+  )
+import Data.Aeson.Key qualified as K
+import Data.Aeson.KeyMap qualified as KM
+import Data.Maybe (mapMaybe)
+import Data.Scientific (toBoundedInteger, toRealFloat)
+import Data.Text (Text)
+import Data.Vector qualified as V
 import LLM.Core.Types
-  ( ChatResponse (respText),
-    ToolCall (tcId, tcName),
+  ( ChatRequest (..),
+    ChatResponse (respContent, respReasoning, respText),
+    ContentPart (..),
+    PartBody (..),
+    ProviderOpaque (..),
+    ThinkingContent (..),
+    ThinkingMode (..),
+    ToolCall (..),
+    ToolResult (..),
+    Turn (..),
+    mkToolCall,
+    textPart,
+    thinkingPart,
+    toolCallPart,
+    pattern UserTurn,
   )
 import LLM.Core.Usage (Usage (Usage))
 import LLM.Core.Utils (getToolCalls, hasToolCalls)
-import LLM.Providers.Claude (parseClaudeResponse, parseClaudeUsage)
+import LLM.Providers.Claude
+  ( claudeBuildBody,
+    encodeTurn,
+    effortToBudgetTokens,
+    parseClaudeResponse,
+    parseClaudeUsage,
+  )
 import Test.Hspec
   ( Spec,
     describe,
@@ -40,6 +70,125 @@ spec = describe "Claude" $ do
           tc.tcId `shouldBe` "toolu_01A09q90qw90lq917835lq9"
         Left err -> expectationFailure $ "Parse failed: " <> show err
 
+    it "preserves thinking -> text -> tool_use order and opaque signature" $ do
+      Right val <- eitherDecodeFileStrict' "test/fixtures/claude-thinking-tool-use.json"
+      case parseClaudeResponse val of
+        Right resp -> do
+          resp.respReasoning `shouldBe` Just "I should call the weather tool."
+          resp.respText `shouldBe` "Checking the weather."
+          case resp.respContent of
+            [ ContentPart (ThinkingPart tc),
+              ContentPart (TextPart "Checking the weather."),
+              ContentPart (ToolCallPart tool)
+              ] -> do
+                tc.thinkingText `shouldBe` Just "I should call the weather tool."
+                case tc.thinkingOpaque of
+                  Just o -> do
+                    o.poProvider `shouldBe` "claude"
+                    o.poModel `shouldBe` Just "claude-haiku-4-5-20251001"
+                    lookupText "signature" o.poPayload `shouldBe` Just "sig_thinking_abc123"
+                  Nothing -> expectationFailure "expected thinking opaque"
+                tool.tcId `shouldBe` "toolu_weather_1"
+            other -> expectationFailure $ "unexpected parts: " <> show other
+        Left err -> expectationFailure $ "Parse failed: " <> show err
+
+  describe "encodeTurn replay" $ do
+    it "replays signed thinking blocks before tool_use for the same model" $ do
+      Right val <- eitherDecodeFileStrict' "test/fixtures/claude-thinking-tool-use.json"
+      case parseClaudeResponse val of
+        Right resp -> do
+          let encoded = encodeTurn "claude-haiku-4-5-20251001" (AssistantMessage resp.respContent)
+              content = messageContent (head encoded)
+          contentTypes content `shouldBe` ["thinking", "text", "tool_use"]
+          case content of
+            (Object o : _) ->
+              lookupText "signature" (Object o) `shouldBe` Just "sig_thinking_abc123"
+            _ -> expectationFailure "expected thinking object"
+          let withResult =
+                encodeTurn
+                  "claude-haiku-4-5-20251001"
+                  ( ToolTurn
+                      [ ToolResult
+                          { trCallId = "toolu_weather_1",
+                            trName = "get_weather",
+                            trContent = "sunny"
+                          }
+                      ]
+                  )
+          length withResult `shouldBe` 1
+        Left err -> expectationFailure $ show err
+
+    it "omits foreign thinking opaque and foreign tool meta on encode" $ do
+      let foreignThinking =
+            thinkingPart
+              ThinkingContent
+                { thinkingText = Just "gemini thoughts",
+                  thinkingOpaque =
+                    Just
+                      ProviderOpaque
+                        { poProvider = "gemini",
+                          poModel = Just "gemini-2.5-flash",
+                          poPayload = object ["thoughtSignature" .= ("sig" :: Text)]
+                        }
+                }
+          foreignTool =
+            let base = mkToolCall "c1" "get_weather" (object [])
+             in toolCallPart
+                  base
+                    { tcProviderMeta =
+                        Just
+                          ProviderOpaque
+                            { poProvider = "gemini",
+                              poModel = Just "gemini-2.5-flash",
+                              poPayload = object ["thoughtSignature" .= ("sig" :: Text)]
+                            }
+                    }
+          turn =
+            AssistantMessage
+              [ foreignThinking,
+                textPart "hello",
+                foreignTool
+              ]
+          content = messageContent (head (encodeTurn "claude-haiku-4-5-20251001" turn))
+      contentTypes content `shouldBe` ["text", "tool_use"]
+      case content of
+        [Object textO, Object toolO] -> do
+          lookupText "text" (Object textO) `shouldBe` Just "hello"
+          lookupText "name" (Object toolO) `shouldBe` Just "get_weather"
+          KM.lookup "thoughtSignature" toolO `shouldBe` Nothing
+        _ -> expectationFailure "expected text + tool_use only"
+
+  describe "thinking request mapping" $ do
+    it "maps effort to budget_tokens and omits temperature when thinking is on" $ do
+      let req =
+            ChatRequest
+              { reqModel = "claude-haiku-4-5-20251001",
+                reqConversation = [UserTurn "hi"],
+                reqSystem = Nothing,
+                reqMaxTokens = 4096,
+                reqTemperature = Just 0.5,
+                reqTools = [],
+                reqThinking = Just ThinkingMode {tmEnabled = True, tmEffort = Just "high"}
+              }
+          body = claudeBuildBody False req
+      nestedText ["thinking", "type"] body `shouldBe` Just "enabled"
+      nestedInt ["thinking", "budget_tokens"] body `shouldBe` Just (effortToBudgetTokens "high")
+      lookupKey "temperature" body `shouldBe` Nothing
+
+    it "keeps temperature when thinking is off" $ do
+      let req =
+            ChatRequest
+              { reqModel = "claude-haiku-4-5-20251001",
+                reqConversation = [UserTurn "hi"],
+                reqSystem = Nothing,
+                reqMaxTokens = 4096,
+                reqTemperature = Just 0.5,
+                reqTools = [],
+                reqThinking = Nothing
+              }
+          body = claudeBuildBody False req
+      lookupNumber "temperature" body `shouldBe` Just 0.5
+
   describe "parseClaudeUsage" $ do
     it "extracts token counts" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/claude-text.json"
@@ -48,3 +197,51 @@ spec = describe "Claude" $ do
     it "extracts token counts from tool_use response" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/claude-tool-use.json"
       parseClaudeUsage val `shouldBe` Just (Usage 50 35 0)
+
+messageContent :: Value -> [Value]
+messageContent (Object o) =
+  case KM.lookup "content" o of
+    Just (Array a) -> V.toList a
+    _ -> []
+messageContent _ = []
+
+contentTypes :: [Value] -> [Text]
+contentTypes = mapMaybe typ
+  where
+    typ (Object o) = case KM.lookup "type" o of
+      Just (String t) -> Just t
+      _ -> Nothing
+    typ _ = Nothing
+
+lookupText :: Text -> Value -> Maybe Text
+lookupText key (Object o) =
+  KM.lookup (K.fromText key) o >>= \case
+    String t -> Just t
+    _ -> Nothing
+lookupText _ _ = Nothing
+
+lookupNumber :: Text -> Value -> Maybe Double
+lookupNumber key (Object o) =
+  KM.lookup (K.fromText key) o >>= \case
+    Number sci -> Just (toRealFloat sci)
+    _ -> Nothing
+lookupNumber _ _ = Nothing
+
+lookupKey :: Text -> Value -> Maybe Value
+lookupKey key (Object o) = KM.lookup (K.fromText key) o
+lookupKey _ _ = Nothing
+
+nestedText :: [Text] -> Value -> Maybe Text
+nestedText [key] v = lookupText key v
+nestedText (key : rest) (Object o) =
+  KM.lookup (K.fromText key) o >>= nestedText rest
+nestedText _ _ = Nothing
+
+nestedInt :: [Text] -> Value -> Maybe Int
+nestedInt [key] (Object o) =
+  KM.lookup (K.fromText key) o >>= \case
+    Number sci -> toBoundedInteger sci
+    _ -> Nothing
+nestedInt (key : rest) (Object o) =
+  KM.lookup (K.fromText key) o >>= nestedInt rest
+nestedInt _ _ = Nothing

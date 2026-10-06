@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0.0] - 2026-10-06
+
+### Changed
+
+- **Breaking:** conversation turns use ordered content parts.
+  `UserMessage` / `AssistantMessage` hold `[ContentPart]`; `UserTurn` is a
+  bidirectional pattern synonym for a single text part. Replace
+  `AssistantTurn text reasoning calls` with `assistantTurn` (canonical order)
+  or `AssistantMessage respContent` for authoritative replay.
+- **Breaking:** `ChatResponse.respContent` is now `[ContentPart]` (authoritative).
+  `respText` / `respReasoning` remain convenience projections.
+- **Breaking:** `ToolCall.tcProviderMeta` is `Maybe ProviderOpaque` (tagged
+  provider + optional model + opaque payload), not bare `Value`.
+- **Breaking:** removed `ContentBlock`; use `ContentPart` / `PartBody`.
+- **Breaking:** `Turn` / `ToolCall` JSON shapes changed (role/content based).
+  Persisted histories must be migrated; old and new shapes are not mixed.
+- Claude adapter: thinking request mapping (`thinking.type=enabled` +
+  `budget_tokens` from catalog effort), ordered thinking/text/tool_use parse
+  and stream, signed-block replay around tool rounds. Temperature is omitted
+  when thinking is enabled (Anthropic incompatibility).
+- Gemini adapter: catalog thinking maps to `thinkingConfig`; tool-call thought
+  signatures use `ProviderOpaque` and still replay only for a matching model.
+- OpenAI / DeepSeek / Ollama adapters encode and parse ordered parts; DeepSeek
+  reasoning continues via `reasoning_content` on ordered `ThinkingPart`s.
+- Foreign opaque thinking / tool metadata is stripped at encode time on
+  provider fallback (history unchanged).
+- Example catalog: removed `temperature` from `haiku_4_5` (Claude thinking
+  temperature footgun).
+
+### Added
+
+- `ProviderOpaque`, `ThinkingContent`, `ContentPart`, `PartBody`, `textPart`,
+  `thinkingPart`, `toolCallPart`, `mkChatResponse`, `projectText`,
+  `projectReasoning`, `turnToolCalls`, `validateTurn`, `stripForeignOpaque`.
+- Claude thinking fixture and unit tests for ordered replay / foreign opaque
+  omission; Gemini signature matching tests.
+
 ## [0.1.1.0] - 2026-08-23
 
 ### Changed

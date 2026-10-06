@@ -12,7 +12,7 @@ import LLM.Agent
     noEventObserver,
   )
 import LLM.Core
-  ( Turn (UserTurn),
+  ( pattern UserTurn,
   )
 import LLM.Generate
   ( ModelWithFallbacks (..),

@@ -151,7 +151,7 @@ findNthUserFromEnd n conv = go (length conv - 1) n
       | idx < 0 = 0
       | remaining <= 0 = idx + 1
       | otherwise = case conv !! idx of
-          UserTurn _ -> go (idx - 1) (remaining - 1)
+          UserMessage _ -> go (idx - 1) (remaining - 1)
           _ -> go (idx - 1) remaining
 
 -- | Build a 'GenRequest' from agent configuration and runtime state.

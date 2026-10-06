@@ -10,7 +10,7 @@ import Heptapod (generate)
 import LLM.Agent.GenerateObject (generateObject, generateObjectUntyped)
 import LLM.Agent.Types (Agent (..), RuntimeArgs (..))
 import LLM.Core.Abort (AbortSignal, abort, newAbortSignal)
-import LLM.Core.Types (ChatRequest (..), ChatResponse (..), LLMError (..), LLMGateway (..), LLMHooks (..), Turn (..))
+import LLM.Core.Types (ChatRequest (..), ChatResponse (..), LLMError (..), LLMGateway (..), LLMHooks (..), Turn (..), assistantTurn, pattern UserTurn)
 import LLM.Core.Usage (PricingInfo (..), Usage (..))
 import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig
@@ -96,7 +96,7 @@ spec = describe "GenerateObject" $ do
           agent = defaultAgent {agContextWindow = Just 1}
           conv =
             [ UserTurn "first",
-              AssistantTurn "a1" Nothing [],
+              assistantTurn "a1" Nothing [],
               UserTurn "second"
             ]
       rt <- mkRuntime Nothing

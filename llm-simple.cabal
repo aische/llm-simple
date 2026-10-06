@@ -2,7 +2,7 @@ cabal-version:      3.0
 
 name:               llm-simple
 
-version:            0.1.1.0
+version:            0.2.0.0
 
 synopsis:
     Multi-provider LLM library with agent tool loops and filesystem tools
@@ -16,7 +16,7 @@ description:
     loops, structured output via Autodocodec, JSON model- and provider-catalog
     loading, and workspace-scoped filesystem tools.
     .
-    Status: early 0.1.x release — APIs may change.
+    Status: early 0.2.x release — APIs may change.
 
 license:            BSD-3-Clause
 
@@ -65,6 +65,7 @@ common opts
         OverloadedRecordDot
         DuplicateRecordFields
         NoFieldSelectors
+        PatternSynonyms
         StrictData
         GADTs
         TypeFamilies
@@ -245,5 +246,7 @@ test-suite llm-simple-test
         heptapod       >=1.1   && <1.2,
         llm-simple,
         mtl            >=2.3   && <2.4,
-        retry          >=0.9   && <0.10
+        retry          >=0.9   && <0.10,
+        scientific     >=0.3   && <0.4,
+        vector         >=0.13  && <0.14
     build-tool-depends: hspec-discover:hspec-discover

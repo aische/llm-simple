@@ -28,7 +28,7 @@
 --                       agContextWindow = Nothing }
 --   rt <- mkRuntime  -- your RuntimeArgs
 --   result <- generateText agent (ModelWithFallbacks model []) tools rt
---                           [UserTurn \"hello\"]
+--                           [UserTurn \"hello\"]  -- pattern synonym
 --   ...
 -- @
 --
@@ -51,12 +51,21 @@
 module LLM
   ( -- * Core conversation types
     Turn (..),
+    pattern UserTurn,
+    assistantTurn,
+    ContentPart (..),
+    PartBody (..),
+    ThinkingContent (..),
+    ProviderOpaque (..),
+    textPart,
+    thinkingPart,
+    toolCallPart,
     ToolCall (..),
     ToolResult (..),
     ToolDef (..),
     TypedTool (..),
     ChatResponse (..),
-    ContentBlock (..),
+    mkChatResponse,
     LLMGateway (..),
     LLMError (..),
     Usage (..),
@@ -135,11 +144,14 @@ import LLM.Agent
 import LLM.Core
   ( AbortSignal,
     ChatResponse (..),
-    ContentBlock (..),
+    ContentPart (..),
     LLMError (..),
     LLMGateway (..),
     LLMHooks (..),
+    PartBody (..),
     PricingInfo (..),
+    ProviderOpaque (..),
+    ThinkingContent (..),
     ThinkingMode (..),
     ToolCall (..),
     ToolDef (..),
@@ -148,9 +160,15 @@ import LLM.Core
     TypedTool (..),
     Usage (..),
     addUsage,
+    assistantTurn,
     emptyUsage,
     estimateCost,
     getToolCalls,
+    mkChatResponse,
+    pattern UserTurn,
+    textPart,
+    thinkingPart,
+    toolCallPart,
   )
 import LLM.Generate
   ( GenRequest (..),

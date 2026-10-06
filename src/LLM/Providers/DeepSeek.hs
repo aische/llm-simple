@@ -35,8 +35,8 @@ import LLM.Core.Types
     LLMError (EmptyResponse),
     LLMGateway,
     ThinkingMode (..),
-    Turn (UserTurn),
     deepSeekMessageEncodeOptions,
+    pattern UserTurn,
   )
 import LLM.Providers.OpenAI
   ( authHeader,

@@ -6,7 +6,15 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Agent.Types (ToolContext (..))
-import LLM.Core.Types (ToolCall (tcName), ToolResult (trContent, trName), Turn (..), TypedTool (..))
+import LLM.Core.Types
+  ( ToolCall (tcName),
+    ToolResult (trContent, trName),
+    Turn (..),
+    TypedTool (..),
+    projectReasoning,
+    projectText,
+    turnToolCalls,
+  )
 
 newtype HistoryToolArgs = HistoryToolArgs
   { _historyChunk :: Int
@@ -53,7 +61,7 @@ countUserTurns :: [Turn] -> Int
 countUserTurns = length . filter isUserTurn
 
 isUserTurn :: Turn -> Bool
-isUserTurn (UserTurn _) = True
+isUserTurn (UserMessage _) = True
 isUserTurn _ = False
 
 -- | Split a conversation into pages of @n@ user messages each, working
@@ -88,7 +96,7 @@ findNthUserBack n conv = go (length conv - 1) n
       | idx < 0 = 0
       | remaining <= 0 = idx + 1
       | otherwise = case conv !! idx of
-          UserTurn _ -> go (idx - 1) (remaining - 1)
+          UserMessage _ -> go (idx - 1) (remaining - 1)
           _ -> go (idx - 1) remaining
 
 -- | Extract a slice [start, end) from a list.
@@ -100,14 +108,18 @@ formatChunk :: [Turn] -> Text
 formatChunk = T.intercalate "\n" . map formatTurn
 
 formatTurn :: Turn -> Text
-formatTurn (UserTurn t) = "[User] " <> t
-formatTurn (AssistantTurn t mReasoning calls) =
-  "[Assistant] "
-    <> t
-    <> maybe "" (\r -> " [reasoning: " <> T.take 200 r <> "]") mReasoning
-    <> if null calls
-      then ""
-      else " [called: " <> T.intercalate ", " (map (\x -> x.tcName) calls) <> "]"
+formatTurn (UserMessage parts) =
+  "[User] " <> projectText parts
+formatTurn (AssistantMessage parts) =
+  let t = projectText parts
+      mReasoning = projectReasoning parts
+      calls = turnToolCalls parts
+   in "[Assistant] "
+        <> t
+        <> maybe "" (\r -> " [reasoning: " <> T.take 200 r <> "]") mReasoning
+        <> if null calls
+          then ""
+          else " [called: " <> T.intercalate ", " (map (\x -> x.tcName) calls) <> "]"
 formatTurn (ToolTurn results) =
   "[Tool results] "
     <> T.intercalate ", " [r.trName <> ": " <> T.take 200 r.trContent | r <- results]

@@ -4,6 +4,7 @@ module LLM.Providers.Claude
     claudeProvider,
     claudeProviderWith,
     parseClaudeResponse,
+    parseClaudeStream,
     parseClaudeUsage,
     claudeBuildBody,
     encodeTurn,
@@ -25,6 +26,7 @@ import Data.Aeson
   )
 import Data.Aeson.KeyMap qualified as KM
 import Data.Aeson.Types (Object, Pair, Parser, parseMaybe)
+import Data.ByteString qualified as BS
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (Text)
@@ -117,7 +119,7 @@ claudeProviderWith baseUrl baseOpts apiKey =
               opts = baseOpts <> claudeAuthOpts apiKey
               modelHint = fromMaybe "" (parseMaybe (withObject "body" (.: "model")) body)
           reqBr POST url (ReqBodyJson body) opts $ \resp ->
-            handleStreamResponse resp (\br -> parseClaudeStream modelHint br callback),
+            handleStreamResponse resp (\br -> parseClaudeStream modelHint (HC.brRead br) callback),
       parseResponse = pure . parseClaudeResponse,
       buildObjectBody = \r schema ->
         let schemaText = TL.toStrict . decodeUtf8 $ encode schema
@@ -404,15 +406,15 @@ data StreamBlock
   | StreamRedacted Text -- data
   | StreamTool Text Text Value -- id, name, args
 
-parseClaudeStream :: Text -> HC.BodyReader -> (StreamEvent -> IO ()) -> IO LLMTextResult
-parseClaudeStream modelHint reader callback = do
+parseClaudeStream :: Text -> IO BS.ByteString -> (StreamEvent -> IO ()) -> IO LLMTextResult
+parseClaudeStream modelHint readChunk callback = do
   blocksRef <- newIORef ([] :: [StreamBlock])
   usageRef <- newIORef emptyUsage
   toolAccRef <- newIORef (Nothing :: Maybe (Text, Text, Text))
   thinkingAccRef <- newIORef (Nothing :: Maybe (Text, Maybe Text)) -- text, signature
   redactedRef <- newIORef (Nothing :: Maybe Text)
   modelRef <- newIORef modelHint
-  readSSEEvents (HC.brRead reader) $ \sse -> do
+  readSSEEvents readChunk $ \sse -> do
     case sse.sseEvent of
       Just "message_start" ->
         case decodeStrict' (encodeUtf8 sse.sseData) of

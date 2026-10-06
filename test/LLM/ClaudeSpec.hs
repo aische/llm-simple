@@ -10,6 +10,8 @@ import Data.Aeson
   )
 import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
+import Data.ByteString qualified as BS
+import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Maybe (mapMaybe)
 import Data.Scientific (toBoundedInteger, toRealFloat)
 import Data.Text (Text)
@@ -20,6 +22,7 @@ import LLM.Core.Types
     ContentPart (..),
     PartBody (..),
     ProviderOpaque (..),
+    StreamEvent (..),
     ThinkingContent (..),
     ThinkingMode (..),
     ToolCall (..),
@@ -41,6 +44,7 @@ import LLM.Providers.Claude
     encodeTurn,
     effortToBudgetTokens,
     parseClaudeResponse,
+    parseClaudeStream,
     parseClaudeUsage,
   )
 import Test.Hspec
@@ -49,6 +53,7 @@ import Test.Hspec
     expectationFailure,
     it,
     shouldBe,
+    shouldContain,
   )
 
 spec :: Spec
@@ -94,6 +99,64 @@ spec = describe "Claude" $ do
                 tool.tcId `shouldBe` "toolu_weather_1"
             other -> expectationFailure $ "unexpected parts: " <> show other
         Left err -> expectationFailure $ "Parse failed: " <> show err
+
+  describe "parseClaudeStream" $ do
+    it "preserves thinking -> text -> tool_use order and opaque signature" $ do
+      sse <- BS.readFile "test/fixtures/claude-thinking-tool-use.sse"
+      eventsRef <- newIORef ([] :: [StreamEvent])
+      reader <- mkBodyReader sse
+      result <- parseClaudeStream "claude-haiku-4-5-20251001" reader $ \ev ->
+        modifyIORef' eventsRef (ev :)
+      case result of
+        Right resp -> do
+          resp.respReasoning `shouldBe` Just "I should call the weather tool."
+          resp.respText `shouldBe` "Checking the weather."
+          case resp.respContent of
+            [ ContentPart (ThinkingPart tc) Nothing,
+              ContentPart (TextPart "Checking the weather.") Nothing,
+              ContentPart (ToolCallPart tool) Nothing
+              ] -> do
+                tc.thinkingText `shouldBe` Just "I should call the weather tool."
+                case tc.thinkingOpaque of
+                  Just o -> do
+                    o.poProvider `shouldBe` "claude"
+                    o.poModel `shouldBe` Just "claude-haiku-4-5-20251001"
+                    lookupText "signature" o.poPayload `shouldBe` Just "sig_thinking_abc123"
+                  Nothing -> expectationFailure "expected thinking opaque"
+                tool.tcId `shouldBe` "toolu_weather_1"
+                tool.tcName `shouldBe` "get_weather"
+                let encoded =
+                      encodeTurn
+                        "claude-haiku-4-5-20251001"
+                        (AssistantMessage resp.respContent)
+                    content = messageContent (head encoded)
+                contentTypes content `shouldBe` ["thinking", "text", "tool_use"]
+                case content of
+                  (Object o : _) ->
+                    lookupText "signature" (Object o) `shouldBe` Just "sig_thinking_abc123"
+                  _ -> expectationFailure "expected thinking object"
+                let withResult =
+                      encodeTurn
+                        "claude-haiku-4-5-20251001"
+                        ( ToolTurn
+                            [ ToolResult
+                                { trCallId = "toolu_weather_1",
+                                  trName = "get_weather",
+                                  trContent = "sunny"
+                                }
+                            ]
+                        )
+                length withResult `shouldBe` 1
+            other -> expectationFailure $ "unexpected parts: " <> show other
+          events <- reverse <$> readIORef eventsRef
+          events
+            `shouldContain` [ StreamReasoningDelta "I should call the weather tool.",
+                              StreamDelta "Checking the weather."
+                            ]
+          case [tc | StreamToolCall tc <- events] of
+            [tc] -> tc.tcId `shouldBe` "toolu_weather_1"
+            other -> expectationFailure $ "expected one StreamToolCall, got: " <> show other
+        Left err -> expectationFailure $ "Stream parse failed: " <> show err
 
   describe "encodeTurn replay" $ do
     it "replays signed thinking blocks before tool_use for the same model" $ do
@@ -289,6 +352,18 @@ spec = describe "Claude" $ do
                 _ -> expectationFailure "missing response"
             _ -> expectationFailure "empty conversation array"
         _ -> expectationFailure "expected conversation array"
+
+-- | Yield the full SSE payload once, then empty chunks (EOF).
+mkBodyReader :: BS.ByteString -> IO (IO BS.ByteString)
+mkBodyReader bs = do
+  ref <- newIORef (Just bs)
+  pure $ do
+    m <- readIORef ref
+    case m of
+      Just chunk -> do
+        writeIORef ref Nothing
+        pure chunk
+      Nothing -> pure BS.empty
 
 messageContent :: Value -> [Value]
 messageContent (Object o) =

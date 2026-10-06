@@ -27,6 +27,7 @@ import Data.Aeson
 import Data.Aeson.KeyMap qualified as KM
 import Data.Aeson.Types (Object, Pair, Parser, parseMaybe)
 import Data.ByteString qualified as BS
+import Data.Foldable (for_)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (Text)
@@ -38,7 +39,8 @@ import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
 import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, stripJsonFences)
 import LLM.Core.SSE (SSEEvent (sseData, sseEvent), readSSEEvents)
 import LLM.Core.Types
-  ( ChatRequest
+  ( CacheHint (..),
+    ChatRequest
       ( reqConversation,
         reqMaxTokens,
         reqModel,
@@ -47,8 +49,8 @@ import LLM.Core.Types
         reqThinking,
         reqTools
       ),
-    CacheHint (..),
     ContentPart (..),
+    ImageSource (..),
     LLMError (EmptyResponse),
     LLMGateway,
     LLMResult,
@@ -62,7 +64,6 @@ import LLM.Core.Types
     ToolDef (toolDescription, toolName, toolParameters),
     ToolResult (trCallId, trContent),
     Turn (..),
-    ImageSource (..),
     mkChatResponse,
     mkToolCall,
     stripForeignOpaque,
@@ -202,7 +203,7 @@ encodeTurn _ (UserMessage parts) =
 encodeTurn currentModel (AssistantMessage parts) =
   [ object
       [ "role" .= ("assistant" :: Text),
-        "content" .= mapMaybe (encodeAssistantPart currentModel) (map (stripForeignOpaque claudeProviderName) parts)
+        "content" .= mapMaybe (encodeAssistantPart currentModel . stripForeignOpaque claudeProviderName) parts
       ]
   ]
 encodeTurn _ (ToolTurn results) =
@@ -427,9 +428,9 @@ parseClaudeStream modelHint readChunk callback = do
                     usageCacheCreationTokens = startUsage.usageCacheCreationTokens
                   }
               Nothing -> pure ()
-            case parseMaybe parseMessageStartModel v of
-              Just m -> writeIORef modelRef m
-              Nothing -> pure ()
+            for_
+              (parseMaybe parseMessageStartModel v)
+              (writeIORef modelRef)
           Nothing -> pure ()
       Just "content_block_start" ->
         case decodeStrict' (encodeUtf8 sse.sseData) of

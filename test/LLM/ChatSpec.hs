@@ -22,7 +22,7 @@ import LLM.Core.Types
     ChatResponse (..),
     ContentPart (..),
     PartBody (..),
-    textPart, toolCallPart, mkChatResponse, assistantTurn, pattern UserTurn,
+    textPart, toolCallPart, pattern UserTurn,
     Turn (..),
     cacheEphemeral,
     imageUrlPart,

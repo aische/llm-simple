@@ -68,7 +68,7 @@ import Data.Aeson
     (.=),
   )
 import Data.Aeson.Types (Parser)
-import Data.Char (isSpace)
+import Data.Char (isSpace, isAsciiUpper, isAsciiLower, isDigit)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -223,9 +223,9 @@ isBase64Text t =
         && T.all isBase64Char t
   where
     isBase64Char c =
-      (c >= 'A' && c <= 'Z')
-        || (c >= 'a' && c <= 'z')
-        || (c >= '0' && c <= '9')
+      isAsciiUpper c
+        || isAsciiLower c
+        || isDigit c
         || c == '+'
         || c == '/'
         || c == '='
@@ -292,8 +292,7 @@ data ContentPart = ContentPart
 instance ToJSON ContentPart where
   toJSON (ContentPart body mHint) =
     object $
-      ["partBody" .= body]
-        ++ ["partCacheHint" .= h | Just h <- [mHint]]
+      ("partBody" .= body) : ["partCacheHint" .= h | Just h <- [mHint]]
 
 instance FromJSON ContentPart where
   parseJSON = withObject "ContentPart" $ \o ->

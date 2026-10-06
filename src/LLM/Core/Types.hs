@@ -7,14 +7,20 @@ module LLM.Core.Types
     assistantTurn,
     ContentPart (..),
     PartBody (..),
+    ImageSource (..),
     ThinkingContent (..),
     ProviderOpaque (..),
     textPart,
     thinkingPart,
     toolCallPart,
+    imageUrlPart,
+    imageBase64Part,
+    mkImageBase64,
+    supportedImageMediaTypes,
     projectText,
     projectReasoning,
     turnToolCalls,
+    conversationHasImages,
     coalesceAdjacentTextParts,
     validateTurn,
     opaqueForProvider,
@@ -49,6 +55,7 @@ where
 
 import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
 import Data.Aeson.Types (Parser)
+import Data.Char (isSpace)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -139,15 +146,88 @@ data ThinkingContent = ThinkingContent
   }
   deriving (Show, Eq, Generic, FromJSON, ToJSON)
 
+-- | Image input by HTTPS URL or base64 payload.
+data ImageSource
+  = ImageUrl Text
+  | ImageBase64 {imageMediaType :: Text, imageData :: Text}
+  deriving (Show, Eq, Generic)
+
+instance ToJSON ImageSource where
+  toJSON (ImageUrl url) =
+    object ["type" .= ("url" :: Text), "url" .= url]
+  toJSON (ImageBase64 mediaType data_) =
+    object
+      [ "type" .= ("base64" :: Text),
+        "media_type" .= mediaType,
+        "data" .= data_
+      ]
+
+instance FromJSON ImageSource where
+  parseJSON = withObject "ImageSource" $ \o -> do
+    typ <- o .: "type" :: Parser Text
+    case typ of
+      "url" -> ImageUrl <$> o .: "url"
+      "base64" ->
+        ImageBase64
+          <$> o .: "media_type"
+          <*> o .: "data"
+      _ -> fail $ "Unknown image source type: " <> T.unpack typ
+
+-- | MIME types accepted by 'mkImageBase64' / 'imageBase64Part'.
+supportedImageMediaTypes :: [Text]
+supportedImageMediaTypes =
+  [ "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/heic",
+    "image/heif"
+  ]
+
+-- | Validate MIME type and base64 payload for an inline image.
+mkImageBase64 :: Text -> Text -> Either Text ImageSource
+mkImageBase64 mediaType rawData
+  | mediaType `notElem` supportedImageMediaTypes =
+      Left $
+        "unsupported image media type: "
+          <> mediaType
+          <> "; expected one of: "
+          <> T.intercalate ", " supportedImageMediaTypes
+  | T.null cleaned =
+      Left "image base64 data must not be empty"
+  | not (isBase64Text cleaned) =
+      Left "image data is not valid base64"
+  | otherwise =
+      Right $ ImageBase64 mediaType cleaned
+  where
+    cleaned = T.filter (not . isSpace) rawData
+
+isBase64Text :: Text -> Bool
+isBase64Text t =
+  let n = T.length t
+   in n > 0
+        && n `mod` 4 == 0
+        && T.all isBase64Char t
+  where
+    isBase64Char c =
+      (c >= 'A' && c <= 'Z')
+        || (c >= 'a' && c <= 'z')
+        || (c >= '0' && c <= '9')
+        || c == '+'
+        || c == '/'
+        || c == '='
+
 -- | Body of one ordered content part.
 data PartBody
   = TextPart Text
+  | ImagePart ImageSource
   | ThinkingPart ThinkingContent
   | ToolCallPart ToolCall
   deriving (Show, Eq, Generic)
 
 instance ToJSON PartBody where
   toJSON (TextPart t) = object ["type" .= ("text" :: Text), "text" .= t]
+  toJSON (ImagePart src) = object ["type" .= ("image" :: Text), "image" .= src]
   toJSON (ThinkingPart tc) =
     object $
       ["type" .= ("thinking" :: Text)]
@@ -164,6 +244,7 @@ instance FromJSON PartBody where
     typ <- o .: "type" :: Parser Text
     case typ of
       "text" -> TextPart <$> o .: "text"
+      "image" -> ImagePart <$> o .: "image"
       "thinking" -> do
         mText <- o .:? "text"
         mOpaque <- o .:? "opaque"
@@ -185,6 +266,15 @@ thinkingPart tc = ContentPart (ThinkingPart tc)
 
 toolCallPart :: ToolCall -> ContentPart
 toolCallPart tc = ContentPart (ToolCallPart tc)
+
+-- | User image part from a publicly reachable URL.
+imageUrlPart :: Text -> ContentPart
+imageUrlPart url = ContentPart (ImagePart (ImageUrl url))
+
+-- | User image part from base64 data; validates MIME type and payload.
+imageBase64Part :: Text -> Text -> Either Text ContentPart
+imageBase64Part mediaType data_ =
+  ContentPart . ImagePart <$> mkImageBase64 mediaType data_
 
 -- | A single turn in a conversation.
 --
@@ -267,16 +357,27 @@ coalesceAdjacentTextParts = go
       go (ContentPart (TextPart (t1 <> t2)) : rest)
     go (p : rest) = p : go rest
 
+-- | Whether any turn in the conversation contains an image part.
+conversationHasImages :: [Turn] -> Bool
+conversationHasImages = any turnHasImage
+  where
+    turnHasImage (UserMessage parts) = any isImagePart parts
+    turnHasImage (AssistantMessage parts) = any isImagePart parts
+    turnHasImage (ToolTurn _) = False
+    isImagePart (ContentPart (ImagePart _)) = True
+    isImagePart _ = False
+
 -- | Validate role/part combinations for a turn.
 --
--- User messages may contain text parts; assistant messages may contain text,
--- thinking, and tool-call parts. Returns 'Left' with an error message when
--- the combination is invalid.
+-- User messages may contain text and image parts; assistant messages may
+-- contain text, thinking, and tool-call parts. Returns 'Left' with an error
+-- message when the combination is invalid.
 validateTurn :: Turn -> Either Text ()
 validateTurn (UserMessage parts) =
   mapM_ userPart parts
   where
     userPart (ContentPart (TextPart _)) = Right ()
+    userPart (ContentPart (ImagePart _)) = Right ()
     userPart (ContentPart (ThinkingPart _)) =
       Left "user messages may not contain thinking parts"
     userPart (ContentPart (ToolCallPart _)) =
@@ -287,6 +388,8 @@ validateTurn (AssistantMessage parts) =
     assistantPart (ContentPart (TextPart _)) = Right ()
     assistantPart (ContentPart (ThinkingPart _)) = Right ()
     assistantPart (ContentPart (ToolCallPart _)) = Right ()
+    assistantPart (ContentPart (ImagePart _)) =
+      Left "assistant messages may not contain image parts"
 validateTurn (ToolTurn _) = Right ()
 
 -- | Keep opaque metadata only when it belongs to @provider@.
@@ -387,6 +490,8 @@ data LLMError
   | EmptyResponse -- valid JSON, but no content in it
   | ToolLoopExceeded Int -- hit the max tool rounds limit
   | Aborted -- user cancelled the request
+  | -- | Model lacks a required catalog capability (e.g. vision) for this request.
+    UnsupportedCapability Text
   deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
 -- | A request to an LLM provider

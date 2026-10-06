@@ -2,7 +2,7 @@
 
 module LLM.GeminiSpec (spec) where
 
-import Data.Aeson (Value (Array, Object), eitherDecodeFileStrict', object, (.=))
+import Data.Aeson (Value (Array, Object, String), eitherDecodeFileStrict', object, (.=))
 import Data.Aeson.KeyMap qualified as KM
 import Data.Text (Text)
 import Data.Vector qualified as V
@@ -16,6 +16,8 @@ import LLM.Core.Types
     textPart,
     thinkingPart,
     toolCallPart,
+    imageUrlPart,
+    imageBase64Part,
   )
 import LLM.Core.Usage (Usage (Usage))
 import LLM.Core.Utils (getToolCalls, hasToolCalls)
@@ -98,6 +100,35 @@ spec = describe "Gemini" $ do
       length parts `shouldBe` 3
       hasFunctionCall encoded `shouldBe` True
       hasThoughtSignature encoded `shouldBe` False
+
+  describe "image request encoding" $ do
+    it "encodes URL fileData and base64 inlineData parts" $ do
+      Right b64 <- pure $ imageBase64Part "image/jpeg" "aGVsbG8="
+      let turn =
+            UserMessage
+              [ imageUrlPart "https://example.com/photo.png",
+                b64,
+                textPart "caption"
+              ]
+          parts = assistantParts (head (encodeTurn "gemini-3.1-flash-lite" turn))
+      length parts `shouldBe` 3
+      case parts of
+        [Object urlP, Object b64P, Object textP] -> do
+          KM.member "fileData" urlP `shouldBe` True
+          KM.member "inlineData" b64P `shouldBe` True
+          KM.lookup "text" textP `shouldBe` Just (String "caption")
+          case KM.lookup "fileData" urlP of
+            Just (Object fd) -> do
+              KM.lookup "fileUri" fd
+                `shouldBe` Just (String "https://example.com/photo.png")
+              KM.lookup "mimeType" fd `shouldBe` Just (String "image/png")
+            _ -> expectationFailure "expected fileData"
+          case KM.lookup "inlineData" b64P of
+            Just (Object idata) -> do
+              KM.lookup "mimeType" idata `shouldBe` Just (String "image/jpeg")
+              KM.lookup "data" idata `shouldBe` Just (String "aGVsbG8=")
+            _ -> expectationFailure "expected inlineData"
+        _ -> expectationFailure "expected three parts"
 
   describe "parseGeminiUsage" $ do
     it "extracts token counts" $ do

@@ -4,7 +4,7 @@ An experimental Haskell **LLM toolbox** for trying out providers, tool loops, an
 
 The API stays small on purpose: JSON model and provider catalogs, bundled filesystem tools, and a straight line from `loadModelOrThrow` to `generateText`. Under that surface you still get multi-provider gateways, fallbacks, streaming, structured output, and sandboxed workspace tools — enough to prototype and compare ideas without assembling the pieces yourself.
 
-**Status:** early 0.1.x release. APIs may change.
+**Status:** early 0.2.x release. APIs may change.
 
 ## Features
 
@@ -69,8 +69,29 @@ Models are defined in a JSON array. Each entry maps a logical config name to a p
 | `retryCount`      | Number of retries on failure                                             |
 | `jitterBackoff`   | Backoff jitter in ms between retries                                     |
 | `thinking`        | Extended thinking effort level (optional, provider-dependent)            |
+| `capabilities`    | Optional object: `thinking`, `vision`, `promptCaching` (default `false`) |
 
 A provider is only available if its API key is set (except Ollama, which is always available).
+
+Capability flags are declarations used before each fallback candidate is
+called: image parts require `vision`; enabled thinking requires `thinking`.
+Unsupported candidates fail with `UnsupportedCapability` and the next
+fallback is tried. Cache hints (phase 3B) may be ignored by providers that
+do not support prompt caching.
+
+### Image input
+
+User messages may mix text and images:
+
+```haskell
+import LLM (imageUrlPart, imageBase64Part, textPart, UserMessage)
+
+let Right png = imageBase64Part "image/png" "<base64>"
+    msg = UserMessage [imageUrlPart "https://example.com/photo.jpg", png, textPart "describe"]
+```
+
+`imageBase64Part` validates MIME type (`image/jpeg|png|gif|webp|heic|heif`)
+and base64 payload locally. Use a model with `"capabilities": {"vision": true}`.
 
 ### Provider catalog
 

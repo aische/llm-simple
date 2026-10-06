@@ -11,7 +11,12 @@ import LLM.Core.LLMProvider (LLMProvider, toGateway)
 import LLM.Core.Types (LLMGateway, ThinkingMode (..))
 import LLM.Core.Usage (PricingInfo (..))
 import LLM.Generate.Logger (noHooks)
-import LLM.Generate.ModelConfig (ModelConfig (..), ModelWithFallbacks (ModelWithFallbacks))
+import LLM.Generate.ModelConfig
+  ( ModelCapabilities (..),
+    ModelConfig (..),
+    ModelWithFallbacks (ModelWithFallbacks),
+    defaultModelCapabilities,
+  )
 import LLM.TestKit
   ( loadRecordedConversation,
     mockProvider,
@@ -39,6 +44,10 @@ mkModelConfig opts provider =
       mcMaxTokens = 1024,
       mcTemperature = Nothing,
       mcThinking = opts.specThinking,
+      mcCapabilities =
+        defaultModelCapabilities
+          { capThinking = maybe False (.tmEnabled) opts.specThinking
+          },
       mcRequestTimeout = Nothing,
       mcThrottleDelay = Nothing,
       mcRetryCount = 3,

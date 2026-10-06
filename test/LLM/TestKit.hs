@@ -37,7 +37,12 @@ import LLM.Core.Usage (PricingInfo (..), addUsage, emptyUsage)
 import LLM.Core.Utils (parseChatResponse)
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (Hooks (..), noHooks)
-import LLM.Generate.ModelConfig (ModelConfig (..), ModelWithFallbacks (..))
+import LLM.Generate.ModelConfig
+  ( ModelCapabilities (..),
+    ModelConfig (..),
+    ModelWithFallbacks (..),
+    defaultModelCapabilities,
+  )
 import LLM.Generate.Types (GenerateErrorResult (..), GenerateTextResult (..))
 import LLM.WeatherTool (weatherToolTyped)
 import System.Directory (createDirectoryIfMissing)
@@ -154,6 +159,10 @@ mkRecordedConversationRuntime gateway modelName thinking promptRef pendingRef en
             mcMaxTokens = 1024,
             mcTemperature = Nothing,
             mcThinking = thinking,
+            mcCapabilities =
+              defaultModelCapabilities
+                { capThinking = maybe False (.tmEnabled) thinking
+                },
             mcRequestTimeout = Nothing,
             mcThrottleDelay = Nothing,
             mcRetryCount = 3,

@@ -12,7 +12,10 @@
         "requestTimeout": 10000,
         "throttleDelay": 1000,
         "retryCount": 3,
-        "jitterBackoff": 1000
+        "jitterBackoff": 1000,
+        "capabilities": {
+            "vision": true
+        }
     },
     {
         "modelConfigName": "gpt_5_6_terra",
@@ -27,7 +30,10 @@
         "requestTimeout": 10000,
         "throttleDelay": 1000,
         "retryCount": 3,
-        "jitterBackoff": 1000
+        "jitterBackoff": 1000,
+        "capabilities": {
+            "vision": true
+        }
     },
     {
         "modelConfigName": "llama_3_2",
@@ -72,7 +78,11 @@
         "requestTimeout": 10000,
         "throttleDelay": 1000,
         "retryCount": 3,
-        "jitterBackoff": 1000
+        "jitterBackoff": 1000,
+        "capabilities": {
+            "thinking": true,
+            "vision": true
+        }
     },
     {
         "modelConfigName": "haiku_4_5",
@@ -86,7 +96,12 @@
         "requestTimeout": 30000,
         "throttleDelay": 5000,
         "retryCount": 3,
-        "jitterBackoff": 5000
+        "jitterBackoff": 5000,
+        "capabilities": {
+            "thinking": true,
+            "vision": true,
+            "promptCaching": true
+        }
     },
     {
         "modelConfigName": "deepseek4flash",
@@ -101,6 +116,9 @@
         "requestTimeout": 20000,
         "throttleDelay": 3000,
         "retryCount": 3,
-        "jitterBackoff": 1000
+        "jitterBackoff": 1000,
+        "capabilities": {
+            "thinking": true
+        }
     }
 ]

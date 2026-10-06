@@ -13,6 +13,8 @@ module LLM.Generate
     streamTextWithFallbacks,
     genObject,
     genObjectUntyped,
+    ModelCapabilities (..),
+    defaultModelCapabilities,
     ModelConfig (..),
     ModelWithFallbacks (..),
     GenRequest (..),

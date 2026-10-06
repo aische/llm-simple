@@ -1,5 +1,7 @@
 module LLM.Generate.ModelConfig
-  ( ModelConfig (..),
+  ( ModelCapabilities (..),
+    defaultModelCapabilities,
+    ModelConfig (..),
     ModelWithFallbacks (..),
     mfwToModelConfigs,
     modelRetryPolicy,
@@ -7,9 +9,45 @@ module LLM.Generate.ModelConfig
 where
 
 import Control.Retry (RetryPolicyM, fullJitterBackoff, limitRetries)
+import Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.!=), (.:?), (.=))
 import Data.Text (Text)
+import GHC.Generics (Generic)
 import LLM.Core.Types (LLMGateway, ThinkingMode)
 import LLM.Core.Usage (PricingInfo)
+
+-- | Declared model capabilities from the catalog.
+--
+-- Missing flags decode as 'False'. These are declarations, not automatic
+-- API discovery; request validation consults them before I/O.
+data ModelCapabilities = ModelCapabilities
+  { capThinking :: Bool,
+    capVision :: Bool,
+    capPromptCaching :: Bool
+  }
+  deriving (Show, Eq, Ord, Generic)
+
+defaultModelCapabilities :: ModelCapabilities
+defaultModelCapabilities =
+  ModelCapabilities
+    { capThinking = False,
+      capVision = False,
+      capPromptCaching = False
+    }
+
+instance ToJSON ModelCapabilities where
+  toJSON caps =
+    object
+      [ "thinking" .= caps.capThinking,
+        "vision" .= caps.capVision,
+        "promptCaching" .= caps.capPromptCaching
+      ]
+
+instance FromJSON ModelCapabilities where
+  parseJSON = withObject "capabilities" $ \o ->
+    ModelCapabilities
+      <$> o .:? "thinking" .!= False
+      <*> o .:? "vision" .!= False
+      <*> o .:? "promptCaching" .!= False
 
 -- | Provider connection and per-model tuning parameters.
 --
@@ -28,6 +66,8 @@ data ModelConfig = ModelConfig
     mcTemperature :: Maybe Double,
     -- | Thinking / reasoning mode (DeepSeek, etc.), when supported.
     mcThinking :: Maybe ThinkingMode,
+    -- | Declared capabilities (vision, thinking, prompt caching).
+    mcCapabilities :: ModelCapabilities,
     -- | Whole-request timeout in milliseconds ('Nothing' = no timeout).
     mcRequestTimeout :: Maybe Int,
     -- | Delay in milliseconds before each API call (rate limiting).

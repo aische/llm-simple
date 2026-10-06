@@ -22,6 +22,7 @@ import Data.Text qualified as T
 import LLM.Core.Types
   ( ChatResponse (..),
     ContentPart (..),
+    ImageSource (..),
     LLMError (..),
     LLMResult,
     PartBody (..),
@@ -93,6 +94,8 @@ streamResponseJson r =
   where
     partToJson (ContentPart (TextPart t)) =
       object ["type" .= ("text" :: Text), "text" .= t]
+    partToJson (ContentPart (ImagePart src)) =
+      object ["type" .= ("image" :: Text), "image" .= imageToJson src]
     partToJson (ContentPart (ThinkingPart tc)) =
       object $
         ["type" .= ("thinking" :: Text)]
@@ -106,6 +109,14 @@ streamResponseJson r =
           "arguments" .= tc.tcArguments
         ]
           ++ ["provider_meta" .= opaqueToJson m | Just m <- [tc.tcProviderMeta]]
+    imageToJson (ImageUrl url) =
+      object ["type" .= ("url" :: Text), "url" .= url]
+    imageToJson (ImageBase64 mediaType data_) =
+      object
+        [ "type" .= ("base64" :: Text),
+          "media_type" .= mediaType,
+          "data" .= data_
+        ]
     opaqueToJson o =
       object $
         [ "provider" .= o.poProvider,
@@ -136,6 +147,7 @@ parseChatResponse = AE.withObject "ChatResponse" $ \v -> do
       t <- o AE..: "type"
       case (t :: Text) of
         "text" -> ContentPart . TextPart <$> o AE..: "text"
+        "image" -> ContentPart . ImagePart <$> (o AE..: "image" >>= parseImageSource)
         "thinking" -> do
           mText <- o AE..:? "text"
           mOpaque <- o AE..:? "opaque" >>= mapM parseOpaque
@@ -147,6 +159,16 @@ parseChatResponse = AE.withObject "ChatResponse" $ \v -> do
           tcMeta <- o AE..:? "provider_meta" >>= mapM parseOpaque
           pure $ ContentPart (ToolCallPart (ToolCall tcId tcName tcArgs tcMeta))
         _ -> fail "Unknown content part type"
+
+    parseImageSource = AE.withObject "ImageSource" $ \o -> do
+      typ <- o AE..: "type" :: Parser Text
+      case typ of
+        "url" -> ImageUrl <$> o AE..: "url"
+        "base64" ->
+          ImageBase64
+            <$> o AE..: "media_type"
+            <*> o AE..: "data"
+        _ -> fail "Unknown image source type"
 
     parseOpaque = AE.withObject "ProviderOpaque" $ \o ->
       ProviderOpaque

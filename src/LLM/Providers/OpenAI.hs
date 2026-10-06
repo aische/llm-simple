@@ -24,6 +24,7 @@ import Data.Aeson
     decodeStrict',
     encode,
     object,
+    toJSON,
     withObject,
     (.!=),
     (.:),
@@ -63,6 +64,7 @@ import LLM.Core.Types
     ToolDef (toolDescription, toolName, toolParameters),
     ToolResult (trCallId, trContent),
     Turn (..),
+    ImageSource (..),
     defaultMessageEncodeOptions,
     mkChatResponse,
     mkToolCall,
@@ -199,7 +201,7 @@ encodeTurn :: MessageEncodeOptions -> Turn -> [Value]
 encodeTurn _ (UserMessage parts) =
   [ object
       [ "role" .= ("user" :: Text),
-        "content" .= projectUserText parts
+        "content" .= encodeUserContent parts
       ]
   ]
 encodeTurn opts (AssistantMessage parts) =
@@ -225,11 +227,32 @@ encodeTurn opts (AssistantMessage parts) =
 encodeTurn _ (ToolTurn results) =
   map encodeToolResult results
 
-projectUserText :: [ContentPart] -> Text
-projectUserText = T.concat . mapMaybe go
+-- | Single text stays a string (recorded-fixture compatible); mixed or image
+-- content uses the OpenAI multimodal content-part array.
+encodeUserContent :: [ContentPart] -> Value
+encodeUserContent [ContentPart (TextPart t)] = String t
+encodeUserContent parts = toJSON (mapMaybe encodeUserPart parts)
   where
-    go (ContentPart (TextPart t)) = Just t
-    go _ = Nothing
+    encodeUserPart (ContentPart (TextPart t)) =
+      Just $ object ["type" .= ("text" :: Text), "text" .= t]
+    encodeUserPart (ContentPart (ImagePart src)) =
+      Just $ encodeImagePart src
+    encodeUserPart _ = Nothing
+
+encodeImagePart :: ImageSource -> Value
+encodeImagePart (ImageUrl url) =
+  object
+    [ "type" .= ("image_url" :: Text),
+      "image_url" .= object ["url" .= url]
+    ]
+encodeImagePart (ImageBase64 mediaType data_) =
+  object
+    [ "type" .= ("image_url" :: Text),
+      "image_url"
+        .= object
+          [ "url" .= ("data:" <> mediaType <> ";base64," <> data_)
+          ]
+    ]
 
 encodeToolDef :: ToolDef -> Value
 encodeToolDef td =

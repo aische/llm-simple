@@ -3,14 +3,16 @@ module LLM.LoadSpec (spec) where
 import Control.Exception (IOException, SomeException, catch, displayException, fromException, try)
 import Control.Monad.Except (runExceptT)
 import Data.Aeson (Value (Array), eitherDecodeFileStrict')
+import Data.List (find)
 import Data.Map qualified as Map
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
 import LLM.Core.Types (LLMGateway (..))
-import LLM.Generate.ModelConfig (ModelConfig (..))
+import LLM.Generate.ModelConfig (ModelCapabilities (..), ModelConfig (..), defaultModelCapabilities)
 import LLM.Load.LoadGateways (buildGateway, loadGateways, loadGatewaysFromCatalog, parseProviderBaseUrl)
 import LLM.Load.LoadModels (loadModelOrThrow, loadModelOrThrow_, loadModelsOrThrow)
+import LLM.Load.ModelCatalog (ModelCatalogItem (..))
 import LLM.Load.ProviderCatalog
   ( ProviderCatalogItem (..),
     ProviderProtocol (..),
@@ -63,6 +65,26 @@ spec = describe "Load" $ do
     it "loads a known model config" $ do
       cfg <- loadModelOrThrow ollamaCatalog "llama_3_2"
       cfg.mcModel `shouldBe` "llama3.2:latest"
+      cfg.mcCapabilities.capVision `shouldBe` False
+
+    it "loads catalog capabilities when present" $ do
+      result <- eitherDecodeFileStrict' "./model-catalog.json"
+      case result of
+        Right (items :: [ModelCatalogItem]) -> do
+          let Just haiku = find (\i -> i.modelConfigName == "haiku_4_5") items
+          haiku.capabilities
+            `shouldBe` Just
+              ( ModelCapabilities
+                  { capThinking = True,
+                    capVision = True,
+                    capPromptCaching = True
+                  }
+              )
+        Left err -> expectationFailure err
+
+    it "loads catalogs without capabilities (defaults false)" $ do
+      cfg <- loadModelOrThrow ollamaCatalog "mistral"
+      cfg.mcCapabilities `shouldBe` defaultModelCapabilities
 
     it "throws when a model config is missing" $ do
       result <- try @LoadConfigError (loadModelsOrThrow ollamaCatalog ("llama_3_2" :: Text, "missing_model" :: Text))

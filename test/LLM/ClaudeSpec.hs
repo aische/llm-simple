@@ -29,6 +29,8 @@ import LLM.Core.Types
     textPart,
     thinkingPart,
     toolCallPart,
+    imageUrlPart,
+    imageBase64Part,
     pattern UserTurn,
   )
 import LLM.Core.Usage (Usage (Usage))
@@ -188,6 +190,28 @@ spec = describe "Claude" $ do
               }
           body = claudeBuildBody False req
       lookupNumber "temperature" body `shouldBe` Just 0.5
+
+  describe "image request encoding" $ do
+    it "encodes URL and base64 image parts" $ do
+      Right b64 <- pure $ imageBase64Part "image/png" "aGVsbG8="
+      let turn =
+            UserMessage
+              [ imageUrlPart "https://example.com/cat.jpg",
+                b64,
+                textPart "describe"
+              ]
+          content = messageContent (head (encodeTurn "claude-haiku-4-5-20251001" turn))
+      contentTypes content `shouldBe` ["image", "image", "text"]
+      case content of
+        [Object urlO, Object b64O, Object textO] -> do
+          nestedText ["source", "type"] (Object urlO) `shouldBe` Just "url"
+          nestedText ["source", "url"] (Object urlO)
+            `shouldBe` Just "https://example.com/cat.jpg"
+          nestedText ["source", "type"] (Object b64O) `shouldBe` Just "base64"
+          nestedText ["source", "media_type"] (Object b64O) `shouldBe` Just "image/png"
+          nestedText ["source", "data"] (Object b64O) `shouldBe` Just "aGVsbG8="
+          lookupText "text" (Object textO) `shouldBe` Just "describe"
+        _ -> expectationFailure "expected image/image/text blocks"
 
   describe "parseClaudeUsage" $ do
     it "extracts token counts" $ do

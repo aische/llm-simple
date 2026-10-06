@@ -1,11 +1,14 @@
 module LLM.TypesSpec (spec) where
 
 import Data.Aeson (object, (.=))
+import Data.Text qualified as T
 import LLM.Core.Types
   ( ChatResponse (ChatResponse),
     LLMError (EmptyResponse, HttpError, NetworkError),
     ThinkingContent (..),
     Turn (..),
+    imageBase64Part,
+    imageUrlPart,
     mkToolCall,
     pattern UserTurn,
     textPart,
@@ -25,7 +28,7 @@ import LLM.Core.Utils
     hasToolCalls,
     isRetryable,
   )
-import Test.Hspec (Spec, describe, it, shouldBe)
+import Test.Hspec (Spec, describe, it, shouldBe, shouldSatisfy)
 
 spec :: Spec
 spec = describe "Types" $ do
@@ -77,6 +80,33 @@ spec = describe "Types" $ do
             [thinkingPart (ThinkingContent (Just "nope") Nothing)]
         )
         `shouldBe` Left "user messages may not contain thinking parts"
+
+    it "allows image parts on user messages" $ do
+      validateTurn
+        ( UserMessage
+            [imageUrlPart "https://example.com/a.png", textPart "look"]
+        )
+        `shouldBe` Right ()
+
+    it "rejects image parts on assistant messages" $ do
+      validateTurn
+        (AssistantMessage [imageUrlPart "https://example.com/a.png"])
+        `shouldBe` Left "assistant messages may not contain image parts"
+
+  describe "imageBase64Part" $ do
+    it "accepts valid png base64" $ do
+      imageBase64Part "image/png" "aGVsbG8=" `shouldSatisfy` either (const False) (const True)
+
+    it "rejects unsupported MIME types" $ do
+      case imageBase64Part "image/svg+xml" "aGVsbG8=" of
+        Left msg -> msg `shouldSatisfy` T.isInfixOf "unsupported image media type"
+        Right _ -> fail "expected MIME failure"
+
+    it "rejects empty base64" $ do
+      imageBase64Part "image/png" "   " `shouldBe` Left "image base64 data must not be empty"
+
+    it "rejects invalid base64 characters" $ do
+      imageBase64Part "image/png" "!!!!" `shouldBe` Left "image data is not valid base64"
 
   describe "isRetryable" $ do
     it "retries on 429" $ do

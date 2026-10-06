@@ -20,7 +20,7 @@ import LLM.Core.Usage (PricingInfo (..), Usage (..))
 import LLM.Generate.Generate (streamTextLLM)
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
-import LLM.Generate.ModelConfig (ModelConfig (..))
+import LLM.Generate.ModelConfig (ModelConfig (..), defaultModelCapabilities)
 import LLM.Generate.Types
   ( GenRequest (..),
     RoundTextRole (..),
@@ -102,6 +102,7 @@ runStream gw turns = do
             mcMaxTokens = 256,
             mcTemperature = Nothing,
             mcThinking = Nothing,
+            mcCapabilities = defaultModelCapabilities,
             mcRequestTimeout = Nothing,
             mcThrottleDelay = Nothing,
             mcRetryCount = 0,

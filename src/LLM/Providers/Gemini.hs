@@ -56,6 +56,7 @@ import LLM.Core.Types
     ToolDef (toolDescription, toolName, toolParameters),
     ToolResult (trContent, trName),
     Turn (..),
+    ImageSource (..),
     mkChatResponse,
     mkToolCall,
     stripForeignOpaque,
@@ -200,6 +201,8 @@ parseGeminiStream reader callback = do
       tc' <- normalizeToolCallId tc
       cb (StreamToolCall tc')
       pure (toolCallPart tc')
+    assignToolId _ (ContentPart (ImagePart src)) =
+      pure (ContentPart (ImagePart src))
 
     parseChunkParts :: Maybe Text -> Value -> Parser [ContentPart]
     parseChunkParts modelVer = withObject "GeminiChunk" $ \o -> do
@@ -247,6 +250,7 @@ encodeTurn _ (UserMessage parts) =
   ]
   where
     encodeUserPart (ContentPart (TextPart t)) = Just $ object ["text" .= t]
+    encodeUserPart (ContentPart (ImagePart src)) = Just $ encodeImagePart src
     encodeUserPart _ = Nothing
 encodeTurn currentModel (AssistantMessage parts) =
   [ object
@@ -262,6 +266,37 @@ encodeTurn _ (ToolTurn results) =
         "parts" .= map encodeFunctionResponse results
       ]
   ]
+
+encodeImagePart :: ImageSource -> Value
+encodeImagePart (ImageUrl url) =
+  object
+    [ "fileData"
+        .= object
+          [ "mimeType" .= guessImageMimeFromUrl url,
+            "fileUri" .= url
+          ]
+    ]
+encodeImagePart (ImageBase64 mediaType data_) =
+  object
+    [ "inlineData"
+        .= object
+          [ "mimeType" .= mediaType,
+            "data" .= data_
+          ]
+    ]
+
+-- | Best-effort MIME guess for Gemini fileData URL parts.
+guessImageMimeFromUrl :: Text -> Text
+guessImageMimeFromUrl url =
+  let path = T.toLower $ T.takeWhile (/= '?') url
+   in case () of
+        _
+          | ".png" `T.isSuffixOf` path -> "image/png"
+          | ".gif" `T.isSuffixOf` path -> "image/gif"
+          | ".webp" `T.isSuffixOf` path -> "image/webp"
+          | ".heic" `T.isSuffixOf` path -> "image/heic"
+          | ".heif" `T.isSuffixOf` path -> "image/heif"
+          | otherwise -> "image/jpeg"
 
 encodeAssistantPart :: Text -> ContentPart -> Maybe Value
 encodeAssistantPart _ (ContentPart (TextPart t))
@@ -281,6 +316,7 @@ encodeAssistantPart currentModel (ContentPart (ThinkingPart tc)) =
         _ -> Nothing
 encodeAssistantPart currentModel (ContentPart (ToolCallPart tc)) =
   Just $ encodeFunctionCall currentModel tc
+encodeAssistantPart _ (ContentPart (ImagePart _)) = Nothing
 
 modelOk :: Text -> Maybe Text -> Bool
 modelOk _ Nothing = True

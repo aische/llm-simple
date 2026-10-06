@@ -58,6 +58,7 @@ import LLM.Core.Types
     ToolDef (toolDescription, toolName, toolParameters),
     ToolResult (trCallId, trContent),
     Turn (..),
+    ImageSource (..),
     mkChatResponse,
     mkToolCall,
     stripForeignOpaque,
@@ -213,7 +214,30 @@ encodeUserContent parts = toJSON (mapMaybe encodeUserPart parts)
   where
     encodeUserPart (ContentPart (TextPart t)) =
       Just $ object ["type" .= ("text" :: Text), "text" .= t]
+    encodeUserPart (ContentPart (ImagePart src)) =
+      Just $ encodeImageBlock src
     encodeUserPart _ = Nothing
+
+encodeImageBlock :: ImageSource -> Value
+encodeImageBlock (ImageUrl url) =
+  object
+    [ "type" .= ("image" :: Text),
+      "source"
+        .= object
+          [ "type" .= ("url" :: Text),
+            "url" .= url
+          ]
+    ]
+encodeImageBlock (ImageBase64 mediaType data_) =
+  object
+    [ "type" .= ("image" :: Text),
+      "source"
+        .= object
+          [ "type" .= ("base64" :: Text),
+            "media_type" .= mediaType,
+            "data" .= data_
+          ]
+    ]
 
 encodeAssistantPart :: Text -> ContentPart -> Maybe Value
 encodeAssistantPart currentModel (ContentPart (ThinkingPart tc)) =
@@ -227,6 +251,7 @@ encodeAssistantPart _ (ContentPart (TextPart t))
   | otherwise = Just $ object ["type" .= ("text" :: Text), "text" .= t]
 encodeAssistantPart _ (ContentPart (ToolCallPart tc)) =
   Just $ encodeToolUseBlock tc
+encodeAssistantPart _ (ContentPart (ImagePart _)) = Nothing
 
 opaqueForClaude :: Text -> Maybe ProviderOpaque -> Maybe Value
 opaqueForClaude _ (Just o)

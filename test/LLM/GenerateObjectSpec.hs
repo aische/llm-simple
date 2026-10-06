@@ -16,6 +16,7 @@ import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig
   ( ModelConfig (..),
     ModelWithFallbacks (..),
+    defaultModelCapabilities,
   )
 import LLM.Generate.Types (GenerateError (..), GenerateErrorResult (..))
 import LLM.WeatherTool (WeatherToolArgs (..))
@@ -145,6 +146,7 @@ mockModel gw =
       mcMaxTokens = 256,
       mcTemperature = Nothing,
       mcThinking = Nothing,
+      mcCapabilities = defaultModelCapabilities,
       mcRequestTimeout = Nothing,
       mcThrottleDelay = Nothing,
       mcRetryCount = 0,

@@ -8,6 +8,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Usage (PricingInfo)
+import LLM.Generate.ModelConfig (ModelCapabilities)
 import LLM.Load.Types (LoadConfigError (..))
 import LLM.Load.Utils (decodeJsonFile)
 
@@ -20,6 +21,8 @@ data ModelCatalogItem = ModelCatalogItem
     temperature :: Maybe Double,
     requestTimeout :: Maybe Int,
     thinking :: Maybe Text,
+    -- | Optional capability flags; missing object or keys default to false.
+    capabilities :: Maybe ModelCapabilities,
     throttleDelay :: Maybe Int,
     retryCount :: Int,
     jitterBackoff :: Int

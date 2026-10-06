@@ -33,16 +33,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reasoning continues via `reasoning_content` on ordered `ThinkingPart`s.
 - Foreign opaque thinking / tool metadata is stripped at encode time on
   provider fallback (history unchanged).
-- Example catalog: removed `temperature` from `haiku_4_5` (Claude thinking
-  temperature footgun).
+- **Breaking:** `ModelConfig` gains `mcCapabilities` (`ModelCapabilities`).
+  Manual record construction must set it (use `defaultModelCapabilities`).
+- Example catalog: `capabilities` on vision/thinking models; removed
+  `temperature` from `haiku_4_5` (Claude thinking temperature footgun).
 
 ### Added
 
+- Image input: `ImageSource`, `ImagePart`, `imageUrlPart`, `imageBase64Part` /
+  `mkImageBase64` with MIME and base64 validation. Encoded for Claude, Gemini,
+  and OpenAI Chat Completions (DeepSeek/Ollama reuse the OpenAI shape when
+  `capabilities.vision` is declared).
+- Catalog `capabilities` object (`thinking`, `vision`, `promptCaching`; missing
+  flags default to `false`). Carried on `ModelCatalogItem` / `ModelConfig`.
+- Fallback candidates are validated before I/O: images require `vision`;
+  enabled thinking requires `thinking`. Unsupported capability yields
+  `UnsupportedCapability` and continues the fallback chain.
 - `ProviderOpaque`, `ThinkingContent`, `ContentPart`, `PartBody`, `textPart`,
   `thinkingPart`, `toolCallPart`, `mkChatResponse`, `projectText`,
   `projectReasoning`, `turnToolCalls`, `validateTurn`, `stripForeignOpaque`.
 - Claude thinking fixture and unit tests for ordered replay / foreign opaque
   omission; Gemini signature matching tests.
+- Image request-shape tests (Claude/Gemini/OpenAI) and vision fallback tests.
 
 ## [0.1.1.0] - 2026-08-23
 

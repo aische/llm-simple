@@ -19,18 +19,21 @@ import LLM.Core.Types
   ( ChatRequest (..),
     ChatResponse (..),
     textPart, toolCallPart, mkChatResponse, assistantTurn, pattern UserTurn,
+    Turn (..),
+    imageUrlPart,
     LLMError (..),
     LLMGateway (..),
     LLMHooks (..),
     ToolDef (ToolDef, toolDescription, toolName, toolParameters, toolReadonly),
-    Turn (..),
     mkToolCall,
   )
 import LLM.Core.Usage (PricingInfo (..), Usage (Usage))
 import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig
-  ( ModelConfig (..),
+  ( ModelCapabilities (..),
+    ModelConfig (..),
     ModelWithFallbacks (..),
+    defaultModelCapabilities,
   )
 import LLM.Generate.Types
   ( GenerateError (..),
@@ -96,6 +99,7 @@ mockModel gw =
       mcMaxTokens = 1024,
       mcTemperature = Nothing,
       mcThinking = Nothing,
+      mcCapabilities = defaultModelCapabilities,
       mcRequestTimeout = Nothing,
       mcThrottleDelay = Nothing,
       mcRetryCount = 0,
@@ -223,6 +227,37 @@ spec = describe "Chat" $ do
       case result of
         Right r -> r.gtrText `shouldBe` "Fallback worked!"
         Left err -> expectationFailure $ "Expected fallback success, got: " <> show err
+
+    it "skips a non-vision model and succeeds with a vision-capable fallback" $ do
+      let boomGw =
+            LLMGateway
+              { gwName = "should-not-run",
+                gwGenerateText = \_ _ -> pure (Left (HttpError 500 "should not be called")),
+                gwStreamText = \_ _ _ -> pure (Left (HttpError 500 "should not be called")),
+                gwGenerateObject = \_ _ _ -> pure (Left (HttpError 500 "should not be called"))
+              }
+          okGw = mockGateway (ChatResponse "I see a cat." [textPart "I see a cat."] (Just (Usage 10 5 0)) Nothing)
+          noVision = mockModel boomGw
+          withVision =
+            (mockModel okGw)
+              { mcCapabilities = defaultModelCapabilities {capVision = True}
+              }
+          models = ModelWithFallbacks noVision [withVision]
+          msgs = [UserMessage [imageUrlPart "https://example.com/cat.png", textPart "what is this?"]]
+      result <- runGenerate defaultAgent models toolMap Nothing msgs
+      case result of
+        Right r -> r.gtrText `shouldBe` "I see a cat."
+        Left err -> expectationFailure $ "Expected vision fallback success, got: " <> show err
+
+    it "returns UnsupportedCapability when no vision-capable model remains" $ do
+      let noVision1 = mockModel (mockErrorGateway (HttpError 500 "unused"))
+          noVision2 = mockModel (mockErrorGateway (HttpError 500 "unused"))
+          models = ModelWithFallbacks noVision1 [noVision2]
+          msgs = [UserMessage [imageUrlPart "https://example.com/cat.png", textPart "what?"]]
+      result <- runGenerate defaultAgent models toolMap Nothing msgs
+      case result of
+        Left GenerateErrorResult {gerError = GErrLLM (UnsupportedCapability _)} -> pure ()
+        other -> expectationFailure $ "Expected UnsupportedCapability, got: " <> show other
 
     it "returns error from last model when all fail" $ do
       let failGw1 = mockErrorGateway (HttpError 503 "service unavailable")

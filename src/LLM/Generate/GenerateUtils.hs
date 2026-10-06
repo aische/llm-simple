@@ -4,6 +4,7 @@ module LLM.Generate.GenerateUtils
     usageWithModelCost,
     callWithRetryTimeout,
     withModelFallbacks,
+    validateModelCapabilities,
     llmHooks,
   )
 where
@@ -16,12 +17,16 @@ import LLM.Core.Types
     LLMError (..),
     LLMGateway (gwName),
     LLMHooks (..),
+    ThinkingMode (..),
+    Turn,
+    conversationHasImages,
   )
 import LLM.Core.Usage (Usage (..), estimateCost)
 import LLM.Core.Utils (withRetry, withTimeout)
 import LLM.Generate.Logger (Hooks (..), LogLevel (..))
 import LLM.Generate.ModelConfig
-  ( ModelConfig (..),
+  ( ModelCapabilities (..),
+    ModelConfig (..),
     ModelWithFallbacks (..),
     mfwToModelConfigs,
     modelRetryPolicy,
@@ -46,6 +51,37 @@ mkRequest gr mc =
 
 usageWithModelCost :: ModelConfig -> Usage -> Usage
 usageWithModelCost mc u = u {usageTotalCost = estimateCost mc.mcPricing u}
+
+-- | Check that a candidate model declares every capability the request needs.
+--
+-- Unsupported vision is a candidate failure (do not drop images). Thinking
+-- configuration requires a declared thinking capability. Cache hints are not
+-- validated here; unsupported providers ignore them.
+validateModelCapabilities :: ModelConfig -> [Turn] -> Either LLMError ()
+validateModelCapabilities mc turns = do
+  whenNeedsVision
+  whenNeedsThinking
+  where
+    caps = mc.mcCapabilities
+    whenNeedsVision
+      | conversationHasImages turns,
+        not caps.capVision =
+          Left $
+            UnsupportedCapability $
+              "model "
+                <> mc.mcModel
+                <> " does not support vision"
+      | otherwise = Right ()
+    whenNeedsThinking =
+      case mc.mcThinking of
+        Just ThinkingMode {tmEnabled = True}
+          | not caps.capThinking ->
+              Left $
+                UnsupportedCapability $
+                  "model "
+                    <> mc.mcModel
+                    <> " does not support thinking"
+        _ -> Right ()
 
 callWithRetryTimeout ::
   GenRequest ->
@@ -73,16 +109,24 @@ withModelFallbacks gr models invokePerModel =
           maybe GErrAllModelsFailed GErrLLM mLast
     loop (mc : rest) _ = do
       gr.grHooks.onLog Info (formatTryingModel mc)
-      r <- invokePerModel mc
-      case r of
-        Left Aborted -> pure $ Left GErrAborted
+      case validateModelCapabilities mc gr.grMessages of
         Left err ->
           case rest of
             [] -> pure $ Left (GErrLLM err)
             _ -> do
               gr.grHooks.onLog Warn (formatModelFallback mc err)
               loop rest (Just err)
-        Right a -> pure $ Right a
+        Right () -> do
+          r <- invokePerModel mc
+          case r of
+            Left Aborted -> pure $ Left GErrAborted
+            Left err ->
+              case rest of
+                [] -> pure $ Left (GErrLLM err)
+                _ -> do
+                  gr.grHooks.onLog Warn (formatModelFallback mc err)
+                  loop rest (Just err)
+            Right a -> pure $ Right a
 
 formatTryingModel :: ModelConfig -> Text
 formatTryingModel mc =

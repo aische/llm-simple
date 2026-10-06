@@ -18,8 +18,12 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
+import Data.Maybe (fromMaybe)
 import LLM.Core.Types (ThinkingMode (..))
-import LLM.Generate.ModelConfig (ModelConfig (..))
+import LLM.Generate.ModelConfig
+  ( ModelConfig (..),
+    defaultModelCapabilities,
+  )
 import LLM.Load.LoadGateways (GatewayMap, loadGatewaysFromCatalogOrThrow)
 import LLM.Load.ModelCatalog (ModelCatalogItem (..), loadModelCatalog)
 import LLM.Load.ProviderCatalog (loadProviderCatalogForModelCatalog)
@@ -45,6 +49,7 @@ loadModelConfigMap filePath = do
                 mcMaxTokens = item.maxTokens,
                 mcTemperature = item.temperature,
                 mcThinking = fmap (\x -> ThinkingMode {tmEnabled = True, tmEffort = Just x}) item.thinking,
+                mcCapabilities = fromMaybe defaultModelCapabilities item.capabilities,
                 mcRequestTimeout = item.requestTimeout,
                 mcThrottleDelay = item.throttleDelay,
                 mcRetryCount = item.retryCount,

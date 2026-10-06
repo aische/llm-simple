@@ -27,7 +27,7 @@ import LLM.Core.Types
     ToolDef (ToolDef, toolDescription, toolName, toolParameters, toolReadonly),
     mkToolCall,
   )
-import LLM.Core.Usage (PricingInfo (..), Usage (Usage))
+import LLM.Core.Usage (PricingInfo (..), defaultPricingInfo, mkUsage)
 import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig
   ( ModelCapabilities (..),
@@ -75,10 +75,10 @@ mockToolGateway =
     { gwName = "mock-tool",
       gwGenerateText = \_ req ->
         if any isToolTurn req.reqConversation
-          then pure $ Right (ChatResponse "The weather is sunny." [textPart "The weather is sunny."] (Just (Usage 80 15 0)) Nothing)
+          then pure $ Right (ChatResponse "The weather is sunny." [textPart "The weather is sunny."] (Just (mkUsage 80 15)) Nothing)
           else
             let tc = mkToolCall "call_1" "get_weather" (object ["location" .= ("London" :: Text)])
-             in pure $ Right (ChatResponse "" [toolCallPart tc] (Just (Usage 50 10 0)) Nothing),
+             in pure $ Right (ChatResponse "" [toolCallPart tc] (Just (mkUsage 50 10)) Nothing),
       gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing),
       gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
     }
@@ -87,7 +87,7 @@ mockToolGateway =
     isToolTurn _ = False
 
 zeroPricing :: PricingInfo
-zeroPricing = PricingInfo 0 0
+zeroPricing = defaultPricingInfo 0 0
 
 -- | Wrap a gateway in a ModelConfig with test defaults
 mockModel :: LLMGateway -> ModelConfig
@@ -163,14 +163,14 @@ spec = describe "Chat" $ do
   let toolMap = Map.fromList [("get_weather", weatherTool)]
   describe "generateText" $ do
     it "returns text for a simple response" $ do
-      let gw = mockGateway (ChatResponse "Hi there!" [textPart "Hi there!"] (Just (Usage 10 5 0)) Nothing)
+      let gw = mockGateway (ChatResponse "Hi there!" [textPart "Hi there!"] (Just (mkUsage 10 5)) Nothing)
           models = ModelWithFallbacks (mockModel gw) []
       result <- runGenerate defaultAgent models toolMap Nothing [UserTurn "hello"]
       case result of
         Right r -> do
           r.gtrText `shouldBe` "Hi there!"
           length r.gtrNewMessages `shouldBe` 1 -- assistantTurn
-          r.gtrUsage `shouldBe` Usage 10 5 0
+          r.gtrUsage `shouldBe` mkUsage 10 5
         Left err -> expectationFailure $ show err
 
     it "propagates errors" $ do
@@ -190,7 +190,7 @@ spec = describe "Chat" $ do
           r.gtrText `shouldBe` "The weather is sunny."
           -- assistantTurn(tool call) + ToolTurn + assistantTurn(final)
           length r.gtrNewMessages `shouldBe` 3
-          r.gtrUsage `shouldBe` Usage 130 25 0 -- 50+80 input, 10+15 output
+          r.gtrUsage `shouldBe` mkUsage 130 25 -- 50+80 input, 10+15 output
         Left err -> expectationFailure $ show err
 
     it "respects maxToolRounds" $ do
@@ -212,7 +212,7 @@ spec = describe "Chat" $ do
 
     it "falls back to next model on retryable error" $ do
       let failGw = mockErrorGateway (HttpError 503 "service unavailable")
-          okGw = mockGateway (ChatResponse "Fallback worked!" [textPart "Fallback worked!"] (Just (Usage 10 5 0)) Nothing)
+          okGw = mockGateway (ChatResponse "Fallback worked!" [textPart "Fallback worked!"] (Just (mkUsage 10 5)) Nothing)
           models = ModelWithFallbacks (mockModel failGw) [mockModel okGw]
       result <- runGenerate defaultAgent models toolMap Nothing [UserTurn "hello"]
       case result of
@@ -221,7 +221,7 @@ spec = describe "Chat" $ do
 
     it "falls back on non-retryable error too" $ do
       let failGw = mockErrorGateway (HttpError 400 "bad request")
-          okGw = mockGateway (ChatResponse "Fallback worked!" [textPart "Fallback worked!"] (Just (Usage 10 5 0)) Nothing)
+          okGw = mockGateway (ChatResponse "Fallback worked!" [textPart "Fallback worked!"] (Just (mkUsage 10 5)) Nothing)
           models = ModelWithFallbacks (mockModel failGw) [mockModel okGw]
       result <- runGenerate defaultAgent models toolMap Nothing [UserTurn "hello"]
       case result of
@@ -236,7 +236,7 @@ spec = describe "Chat" $ do
                 gwStreamText = \_ _ _ -> pure (Left (HttpError 500 "should not be called")),
                 gwGenerateObject = \_ _ _ -> pure (Left (HttpError 500 "should not be called"))
               }
-          okGw = mockGateway (ChatResponse "I see a cat." [textPart "I see a cat."] (Just (Usage 10 5 0)) Nothing)
+          okGw = mockGateway (ChatResponse "I see a cat." [textPart "I see a cat."] (Just (mkUsage 10 5)) Nothing)
           noVision = mockModel boomGw
           withVision =
             (mockModel okGw)

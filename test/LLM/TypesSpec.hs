@@ -1,6 +1,6 @@
 module LLM.TypesSpec (spec) where
 
-import Data.Aeson (object, (.=))
+import Data.Aeson (eitherDecode, encode, object, (.=))
 import Data.Text qualified as T
 import LLM.Core.Types
   ( ChatResponse (ChatResponse),
@@ -20,8 +20,11 @@ import LLM.Core.Usage
   ( PricingInfo (..),
     Usage (..),
     addUsage,
+    defaultPricingInfo,
     emptyUsage,
     estimateCost,
+    mkUsage,
+    usageOrdinaryInputTokens,
   )
 import LLM.Core.Utils
   ( getToolCalls,
@@ -36,27 +39,119 @@ spec = describe "Types" $ do
     it "emptyUsage has zero tokens" $ do
       emptyUsage.usageInputTokens `shouldBe` 0
       emptyUsage.usageOutputTokens `shouldBe` 0
+      emptyUsage.usageCacheReadTokens `shouldBe` 0
+      emptyUsage.usageCacheCreationTokens `shouldBe` 0
 
-    it "addUsage sums token counts" $ do
-      let u1 = Usage 10 20 0
-          u2 = Usage 30 40 0
-      addUsage u1 u2 `shouldBe` Usage 40 60 0
+    it "addUsage sums token counts including cache counters" $ do
+      let u1 =
+            Usage
+              { usageInputTokens = 10,
+                usageOutputTokens = 20,
+                usageCacheReadTokens = 3,
+                usageCacheCreationTokens = 2,
+                usageTotalCost = 0.25
+              }
+          u2 =
+            Usage
+              { usageInputTokens = 30,
+                usageOutputTokens = 40,
+                usageCacheReadTokens = 4,
+                usageCacheCreationTokens = 1,
+                usageTotalCost = 0.5
+              }
+      addUsage u1 u2
+        `shouldBe` Usage
+          { usageInputTokens = 40,
+            usageOutputTokens = 60,
+            usageCacheReadTokens = 7,
+            usageCacheCreationTokens = 3,
+            usageTotalCost = 0.75
+          }
 
     it "addUsage is associative" $ do
-      let u1 = Usage 1 2 0
-          u2 = Usage 3 4 0
-          u3 = Usage 5 6 0
+      let u1 = mkUsage 1 2
+          u2 = mkUsage 3 4
+          u3 = mkUsage 5 6
       addUsage (addUsage u1 u2) u3 `shouldBe` addUsage u1 (addUsage u2 u3)
+
+    it "Semigroup matches addUsage and Monoid uses emptyUsage" $ do
+      let u1 = mkUsage 10 1
+          u2 = mkUsage 5 2
+      (u1 <> u2) `shouldBe` addUsage u1 u2
+      (mempty :: Usage) `shouldBe` emptyUsage
+
+    it "JSON round-trips with cache fields" $ do
+      let u =
+            Usage
+              { usageInputTokens = 100,
+                usageOutputTokens = 20,
+                usageCacheReadTokens = 40,
+                usageCacheCreationTokens = 10,
+                usageTotalCost = 0.5
+              }
+      eitherDecode (encode u) `shouldBe` Right u
+
+    it "JSON decode defaults missing cache fields to zero" $ do
+      let json = "{\"usageInputTokens\":12,\"usageOutputTokens\":3}"
+      eitherDecode json
+        `shouldBe` Right (mkUsage 12 3)
 
   describe "estimateCost" $ do
     it "calculates cost in dollars from per-million pricing" $ do
-      let pricing = PricingInfo {pricePerMillionInput = 1.0, pricePerMillionOutput = 5.0}
-          usage = Usage 1_000_000 1_000_000 0
+      let pricing = defaultPricingInfo 1.0 5.0
+          usage = mkUsage 1_000_000 1_000_000
       estimateCost pricing usage `shouldBe` 6.0
 
     it "returns 0 for zero usage" $ do
-      let pricing = PricingInfo {pricePerMillionInput = 1.0, pricePerMillionOutput = 5.0}
+      let pricing = defaultPricingInfo 1.0 5.0
       estimateCost pricing emptyUsage `shouldBe` 0.0
+
+    it "prices cache read/write separately when rates are set" $ do
+      let pricing =
+            PricingInfo
+              { pricePerMillionInput = 3.0,
+                pricePerMillionOutput = 15.0,
+                pricePerMillionCacheRead = Just 0.3,
+                pricePerMillionCacheWrite = Just 3.75
+              }
+          usage =
+            Usage
+              { usageInputTokens = 1_000_000,
+                usageOutputTokens = 0,
+                usageCacheReadTokens = 400_000,
+                usageCacheCreationTokens = 100_000,
+                usageTotalCost = 0
+              }
+      -- ordinary 500k * 3 + read 400k * 0.3 + write 100k * 3.75 = 1.5 + 0.12 + 0.375
+      estimateCost pricing usage `shouldBe` 1.995
+      usageOrdinaryInputTokens usage `shouldBe` 500_000
+
+    it "falls back to input rate when cache rates are absent" $ do
+      let pricing = defaultPricingInfo 2.0 0.0
+          usage =
+            Usage
+              { usageInputTokens = 1_000_000,
+                usageOutputTokens = 0,
+                usageCacheReadTokens = 250_000,
+                usageCacheCreationTokens = 250_000,
+                usageTotalCost = 0
+              }
+      estimateCost pricing usage `shouldBe` 2.0
+
+  describe "PricingInfo JSON" $ do
+    it "decodes catalogs without cache rates" $ do
+      let json = "{\"pricePerMillionInput\":1.0,\"pricePerMillionOutput\":5.0}"
+      eitherDecode json `shouldBe` Right (defaultPricingInfo 1.0 5.0)
+
+    it "round-trips optional cache rates" $ do
+      let pricing =
+            PricingInfo
+              { pricePerMillionInput = 3.0,
+                pricePerMillionOutput = 15.0,
+                pricePerMillionCacheRead = Just 0.3,
+                pricePerMillionCacheWrite = Just 3.75
+              }
+      eitherDecode (encode pricing) `shouldBe` Right pricing
 
   describe "hasToolCalls / getToolCalls" $ do
     it "returns False for text-only response" $ do

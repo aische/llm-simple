@@ -23,7 +23,7 @@ import Data.Aeson
     (.:),
     (.:?),
   )
-import Data.Aeson.Types (Pair, Parser, parseMaybe)
+import Data.Aeson.Types (Object, Pair, Parser, parseMaybe)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (Text)
@@ -345,7 +345,23 @@ parseBlock mv = withObject "content_block" $ \o -> do
 parseClaudeUsage :: Value -> Maybe Usage
 parseClaudeUsage = parseMaybe $ withObject "ClaudeResponse" $ \o -> do
   u <- o .: "usage"
-  withObject "usage" (\uo -> Usage <$> uo .: "input_tokens" <*> uo .: "output_tokens" <*> pure 0) u
+  withObject "usage" parseClaudeUsageObject u
+
+parseClaudeUsageObject :: Object -> Parser Usage
+parseClaudeUsageObject uo = do
+  -- Anthropic: input_tokens is uncached-only; total = uncached + read + creation.
+  uncached <- uo .: "input_tokens"
+  output <- uo .: "output_tokens"
+  cacheRead <- uo .:? "cache_read_input_tokens" .!= 0
+  cacheCreate <- uo .:? "cache_creation_input_tokens" .!= 0
+  pure
+    Usage
+      { usageInputTokens = uncached + cacheRead + cacheCreate,
+        usageOutputTokens = output,
+        usageCacheReadTokens = cacheRead,
+        usageCacheCreationTokens = cacheCreate,
+        usageTotalCost = 0
+      }
 
 parseClaudeObjectResponse :: Value -> IO (LLMResult (Value, Maybe Usage))
 parseClaudeObjectResponse v = case parseMaybe go v of
@@ -390,7 +406,12 @@ parseClaudeStream modelHint reader callback = do
         case decodeStrict' (encodeUtf8 sse.sseData) of
           Just v -> do
             case parseMaybe parseMessageStartUsage v of
-              Just inputToks -> modifyIORef' usageRef $ \u -> u {usageInputTokens = inputToks}
+              Just startUsage -> modifyIORef' usageRef $ \u ->
+                u
+                  { usageInputTokens = startUsage.usageInputTokens,
+                    usageCacheReadTokens = startUsage.usageCacheReadTokens,
+                    usageCacheCreationTokens = startUsage.usageCacheCreationTokens
+                  }
               Nothing -> pure ()
             case parseMaybe parseMessageStartModel v of
               Just m -> writeIORef modelRef m
@@ -504,10 +525,10 @@ data BlockStart
   | StartRedacted Text
   | StartTool Text Text
 
-parseMessageStartUsage :: Value -> Parser Int
+parseMessageStartUsage :: Value -> Parser Usage
 parseMessageStartUsage = withObject "message_start" $ \o -> do
   msg <- o .: "message"
-  withObject "message" (\mo -> do u <- mo .: "usage"; withObject "usage" (.: "input_tokens") u) msg
+  withObject "message" (\mo -> do u <- mo .: "usage"; withObject "usage" parseClaudeUsageObject u) msg
 
 parseMessageStartModel :: Value -> Parser Text
 parseMessageStartModel = withObject "message_start" $ \o -> do

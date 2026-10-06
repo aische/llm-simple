@@ -13,6 +13,7 @@ where
 import Control.Applicative ((<|>))
 import Data.Aeson
   ( KeyValue ((.=)),
+    Object,
     Value (Object, String),
     decodeStrict',
     object,
@@ -218,10 +219,7 @@ parseGeminiStream reader callback = do
     parseUsageMetadata :: Value -> Parser Usage
     parseUsageMetadata = withObject "GeminiChunk" $ \o -> do
       u <- o .: "usageMetadata"
-      withObject
-        "usageMetadata"
-        (\uo -> Usage <$> uo .: "promptTokenCount" <*> uo .: "candidatesTokenCount" <*> pure 0)
-        u
+      withObject "usageMetadata" parseGeminiUsageObject u
 
 geminiBuildBody :: ChatRequest -> Value
 geminiBuildBody r = object $ geminiBuildBodyPairs r
@@ -509,10 +507,22 @@ modelsMatch a b = a == b || T.isPrefixOf a b || T.isPrefixOf b a
 parseGeminiUsage :: Value -> Maybe Usage
 parseGeminiUsage = parseMaybe $ withObject "GeminiResponse" $ \o -> do
   u <- o .: "usageMetadata"
-  withObject
-    "usageMetadata"
-    (\uo -> Usage <$> uo .: "promptTokenCount" <*> uo .: "candidatesTokenCount" <*> pure 0)
-    u
+  withObject "usageMetadata" parseGeminiUsageObject u
+
+-- | Gemini @promptTokenCount@ already includes cached content tokens.
+parseGeminiUsageObject :: Object -> Parser Usage
+parseGeminiUsageObject uo = do
+  prompt <- uo .: "promptTokenCount"
+  candidates <- uo .: "candidatesTokenCount"
+  cacheRead <- uo .:? "cachedContentTokenCount" .!= 0
+  pure
+    Usage
+      { usageInputTokens = prompt,
+        usageOutputTokens = candidates,
+        usageCacheReadTokens = cacheRead,
+        usageCacheCreationTokens = 0,
+        usageTotalCost = 0
+      }
 
 parseGeminiObjectResponse :: Value -> IO LLMObjectResult
 parseGeminiObjectResponse v = case parseMaybe go v of

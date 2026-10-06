@@ -38,6 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Example catalog: `capabilities` on vision/thinking models; removed
   `temperature` from `haiku_4_5` (Claude thinking temperature footgun).
 
+- **Breaking:** `Usage` adds `usageCacheReadTokens` / `usageCacheCreationTokens`.
+  `usageInputTokens` is total input including cache read/write tokens (providers
+  normalize wire semantics so totals are not double-counted). Prefer `mkUsage`.
+- **Breaking:** `PricingInfo` adds optional `pricePerMillionCacheRead` /
+  `pricePerMillionCacheWrite`; absent rates fall back to the ordinary input rate.
+  Prefer `defaultPricingInfo` for catalogs without cache rates.
+- Cost estimation: ordinary input × input rate + cache read × cache-read rate +
+  cache creation × cache-write rate + output × output rate.
+
 ### Added
 
 - Image input: `ImageSource`, `ImagePart`, `imageUrlPart`, `imageBase64Part` /
@@ -55,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Claude thinking fixture and unit tests for ordered replay / foreign opaque
   omission; Gemini signature matching tests.
 - Image request-shape tests (Claude/Gemini/OpenAI) and vision fallback tests.
+- `mkUsage`, `defaultPricingInfo`, `usageOrdinaryInputTokens`; provider parsers
+  report cache read/creation counters (Claude, OpenAI, DeepSeek, Gemini).
 
 ## [0.1.1.0] - 2026-08-23
 

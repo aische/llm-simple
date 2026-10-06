@@ -33,7 +33,7 @@ import LLM.Agent.ToolUtils (toTool)
 import LLM.Agent.Types (Agent (..), RuntimeArgs (..), ToolMap)
 import LLM.Core.LLMProvider (LLMProvider (..))
 import LLM.Core.Types (LLMGateway, ThinkingMode (..), Turn (..), pattern UserTurn)
-import LLM.Core.Usage (PricingInfo (..), addUsage, emptyUsage)
+import LLM.Core.Usage (addUsage, defaultPricingInfo, emptyUsage)
 import LLM.Core.Utils (parseChatResponse)
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (Hooks (..), noHooks)
@@ -155,7 +155,7 @@ mkRecordedConversationRuntime gateway modelName thinking promptRef pendingRef en
         ModelConfig
           { mcGateway = gateway,
             mcModel = modelName,
-            mcPricing = PricingInfo {pricePerMillionInput = 0.0, pricePerMillionOutput = 0.0},
+            mcPricing = defaultPricingInfo 0.0 0.0,
             mcMaxTokens = 1024,
             mcTemperature = Nothing,
             mcThinking = thinking,

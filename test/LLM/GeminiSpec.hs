@@ -19,7 +19,7 @@ import LLM.Core.Types
     imageUrlPart,
     imageBase64Part,
   )
-import LLM.Core.Usage (Usage (Usage))
+import LLM.Core.Usage (Usage (..), mkUsage)
 import LLM.Core.Utils (getToolCalls, hasToolCalls)
 import LLM.Providers.Gemini (encodeTurn, parseGeminiResponse, parseGeminiUsage, signatureForModel)
 import Test.Hspec
@@ -133,7 +133,27 @@ spec = describe "Gemini" $ do
   describe "parseGeminiUsage" $ do
     it "extracts token counts" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/gemini-text.json"
-      parseGeminiUsage val `shouldBe` Just (Usage 20 8 0)
+      parseGeminiUsage val `shouldBe` Just (mkUsage 20 8)
+
+    it "reports cachedContentTokenCount without double-counting promptTokenCount" $ do
+      let val =
+            object
+              [ "usageMetadata"
+                  .= object
+                    [ "promptTokenCount" .= (1000 :: Int),
+                      "candidatesTokenCount" .= (50 :: Int),
+                      "cachedContentTokenCount" .= (800 :: Int)
+                    ]
+              ]
+      parseGeminiUsage val
+        `shouldBe` Just
+          Usage
+            { usageInputTokens = 1000,
+              usageOutputTokens = 50,
+              usageCacheReadTokens = 800,
+              usageCacheCreationTokens = 0,
+              usageTotalCost = 0
+            }
 
 hasThoughtSignature :: Value -> Bool
 hasThoughtSignature (Object o) =

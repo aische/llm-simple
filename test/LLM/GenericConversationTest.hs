@@ -9,7 +9,7 @@ import LLM.Agent.ToolUtils (toTool)
 import LLM.Agent.Types (Agent (..), RuntimeArgs (..))
 import LLM.Core.LLMProvider (LLMProvider, toGateway)
 import LLM.Core.Types (LLMGateway, ThinkingMode (..))
-import LLM.Core.Usage (PricingInfo (..))
+import LLM.Core.Usage (defaultPricingInfo)
 import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig
   ( ModelCapabilities (..),
@@ -40,7 +40,7 @@ mkModelConfig opts provider =
   ModelConfig
     { mcGateway = provider,
       mcModel = T.pack opts.modelName,
-      mcPricing = PricingInfo {pricePerMillionInput = 0.0, pricePerMillionOutput = 0.0},
+      mcPricing = defaultPricingInfo 0.0 0.0,
       mcMaxTokens = 1024,
       mcTemperature = Nothing,
       mcThinking = opts.specThinking,

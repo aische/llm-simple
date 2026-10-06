@@ -16,7 +16,7 @@ import LLM.Core.Types
     textPart,
     toolCallPart,
   )
-import LLM.Core.Usage (PricingInfo (..), Usage (..))
+import LLM.Core.Usage (PricingInfo (..), defaultPricingInfo, mkUsage)
 import LLM.Generate.Generate (streamTextLLM)
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
@@ -35,7 +35,7 @@ spec = describe "Streaming" $ do
       let gw =
             streamGateway
               [StreamDelta "hello"]
-              (ChatResponse "hello" [textPart "hello"] (Just (Usage 1 1 0)) Nothing)
+              (ChatResponse "hello" [textPart "hello"] (Just (mkUsage 1 1)) Nothing)
       chunks <- runStream gw []
       reverse chunks
         `shouldBe` [ TextDelta "hello",
@@ -47,7 +47,7 @@ spec = describe "Streaming" $ do
           gw =
             streamGateway
               [StreamDelta "done"]
-              (ChatResponse "done" [textPart "done"] (Just (Usage 1 1 0)) Nothing)
+              (ChatResponse "done" [textPart "done"] (Just (mkUsage 1 1)) Nothing)
       chunks <- runStream gw prior
       reverse chunks `shouldBe` [AnswerDelta "done"]
 
@@ -56,7 +56,7 @@ spec = describe "Streaming" $ do
           gw =
             streamGateway
               [StreamDelta "searching", StreamToolCall tc]
-              (ChatResponse "" [toolCallPart tc] (Just (Usage 2 0 0)) Nothing)
+              (ChatResponse "" [toolCallPart tc] (Just (mkUsage 2 0)) Nothing)
       chunks <- runStream gw [UserTurn "find x"]
       reverse chunks
         `shouldBe` [ TextDelta "searching",
@@ -112,4 +112,4 @@ runStream gw turns = do
   readIORef ref
 
 zeroPricing :: PricingInfo
-zeroPricing = PricingInfo 0 0
+zeroPricing = defaultPricingInfo 0 0

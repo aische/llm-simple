@@ -35,6 +35,7 @@ import Data.ByteString.Lazy qualified as BSL
 import Data.Foldable (forM_)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Control.Applicative ((<|>))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
@@ -342,7 +343,41 @@ parseOpenAIResponse v = case parseMaybe go v of
 parseOpenAIUsage :: Value -> Maybe Usage
 parseOpenAIUsage = parseMaybe $ withObject "OpenAIResponse" $ \o -> do
   u <- o .: "usage"
-  withObject "usage" (\uo -> Usage <$> uo .: "prompt_tokens" <*> uo .: "completion_tokens" <*> pure 0) u
+  withObject "usage" parseOpenAIUsageObject u
+
+-- | Shared OpenAI Chat Completions / DeepSeek usage shape.
+--
+-- @prompt_tokens@ is already the total input (including cache hits). Cache
+-- reads come from DeepSeek's @prompt_cache_hit_tokens@ or OpenAI's
+-- @prompt_tokens_details.cached_tokens@. Optional @cache_write_tokens@ map to
+-- creation counters.
+parseOpenAIUsageObject :: Object -> Parser Usage
+parseOpenAIUsageObject uo = do
+  prompt <- uo .: "prompt_tokens"
+  completion <- uo .: "completion_tokens"
+  cacheReadDeepSeek <- uo .:? "prompt_cache_hit_tokens"
+  details <- uo .:? "prompt_tokens_details" :: Parser (Maybe Value)
+  (cacheReadDetails, cacheWrite) <- case details of
+    Nothing -> pure (Nothing, Nothing)
+    Just d ->
+      withObject
+        "prompt_tokens_details"
+        ( \dto ->
+            (,)
+              <$> dto .:? "cached_tokens"
+              <*> dto .:? "cache_write_tokens"
+        )
+        d
+  let cacheRead = fromMaybe 0 (cacheReadDeepSeek <|> cacheReadDetails)
+      cacheCreate = fromMaybe 0 cacheWrite
+  pure
+    Usage
+      { usageInputTokens = prompt,
+        usageOutputTokens = completion,
+        usageCacheReadTokens = cacheRead,
+        usageCacheCreationTokens = cacheCreate,
+        usageTotalCost = 0
+      }
 
 -- Streaming
 
@@ -466,4 +501,4 @@ parseFinishReason = withObject "chunk" $ \o -> do
 parseStreamUsage :: Value -> Parser Usage
 parseStreamUsage = withObject "chunk" $ \o -> do
   u <- o .: "usage"
-  withObject "usage" (\uo -> Usage <$> uo .: "prompt_tokens" <*> uo .: "completion_tokens" <*> pure 0) u
+  withObject "usage" parseOpenAIUsageObject u

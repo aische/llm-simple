@@ -11,7 +11,7 @@ import LLM.Agent.GenerateObject (generateObject, generateObjectUntyped)
 import LLM.Agent.Types (Agent (..), RuntimeArgs (..))
 import LLM.Core.Abort (AbortSignal, abort, newAbortSignal)
 import LLM.Core.Types (ChatRequest (..), ChatResponse (..), LLMError (..), LLMGateway (..), LLMHooks (..), Turn (..), assistantTurn, pattern UserTurn)
-import LLM.Core.Usage (PricingInfo (..), Usage (..))
+import LLM.Core.Usage (PricingInfo (..), Usage (..), defaultPricingInfo, mkUsage)
 import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig
   ( ModelConfig (..),
@@ -33,13 +33,13 @@ spec :: Spec
 spec = describe "GenerateObject" $ do
   describe "generateObjectUntyped" $ do
     it "returns the provider JSON and usage" $ do
-      let gw = objectGateway (object ["location" .= ("Paris" :: Text)]) (Usage 12 3 0)
+      let gw = objectGateway (object ["location" .= ("Paris" :: Text)]) (mkUsage 12 3)
           models = ModelWithFallbacks (mockModel gw) []
       result <- runUntyped models (object ["type" .= ("object" :: Text)])
       case result of
         Right (value, usage) -> do
           value `shouldBe` object ["location" .= ("Paris" :: Text)]
-          usage `shouldBe` Usage 12 3 0
+          usage `shouldBe` mkUsage 12 3
         Left err -> expectationFailure $ show err
 
     it "propagates provider errors" $ do
@@ -53,7 +53,7 @@ spec = describe "GenerateObject" $ do
     it "returns Aborted when the signal is already set" $ do
       sig <- newAbortSignal
       abort sig
-      let gw = objectGateway (object []) (Usage 0 0 0)
+      let gw = objectGateway (object []) (mkUsage 0 0)
           models = ModelWithFallbacks (mockModel gw) []
       rt <- mkRuntime (Just sig)
       result <- generateObjectUntyped defaultAgent models rt [UserTurn "go"] (object ["type" .= ("object" :: Text)])
@@ -63,7 +63,7 @@ spec = describe "GenerateObject" $ do
 
     it "falls back to the next model on failure" $ do
       let failGw = errorObjectGateway (HttpError 500 "boom")
-          okGw = objectGateway (object ["ok" .= True]) (Usage 1 1 0)
+          okGw = objectGateway (object ["ok" .= True]) (mkUsage 1 1)
           models = ModelWithFallbacks (mockModel failGw) [mockModel okGw]
       result <- runUntyped models (object ["type" .= ("object" :: Text)])
       case result of
@@ -72,17 +72,17 @@ spec = describe "GenerateObject" $ do
 
   describe "generateObject" $ do
     it "decodes a typed object from provider JSON" $ do
-      let gw = objectGateway (object ["location" .= ("London" :: Text)]) (Usage 4 2 0)
+      let gw = objectGateway (object ["location" .= ("London" :: Text)]) (mkUsage 4 2)
           models = ModelWithFallbacks (mockModel gw) []
       result <- runTyped models
       case result of
         Right (WeatherToolArgs loc, usage) -> do
           loc `shouldBe` "London"
-          usage `shouldBe` Usage 4 2 0
+          usage `shouldBe` mkUsage 4 2
         Left err -> expectationFailure $ show err
 
     it "reports a parse error when provider JSON does not match the codec" $ do
-      let gw = objectGateway (object ["wrong" .= (1 :: Int)]) (Usage 0 0 0)
+      let gw = objectGateway (object ["wrong" .= (1 :: Int)]) (mkUsage 0 0)
           models = ModelWithFallbacks (mockModel gw) []
       result <- runTyped models
       case result of
@@ -92,7 +92,7 @@ spec = describe "GenerateObject" $ do
 
     it "does not advertise tools even when agContextWindow would inject get_history" $ do
       captured <- newIORef Nothing
-      let gw = capturingObjectGateway captured (object ["location" .= ("Paris" :: Text)]) (Usage 1 0 0)
+      let gw = capturingObjectGateway captured (object ["location" .= ("Paris" :: Text)]) (mkUsage 1 0)
           models = ModelWithFallbacks (mockModel gw) []
           agent = defaultAgent {agContextWindow = Just 1}
           conv =
@@ -154,7 +154,7 @@ mockModel gw =
     }
 
 zeroPricing :: PricingInfo
-zeroPricing = PricingInfo 0 0
+zeroPricing = defaultPricingInfo 0 0
 
 defaultAgent :: Agent
 defaultAgent =

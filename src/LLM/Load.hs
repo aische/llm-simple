@@ -10,6 +10,8 @@
 --         "pricePerMillionInput": 0.0,
 --         "pricePerMillionOutput": 0.0
 --     },
+--     -- optional: pricePerMillionCacheRead / pricePerMillionCacheWrite
+--     -- (fall back to pricePerMillionInput when absent)
 --     "maxTokens": 1024,
 --     "temperature": 0.5,
 --     "requestTimeout": 10000,

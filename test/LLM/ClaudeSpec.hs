@@ -33,7 +33,7 @@ import LLM.Core.Types
     imageBase64Part,
     pattern UserTurn,
   )
-import LLM.Core.Usage (Usage (Usage))
+import LLM.Core.Usage (Usage (..), mkUsage)
 import LLM.Core.Utils (getToolCalls, hasToolCalls)
 import LLM.Providers.Claude
   ( claudeBuildBody,
@@ -216,11 +216,46 @@ spec = describe "Claude" $ do
   describe "parseClaudeUsage" $ do
     it "extracts token counts" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/claude-text.json"
-      parseClaudeUsage val `shouldBe` Just (Usage 25 10 0)
+      parseClaudeUsage val `shouldBe` Just (mkUsage 25 10)
 
     it "extracts token counts from tool_use response" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/claude-tool-use.json"
-      parseClaudeUsage val `shouldBe` Just (Usage 50 35 0)
+      parseClaudeUsage val `shouldBe` Just (mkUsage 50 35)
+
+    it "normalizes cache read/creation into total input without double-counting" $ do
+      let val =
+            object
+              [ "usage"
+                  .= object
+                    [ "input_tokens" .= (50 :: Int),
+                      "output_tokens" .= (20 :: Int),
+                      "cache_read_input_tokens" .= (100_000 :: Int),
+                      "cache_creation_input_tokens" .= (1_200 :: Int)
+                    ]
+              ]
+      parseClaudeUsage val
+        `shouldBe` Just
+          Usage
+            { usageInputTokens = 101_250,
+              usageOutputTokens = 20,
+              usageCacheReadTokens = 100_000,
+              usageCacheCreationTokens = 1_200,
+              usageTotalCost = 0
+            }
+
+    it "treats missing or zero cache fields as zero on recorded fixtures" $ do
+      Right val <- eitherDecodeFileStrict' "test/fixtures/claude-conversation-generated.json"
+      case val of
+        Array arr ->
+          case V.toList arr of
+            (Object first : _) ->
+              case KM.lookup "response" first of
+                Just resp ->
+                  parseClaudeUsage resp
+                    `shouldBe` Just (mkUsage 623 54)
+                _ -> expectationFailure "missing response"
+            _ -> expectationFailure "empty conversation array"
+        _ -> expectationFailure "expected conversation array"
 
 messageContent :: Value -> [Value]
 messageContent (Object o) =

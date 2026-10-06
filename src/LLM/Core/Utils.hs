@@ -126,7 +126,9 @@ streamResponseJson r =
     usageToJson u =
       object
         [ "input_tokens" .= u.usageInputTokens,
-          "output_tokens" .= u.usageOutputTokens
+          "output_tokens" .= u.usageOutputTokens,
+          "cache_read_tokens" .= u.usageCacheReadTokens,
+          "cache_creation_tokens" .= u.usageCacheCreationTokens
         ]
 
 parseChatResponse :: Value -> Parser ChatResponse
@@ -179,7 +181,16 @@ parseChatResponse = AE.withObject "ChatResponse" $ \v -> do
     parseUsage = AE.withObject "Usage" $ \o -> do
       input <- o AE..: "input_tokens"
       output <- o AE..: "output_tokens"
-      pure $ Usage input output 0.0
+      cacheRead <- fromMaybe 0 <$> o AE..:? "cache_read_tokens"
+      cacheCreate <- fromMaybe 0 <$> o AE..:? "cache_creation_tokens"
+      pure $
+        Usage
+          { usageInputTokens = input,
+            usageOutputTokens = output,
+            usageCacheReadTokens = cacheRead,
+            usageCacheCreationTokens = cacheCreate,
+            usageTotalCost = 0.0
+          }
 
 printValue :: Value -> IO ()
 printValue val = L8.putStrLn (encode val)

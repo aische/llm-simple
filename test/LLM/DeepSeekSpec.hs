@@ -1,9 +1,10 @@
 module LLM.DeepSeekSpec (spec) where
 
-import Data.Aeson (Value (Object, String), object, (.=))
+import Data.Aeson (Value (Array, Object, String), eitherDecodeFileStrict', object, (.=))
 import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
 import Data.Text (Text)
+import Data.Vector qualified as V
 import LLM.Core.Types
   ( ChatRequest (..),
     ChatResponse (respContent, respReasoning, respText),
@@ -17,9 +18,10 @@ import LLM.Core.Types
     defaultMessageEncodeOptions,
     mkToolCall,
   )
+import LLM.Core.Usage (Usage (..))
 import LLM.Providers.DeepSeek (deepSeekBuildBodyPairs)
-import LLM.Providers.OpenAI (encodeTurn, parseOpenAIResponse)
-import Test.Hspec (Spec, describe, it, shouldBe)
+import LLM.Providers.OpenAI (encodeTurn, parseOpenAIResponse, parseOpenAIUsage)
+import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 
 spec :: Spec
 spec = describe "DeepSeek thinking mode" $ do
@@ -85,6 +87,28 @@ spec = describe "DeepSeek thinking mode" $ do
               ] -> pure ()
             other -> fail $ "unexpected ordered parts: " <> show other
         Left err -> fail $ show err
+
+  describe "parseOpenAIUsage (DeepSeek cache fields)" $ do
+    it "maps prompt_cache_hit_tokens without double-counting prompt_tokens" $ do
+      Right val <- eitherDecodeFileStrict' "test/fixtures/deepseek-conversation-generated.json"
+      case val of
+        Array arr ->
+          case V.toList arr of
+            (Object first : _) ->
+              case KM.lookup "response" first of
+                Just resp ->
+                  parseOpenAIUsage resp
+                    `shouldBe` Just
+                      Usage
+                        { usageInputTokens = 336,
+                          usageOutputTokens = 68,
+                          usageCacheReadTokens = 256,
+                          usageCacheCreationTokens = 0,
+                          usageTotalCost = 0
+                        }
+                _ -> expectationFailure "missing response"
+            _ -> expectationFailure "empty conversation array"
+        _ -> expectationFailure "expected conversation array"
 
 sampleRequest :: ChatRequest
 sampleRequest =

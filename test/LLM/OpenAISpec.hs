@@ -22,7 +22,7 @@ import LLM.Core.Types
     imageUrlPart,
     textPart,
   )
-import LLM.Core.Usage (Usage (Usage))
+import LLM.Core.Usage (Usage (..), mkUsage)
 import LLM.Core.Utils (getToolCalls, hasToolCalls)
 import LLM.Providers.OpenAI (encodeTurn, parseOpenAIResponse, parseOpenAIUsage)
 import Test.Hspec
@@ -31,6 +31,7 @@ import Test.Hspec
     expectationFailure,
     it,
     shouldBe,
+    shouldSatisfy,
   )
 
 spec :: Spec
@@ -77,7 +78,48 @@ spec = describe "OpenAI" $ do
   describe "parseOpenAIUsage" $ do
     it "extracts token counts" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/openai-text.json"
-      parseOpenAIUsage val `shouldBe` Just (Usage 15 9 0)
+      parseOpenAIUsage val `shouldBe` Just (mkUsage 15 9)
+
+    it "reports cached_tokens without double-counting prompt_tokens" $ do
+      let val =
+            object
+              [ "usage"
+                  .= object
+                    [ "prompt_tokens" .= (2006 :: Int),
+                      "completion_tokens" .= (300 :: Int),
+                      "prompt_tokens_details"
+                        .= object
+                          [ "cached_tokens" .= (1920 :: Int),
+                            "cache_write_tokens" .= (40 :: Int)
+                          ]
+                    ]
+              ]
+      parseOpenAIUsage val
+        `shouldBe` Just
+          Usage
+            { usageInputTokens = 2006,
+              usageOutputTokens = 300,
+              usageCacheReadTokens = 1920,
+              usageCacheCreationTokens = 40,
+              usageTotalCost = 0
+            }
+
+    it "reads zero cached_tokens from recorded conversation fixtures" $ do
+      Right val <- eitherDecodeFileStrict' "test/fixtures/openai-conversation-generated.json"
+      case val of
+        Array arr ->
+          case V.toList arr of
+            (Object first : _) ->
+              case KM.lookup "response" first of
+                Just resp ->
+                  case parseOpenAIUsage resp of
+                    Just u -> do
+                      u.usageCacheReadTokens `shouldBe` 0
+                      u.usageInputTokens `shouldSatisfy` (> 0)
+                    Nothing -> expectationFailure "failed to parse usage"
+                _ -> expectationFailure "missing response"
+            _ -> expectationFailure "empty conversation array"
+        _ -> expectationFailure "expected conversation array"
 
 userContent :: Value -> [Value]
 userContent (Object o) =

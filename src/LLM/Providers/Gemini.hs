@@ -190,20 +190,20 @@ parseGeminiStream reader callback = do
     else pure $ Right (mkChatResponse parts usage)
   where
     assignToolId :: (StreamEvent -> IO ()) -> ContentPart -> IO ContentPart
-    assignToolId cb (ContentPart (TextPart t)) = do
+    assignToolId cb (ContentPart (TextPart t) hint) = do
       cb (StreamDelta t)
-      pure (textPart t)
-    assignToolId cb (ContentPart (ThinkingPart tc)) = do
+      pure (textPart t) {partCacheHint = hint}
+    assignToolId cb (ContentPart (ThinkingPart tc) hint) = do
       case tc.thinkingText of
         Just t | not (T.null t) -> cb (StreamReasoningDelta t)
         _ -> pure ()
-      pure (thinkingPart tc)
-    assignToolId cb (ContentPart (ToolCallPart tc)) = do
+      pure (thinkingPart tc) {partCacheHint = hint}
+    assignToolId cb (ContentPart (ToolCallPart tc) hint) = do
       tc' <- normalizeToolCallId tc
       cb (StreamToolCall tc')
-      pure (toolCallPart tc')
-    assignToolId _ (ContentPart (ImagePart src)) =
-      pure (ContentPart (ImagePart src))
+      pure (toolCallPart tc') {partCacheHint = hint}
+    assignToolId _ (ContentPart (ImagePart src) hint) =
+      pure (ContentPart (ImagePart src) hint)
 
     parseChunkParts :: Maybe Text -> Value -> Parser [ContentPart]
     parseChunkParts modelVer = withObject "GeminiChunk" $ \o -> do
@@ -247,8 +247,9 @@ encodeTurn _ (UserMessage parts) =
       ]
   ]
   where
-    encodeUserPart (ContentPart (TextPart t)) = Just $ object ["text" .= t]
-    encodeUserPart (ContentPart (ImagePart src)) = Just $ encodeImagePart src
+    -- Cache hints are ignored on the Gemini wire; content is unchanged.
+    encodeUserPart (ContentPart (TextPart t) _) = Just $ object ["text" .= t]
+    encodeUserPart (ContentPart (ImagePart src) _) = Just $ encodeImagePart src
     encodeUserPart _ = Nothing
 encodeTurn currentModel (AssistantMessage parts) =
   [ object
@@ -297,10 +298,10 @@ guessImageMimeFromUrl url =
           | otherwise -> "image/jpeg"
 
 encodeAssistantPart :: Text -> ContentPart -> Maybe Value
-encodeAssistantPart _ (ContentPart (TextPart t))
+encodeAssistantPart _ (ContentPart (TextPart t) _)
   | T.null t = Nothing
   | otherwise = Just $ object ["text" .= t]
-encodeAssistantPart currentModel (ContentPart (ThinkingPart tc)) =
+encodeAssistantPart currentModel (ContentPart (ThinkingPart tc) _) =
   case tc.thinkingOpaque of
     Just o
       | o.poProvider == geminiProviderName,
@@ -312,9 +313,9 @@ encodeAssistantPart currentModel (ContentPart (ThinkingPart tc)) =
           | not (T.null t) ->
               Just $ object ["text" .= t, "thought" .= True]
         _ -> Nothing
-encodeAssistantPart currentModel (ContentPart (ToolCallPart tc)) =
+encodeAssistantPart currentModel (ContentPart (ToolCallPart tc) _) =
   Just $ encodeFunctionCall currentModel tc
-encodeAssistantPart _ (ContentPart (ImagePart _)) = Nothing
+encodeAssistantPart _ (ContentPart (ImagePart _) _) = Nothing
 
 modelOk :: Text -> Maybe Text -> Bool
 modelOk _ Nothing = True
@@ -356,7 +357,8 @@ normalizeToolCallId tc = do
   pure tc {tcId = callId}
 
 normalizePart :: ContentPart -> IO ContentPart
-normalizePart (ContentPart (ToolCallPart tc)) = toolCallPart <$> normalizeToolCallId tc
+normalizePart (ContentPart (ToolCallPart tc) hint) =
+  (\tc' -> (toolCallPart tc') {partCacheHint = hint}) <$> normalizeToolCallId tc
 normalizePart p = pure p
 
 genConfig :: ChatRequest -> Value

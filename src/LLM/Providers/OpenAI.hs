@@ -207,15 +207,16 @@ encodeTurn _ (UserMessage parts) =
   ]
 encodeTurn opts (AssistantMessage parts) =
   let cleaned = map (stripForeignOpaque openAIProviderName) parts
-      text = T.concat [t | ContentPart (TextPart t) <- cleaned]
+      -- Cache hints are ignored on the OpenAI wire; content is unchanged.
+      text = T.concat [t | ContentPart (TextPart t) _ <- cleaned]
       mReasoning =
         listToMaybe
           [ t
-            | ContentPart (ThinkingPart tc) <- cleaned,
+            | ContentPart (ThinkingPart tc) _ <- cleaned,
               Just t <- [tc.thinkingText],
               not (T.null t)
           ]
-      calls = [tc | ContentPart (ToolCallPart tc) <- cleaned]
+      calls = [tc | ContentPart (ToolCallPart tc) _ <- cleaned]
    in [ object $
           ["role" .= ("assistant" :: Text)]
             ++ ["content" .= text | not (T.null text)]
@@ -230,13 +231,14 @@ encodeTurn _ (ToolTurn results) =
 
 -- | Single text stays a string (recorded-fixture compatible); mixed or image
 -- content uses the OpenAI multimodal content-part array.
+-- Cache hints are omitted from the wire JSON.
 encodeUserContent :: [ContentPart] -> Value
-encodeUserContent [ContentPart (TextPart t)] = String t
+encodeUserContent [ContentPart (TextPart t) _] = String t
 encodeUserContent parts = toJSON (mapMaybe encodeUserPart parts)
   where
-    encodeUserPart (ContentPart (TextPart t)) =
+    encodeUserPart (ContentPart (TextPart t) _) =
       Just $ object ["type" .= ("text" :: Text), "text" .= t]
-    encodeUserPart (ContentPart (ImagePart src)) =
+    encodeUserPart (ContentPart (ImagePart src) _) =
       Just $ encodeImagePart src
     encodeUserPart _ = Nothing
 

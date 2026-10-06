@@ -14,9 +14,11 @@ import LLM.Core.Types
     ThinkingMode (..),
     Turn (..),
     assistantTurn,
+    cacheEphemeral,
     deepSeekMessageEncodeOptions,
     defaultMessageEncodeOptions,
     mkToolCall,
+    textPart,
   )
 import LLM.Core.Usage (Usage (..))
 import LLM.Providers.DeepSeek (deepSeekBuildBodyPairs)
@@ -39,6 +41,14 @@ spec = describe "DeepSeek thinking mode" $ do
       let turn = assistantTurn "Hello" (Just "thinking") []
           msg = head (encodeTurn defaultMessageEncodeOptions turn)
       lookupText "reasoning_content" msg `shouldBe` Nothing
+
+    it "omits cache hints from the wire while keeping content identical" $ do
+      let plain = UserMessage [textPart "static context"]
+          hinted = UserMessage [cacheEphemeral (textPart "static context")]
+          plainMsg = head (encodeTurn deepSeekMessageEncodeOptions plain)
+          hintedMsg = head (encodeTurn deepSeekMessageEncodeOptions hinted)
+      hintedMsg `shouldBe` plainMsg
+      lookupText "content" hintedMsg `shouldBe` Just "static context"
 
   describe "request body" $ do
     it "disables thinking by default" $ do
@@ -82,8 +92,8 @@ spec = describe "DeepSeek thinking mode" $ do
           resp.respReasoning `shouldBe` Just "Let me think."
           resp.respText `shouldBe` "The answer is 42."
           case resp.respContent of
-            [ ContentPart (ThinkingPart (ThinkingContent (Just "Let me think.") Nothing)),
-              ContentPart (TextPart "The answer is 42.")
+            [ ContentPart (ThinkingPart (ThinkingContent (Just "Let me think.") Nothing)) Nothing,
+              ContentPart (TextPart "The answer is 42.") Nothing
               ] -> pure ()
             other -> fail $ "unexpected ordered parts: " <> show other
         Left err -> fail $ show err

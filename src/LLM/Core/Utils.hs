@@ -92,16 +92,21 @@ streamResponseJson r =
       "reasoning" .= r.respReasoning
     ]
   where
-    partToJson (ContentPart (TextPart t)) =
-      object ["type" .= ("text" :: Text), "text" .= t]
-    partToJson (ContentPart (ImagePart src)) =
-      object ["type" .= ("image" :: Text), "image" .= imageToJson src]
-    partToJson (ContentPart (ThinkingPart tc)) =
+    partToJson (ContentPart (TextPart t) hint) =
+      object $
+        ["type" .= ("text" :: Text), "text" .= t]
+          ++ cacheHintPair hint
+    partToJson (ContentPart (ImagePart src) hint) =
+      object $
+        ["type" .= ("image" :: Text), "image" .= imageToJson src]
+          ++ cacheHintPair hint
+    partToJson (ContentPart (ThinkingPart tc) hint) =
       object $
         ["type" .= ("thinking" :: Text)]
           ++ ["text" .= t | Just t <- [tc.thinkingText]]
           ++ ["opaque" .= opaqueToJson o | Just o <- [tc.thinkingOpaque]]
-    partToJson (ContentPart (ToolCallPart tc)) =
+          ++ cacheHintPair hint
+    partToJson (ContentPart (ToolCallPart tc) hint) =
       object $
         [ "type" .= ("tool_call" :: Text),
           "id" .= tc.tcId,
@@ -109,6 +114,9 @@ streamResponseJson r =
           "arguments" .= tc.tcArguments
         ]
           ++ ["provider_meta" .= opaqueToJson m | Just m <- [tc.tcProviderMeta]]
+          ++ cacheHintPair hint
+    cacheHintPair hint =
+      ["cache_hint" .= h | Just h <- [hint]]
     imageToJson (ImageUrl url) =
       object ["type" .= ("url" :: Text), "url" .= url]
     imageToJson (ImageBase64 mediaType data_) =
@@ -147,20 +155,22 @@ parseChatResponse = AE.withObject "ChatResponse" $ \v -> do
   where
     parseContentPart = AE.withObject "ContentPart" $ \o -> do
       t <- o AE..: "type"
-      case (t :: Text) of
-        "text" -> ContentPart . TextPart <$> o AE..: "text"
-        "image" -> ContentPart . ImagePart <$> (o AE..: "image" >>= parseImageSource)
+      mHint <- o AE..:? "cache_hint"
+      body <- case (t :: Text) of
+        "text" -> TextPart <$> o AE..: "text"
+        "image" -> ImagePart <$> (o AE..: "image" >>= parseImageSource)
         "thinking" -> do
           mText <- o AE..:? "text"
           mOpaque <- o AE..:? "opaque" >>= mapM parseOpaque
-          pure $ ContentPart (ThinkingPart (ThinkingContent mText mOpaque))
+          pure $ ThinkingPart (ThinkingContent mText mOpaque)
         "tool_call" -> do
           tcId <- o AE..: "id"
           tcName <- o AE..: "name"
           tcArgs <- o AE..: "arguments"
           tcMeta <- o AE..:? "provider_meta" >>= mapM parseOpaque
-          pure $ ContentPart (ToolCallPart (ToolCall tcId tcName tcArgs tcMeta))
+          pure $ ToolCallPart (ToolCall tcId tcName tcArgs tcMeta)
         _ -> fail "Unknown content part type"
+      pure $ ContentPart body mHint
 
     parseImageSource = AE.withObject "ImageSource" $ \o -> do
       typ <- o AE..: "type" :: Parser Text

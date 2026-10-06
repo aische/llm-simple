@@ -17,6 +17,7 @@ import LLM.Core.Types
   ( ChatResponse (respText),
     ToolCall (tcId, tcName),
     Turn (..),
+    cacheEphemeral,
     defaultMessageEncodeOptions,
     imageBase64Part,
     imageUrlPart,
@@ -74,6 +75,36 @@ spec = describe "OpenAI" $ do
           nestedText ["image_url", "url"] (Object b64O)
             `shouldBe` Just "data:image/png;base64,aGVsbG8="
         _ -> expectationFailure "expected text + two image_url parts"
+
+  describe "cache hint encoding" $ do
+    it "omits cache hints from the wire while keeping content identical" $ do
+      Right b64 <- pure $ imageBase64Part "image/png" "aGVsbG8="
+      let plain =
+            UserMessage
+              [ textPart "What is in this image?",
+                imageUrlPart "https://example.com/boardwalk.jpg",
+                b64
+              ]
+          hinted =
+            UserMessage
+              [ cacheEphemeral (textPart "What is in this image?"),
+                imageUrlPart "https://example.com/boardwalk.jpg",
+                cacheEphemeral b64
+              ]
+          plainMsg = head (encodeTurn defaultMessageEncodeOptions plain)
+          hintedMsg = head (encodeTurn defaultMessageEncodeOptions hinted)
+      hintedMsg `shouldBe` plainMsg
+      case userContent hintedMsg of
+        parts -> do
+          contentTypes parts `shouldBe` ["text", "image_url", "image_url"]
+          mapM_ (\p -> lookupKey "cache_control" p `shouldBe` Nothing) parts
+
+    it "Ollama (shared OpenAI encoder) also omits cache hints" $ do
+      -- Ollama requests use the same encodeTurn + defaultMessageEncodeOptions path.
+      let plain = UserMessage [textPart "hello"]
+          hinted = UserMessage [cacheEphemeral (textPart "hello")]
+      head (encodeTurn defaultMessageEncodeOptions hinted)
+        `shouldBe` head (encodeTurn defaultMessageEncodeOptions plain)
 
   describe "parseOpenAIUsage" $ do
     it "extracts token counts" $ do
@@ -142,6 +173,10 @@ lookupText key (Object o) =
     Just (String t) -> Just t
     _ -> Nothing
 lookupText _ _ = Nothing
+
+lookupKey :: Text -> Value -> Maybe Value
+lookupKey key (Object o) = KM.lookup (K.fromText key) o
+lookupKey _ _ = Nothing
 
 nestedText :: [Text] -> Value -> Maybe Text
 nestedText [key] v = lookupText key v

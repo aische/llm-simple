@@ -13,7 +13,7 @@ where
 
 import Data.Aeson
   ( KeyValue ((.=)),
-    Value (String),
+    Value (Object, String),
     decodeStrict',
     encode,
     object,
@@ -23,6 +23,7 @@ import Data.Aeson
     (.:),
     (.:?),
   )
+import Data.Aeson.KeyMap qualified as KM
 import Data.Aeson.Types (Object, Pair, Parser, parseMaybe)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -44,6 +45,7 @@ import LLM.Core.Types
         reqThinking,
         reqTools
       ),
+    CacheHint (..),
     ContentPart (..),
     LLMError (EmptyResponse),
     LLMGateway,
@@ -209,13 +211,14 @@ encodeTurn _ (ToolTurn results) =
   ]
 
 encodeUserContent :: [ContentPart] -> Value
-encodeUserContent [ContentPart (TextPart t)] = String t
+-- Bare string only when a single unannotated text part (fixture-compatible).
+encodeUserContent [ContentPart (TextPart t) Nothing] = String t
 encodeUserContent parts = toJSON (mapMaybe encodeUserPart parts)
   where
-    encodeUserPart (ContentPart (TextPart t)) =
-      Just $ object ["type" .= ("text" :: Text), "text" .= t]
-    encodeUserPart (ContentPart (ImagePart src)) =
-      Just $ encodeImageBlock src
+    encodeUserPart (ContentPart (TextPart t) hint) =
+      Just $ withCacheControl hint $ object ["type" .= ("text" :: Text), "text" .= t]
+    encodeUserPart (ContentPart (ImagePart src) hint) =
+      Just $ withCacheControl hint $ encodeImageBlock src
     encodeUserPart _ = Nothing
 
 encodeImageBlock :: ImageSource -> Value
@@ -239,19 +242,28 @@ encodeImageBlock (ImageBase64 mediaType data_) =
           ]
     ]
 
+-- | Attach Anthropic @cache_control@ for the default ephemeral TTL.
+withCacheControl :: Maybe CacheHint -> Value -> Value
+withCacheControl (Just CacheEphemeral) (Object o) =
+  Object $ KM.insert "cache_control" (object ["type" .= ("ephemeral" :: Text)]) o
+withCacheControl _ v = v
+
 encodeAssistantPart :: Text -> ContentPart -> Maybe Value
-encodeAssistantPart currentModel (ContentPart (ThinkingPart tc)) =
+encodeAssistantPart currentModel (ContentPart (ThinkingPart tc) hint) =
   case opaqueForClaude currentModel tc.thinkingOpaque of
-    Just payload -> Just payload
+    Just payload -> Just $ withCacheControl hint payload
     Nothing ->
       -- Without a Claude signature we must not invent a thinking block.
       Nothing
-encodeAssistantPart _ (ContentPart (TextPart t))
+encodeAssistantPart _ (ContentPart (TextPart t) hint)
   | T.null t = Nothing
-  | otherwise = Just $ object ["type" .= ("text" :: Text), "text" .= t]
-encodeAssistantPart _ (ContentPart (ToolCallPart tc)) =
-  Just $ encodeToolUseBlock tc
-encodeAssistantPart _ (ContentPart (ImagePart _)) = Nothing
+  | otherwise =
+      Just $
+        withCacheControl hint $
+          object ["type" .= ("text" :: Text), "text" .= t]
+encodeAssistantPart _ (ContentPart (ToolCallPart tc) hint) =
+  Just $ withCacheControl hint $ encodeToolUseBlock tc
+encodeAssistantPart _ (ContentPart (ImagePart _) _) = Nothing
 
 opaqueForClaude :: Text -> Maybe ProviderOpaque -> Maybe Value
 opaqueForClaude _ (Just o)

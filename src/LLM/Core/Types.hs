@@ -7,6 +7,7 @@ module LLM.Core.Types
     assistantTurn,
     ContentPart (..),
     PartBody (..),
+    CacheHint (..),
     ImageSource (..),
     ThinkingContent (..),
     ProviderOpaque (..),
@@ -15,6 +16,8 @@ module LLM.Core.Types
     toolCallPart,
     imageUrlPart,
     imageBase64Part,
+    withCacheHint,
+    cacheEphemeral,
     mkImageBase64,
     supportedImageMediaTypes,
     projectText,
@@ -53,7 +56,17 @@ module LLM.Core.Types
   )
 where
 
-import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
+import Data.Aeson
+  ( FromJSON (..),
+    ToJSON (..),
+    Value (..),
+    object,
+    withObject,
+    withText,
+    (.:),
+    (.:?),
+    (.=),
+  )
 import Data.Aeson.Types (Parser)
 import Data.Char (isSpace)
 import Data.Maybe (mapMaybe)
@@ -252,29 +265,71 @@ instance FromJSON PartBody where
       "tool_call" -> ToolCallPart <$> o .: "tool_call"
       _ -> fail $ "Unknown part type: " <> T.unpack typ
 
+-- | Portable prompt-cache breakpoint intent.
+--
+-- Unsupported providers ignore the hint without dropping the underlying
+-- content. Claude serializes 'CacheEphemeral' as wire @cache_control@.
+data CacheHint = CacheEphemeral
+  deriving (Show, Eq, Generic)
+
+instance ToJSON CacheHint where
+  toJSON CacheEphemeral = String "ephemeral"
+
+instance FromJSON CacheHint where
+  parseJSON = withText "CacheHint" $ \t ->
+    case t of
+      "ephemeral" -> pure CacheEphemeral
+      _ -> fail $ "Unknown cache hint: " <> T.unpack t
+
 -- | One ordered content part in a user or assistant message.
 data ContentPart = ContentPart
-  { partBody :: PartBody
+  { partBody :: PartBody,
+    -- | Optional cache breakpoint. Portable intent; see 'CacheHint'.
+    partCacheHint :: Maybe CacheHint
   }
-  deriving (Show, Eq, Generic, FromJSON, ToJSON)
+  deriving (Show, Eq, Generic)
+
+instance ToJSON ContentPart where
+  toJSON (ContentPart body mHint) =
+    object $
+      ["partBody" .= body]
+        ++ ["partCacheHint" .= h | Just h <- [mHint]]
+
+instance FromJSON ContentPart where
+  parseJSON = withObject "ContentPart" $ \o ->
+    ContentPart
+      <$> o .: "partBody"
+      <*> o .:? "partCacheHint"
+
+-- | Content part with no cache hint.
+mkPart :: PartBody -> ContentPart
+mkPart body = ContentPart body Nothing
 
 textPart :: Text -> ContentPart
-textPart t = ContentPart (TextPart t)
+textPart t = mkPart (TextPart t)
 
 thinkingPart :: ThinkingContent -> ContentPart
-thinkingPart tc = ContentPart (ThinkingPart tc)
+thinkingPart tc = mkPart (ThinkingPart tc)
 
 toolCallPart :: ToolCall -> ContentPart
-toolCallPart tc = ContentPart (ToolCallPart tc)
+toolCallPart tc = mkPart (ToolCallPart tc)
 
 -- | User image part from a publicly reachable URL.
 imageUrlPart :: Text -> ContentPart
-imageUrlPart url = ContentPart (ImagePart (ImageUrl url))
+imageUrlPart url = mkPart (ImagePart (ImageUrl url))
 
 -- | User image part from base64 data; validates MIME type and payload.
 imageBase64Part :: Text -> Text -> Either Text ContentPart
 imageBase64Part mediaType data_ =
-  ContentPart . ImagePart <$> mkImageBase64 mediaType data_
+  mkPart . ImagePart <$> mkImageBase64 mediaType data_
+
+-- | Attach a cache hint to a content part.
+withCacheHint :: CacheHint -> ContentPart -> ContentPart
+withCacheHint hint cp = cp {partCacheHint = Just hint}
+
+-- | Mark a content part with Claude's default ephemeral cache breakpoint.
+cacheEphemeral :: ContentPart -> ContentPart
+cacheEphemeral = withCacheHint CacheEphemeral
 
 -- | A single turn in a conversation.
 --
@@ -304,8 +359,11 @@ instance FromJSON Turn where
       _ -> fail $ "Unknown turn role: " <> T.unpack role
 
 -- | Bidirectional pattern for a single unannotated user text part.
+--
+-- Matches only when there is no cache hint. Use 'UserMessage' for annotated
+-- or multi-part content.
 pattern UserTurn :: Text -> Turn
-pattern UserTurn text = UserMessage [ContentPart (TextPart text)]
+pattern UserTurn text = UserMessage [ContentPart (TextPart text) Nothing]
 
 {-# COMPLETE UserMessage, AssistantMessage, ToolTurn #-}
 
@@ -327,7 +385,7 @@ assistantTurn text mReasoning calls =
 projectText :: [ContentPart] -> Text
 projectText = T.concat . mapMaybe go
   where
-    go (ContentPart (TextPart t)) = Just t
+    go (ContentPart (TextPart t) _) = Just t
     go _ = Nothing
 
 -- | First non-empty thinking text, if any.
@@ -335,7 +393,7 @@ projectReasoning :: [ContentPart] -> Maybe Text
 projectReasoning = go
   where
     go [] = Nothing
-    go (ContentPart (ThinkingPart tc) : rest) =
+    go (ContentPart (ThinkingPart tc) _ : rest) =
       case tc.thinkingText of
         Just t | not (T.null t) -> Just t
         _ -> go rest
@@ -345,16 +403,20 @@ projectReasoning = go
 turnToolCalls :: [ContentPart] -> [ToolCall]
 turnToolCalls = mapMaybe go
   where
-    go (ContentPart (ToolCallPart tc)) = Just tc
+    go (ContentPart (ToolCallPart tc) _) = Just tc
     go _ = Nothing
 
 -- | Merge runs of adjacent text parts (e.g. streamed token deltas).
+--
+-- Only coalesces when both parts share the same cache hint, so breakpoints
+-- are not lost.
 coalesceAdjacentTextParts :: [ContentPart] -> [ContentPart]
 coalesceAdjacentTextParts = go
   where
     go [] = []
-    go (ContentPart (TextPart t1) : ContentPart (TextPart t2) : rest) =
-      go (ContentPart (TextPart (t1 <> t2)) : rest)
+    go (ContentPart (TextPart t1) h1 : ContentPart (TextPart t2) h2 : rest)
+      | h1 == h2 =
+          go (ContentPart (TextPart (t1 <> t2)) h1 : rest)
     go (p : rest) = p : go rest
 
 -- | Whether any turn in the conversation contains an image part.
@@ -364,31 +426,31 @@ conversationHasImages = any turnHasImage
     turnHasImage (UserMessage parts) = any isImagePart parts
     turnHasImage (AssistantMessage parts) = any isImagePart parts
     turnHasImage (ToolTurn _) = False
-    isImagePart (ContentPart (ImagePart _)) = True
+    isImagePart (ContentPart (ImagePart _) _) = True
     isImagePart _ = False
 
 -- | Validate role/part combinations for a turn.
 --
 -- User messages may contain text and image parts; assistant messages may
 -- contain text, thinking, and tool-call parts. Returns 'Left' with an error
--- message when the combination is invalid.
+-- message when the combination is invalid. Cache hints do not affect validity.
 validateTurn :: Turn -> Either Text ()
 validateTurn (UserMessage parts) =
   mapM_ userPart parts
   where
-    userPart (ContentPart (TextPart _)) = Right ()
-    userPart (ContentPart (ImagePart _)) = Right ()
-    userPart (ContentPart (ThinkingPart _)) =
+    userPart (ContentPart (TextPart _) _) = Right ()
+    userPart (ContentPart (ImagePart _) _) = Right ()
+    userPart (ContentPart (ThinkingPart _) _) =
       Left "user messages may not contain thinking parts"
-    userPart (ContentPart (ToolCallPart _)) =
+    userPart (ContentPart (ToolCallPart _) _) =
       Left "user messages may not contain tool-call parts"
 validateTurn (AssistantMessage parts) =
   mapM_ assistantPart parts
   where
-    assistantPart (ContentPart (TextPart _)) = Right ()
-    assistantPart (ContentPart (ThinkingPart _)) = Right ()
-    assistantPart (ContentPart (ToolCallPart _)) = Right ()
-    assistantPart (ContentPart (ImagePart _)) =
+    assistantPart (ContentPart (TextPart _) _) = Right ()
+    assistantPart (ContentPart (ThinkingPart _) _) = Right ()
+    assistantPart (ContentPart (ToolCallPart _) _) = Right ()
+    assistantPart (ContentPart (ImagePart _) _) =
       Left "assistant messages may not contain image parts"
 validateTurn (ToolTurn _) = Right ()
 
@@ -401,19 +463,24 @@ opaqueForProvider _ _ = Nothing
 -- | Drop foreign opaque state from thinking parts and tool-call metadata.
 --
 -- Used by provider encoders during fallback so stored history is not mutated.
+-- Cache hints are preserved.
 stripForeignOpaque :: Text -> ContentPart -> ContentPart
-stripForeignOpaque provider (ContentPart (ThinkingPart tc)) =
-  ContentPart $
-    ThinkingPart
-      tc
-        { thinkingOpaque = opaqueForProvider provider tc.thinkingOpaque
-        }
-stripForeignOpaque provider (ContentPart (ToolCallPart tc)) =
-  ContentPart $
-    ToolCallPart
-      tc
-        { tcProviderMeta = opaqueForProvider provider tc.tcProviderMeta
-        }
+stripForeignOpaque provider (ContentPart (ThinkingPart tc) hint) =
+  ContentPart
+    ( ThinkingPart
+        tc
+          { thinkingOpaque = opaqueForProvider provider tc.thinkingOpaque
+          }
+    )
+    hint
+stripForeignOpaque provider (ContentPart (ToolCallPart tc) hint) =
+  ContentPart
+    ( ToolCallPart
+        tc
+          { tcProviderMeta = opaqueForProvider provider tc.tcProviderMeta
+          }
+    )
+    hint
 stripForeignOpaque _ p = p
 
 -- | A tool definition sent to the model

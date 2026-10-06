@@ -46,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Prefer `defaultPricingInfo` for catalogs without cache rates.
 - Cost estimation: ordinary input × input rate + cache read × cache-read rate +
   cache creation × cache-write rate + output × output rate.
+- **Breaking:** `ContentPart` gains `partCacheHint :: Maybe CacheHint`. Manual
+  construction and pattern matches must account for the new field; prefer
+  `textPart` / `cacheEphemeral`. `UserTurn` still matches only a single
+  unannotated text part.
 
 ### Added
 
@@ -66,6 +70,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image request-shape tests (Claude/Gemini/OpenAI) and vision fallback tests.
 - `mkUsage`, `defaultPricingInfo`, `usageOrdinaryInputTokens`; provider parsers
   report cache read/creation counters (Claude, OpenAI, DeepSeek, Gemini).
+- Optional Claude prompt-cache breakpoints: `CacheHint` / `CacheEphemeral` on
+  `ContentPart.partCacheHint`, helpers `withCacheHint` / `cacheEphemeral`.
+  Claude emits wire `cache_control: {type: ephemeral}` (default TTL) on marked
+  parts without reordering; other providers ignore hints and leave content
+  unchanged. Hints round-trip in conversation JSON and survive agent tool rounds.
 
 ## [0.1.1.0] - 2026-08-23
 

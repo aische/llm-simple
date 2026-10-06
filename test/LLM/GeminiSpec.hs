@@ -18,6 +18,7 @@ import LLM.Core.Types
     toolCallPart,
     imageUrlPart,
     imageBase64Part,
+    cacheEphemeral,
   )
 import LLM.Core.Usage (Usage (..), mkUsage)
 import LLM.Core.Utils (getToolCalls, hasToolCalls)
@@ -129,6 +130,25 @@ spec = describe "Gemini" $ do
               KM.lookup "data" idata `shouldBe` Just (String "aGVsbG8=")
             _ -> expectationFailure "expected inlineData"
         _ -> expectationFailure "expected three parts"
+
+  describe "cache hint encoding" $ do
+    it "omits cache hints from the wire while keeping content identical" $ do
+      Right b64 <- pure $ imageBase64Part "image/jpeg" "aGVsbG8="
+      let plain =
+            UserMessage
+              [ imageUrlPart "https://example.com/photo.png",
+                b64,
+                textPart "caption"
+              ]
+          hinted =
+            UserMessage
+              [ cacheEphemeral (imageUrlPart "https://example.com/photo.png"),
+                b64,
+                cacheEphemeral (textPart "caption")
+              ]
+          plainMsg = head (encodeTurn "gemini-3.1-flash-lite" plain)
+          hintedMsg = head (encodeTurn "gemini-3.1-flash-lite" hinted)
+      hintedMsg `shouldBe` plainMsg
 
   describe "parseGeminiUsage" $ do
     it "extracts token counts" $ do

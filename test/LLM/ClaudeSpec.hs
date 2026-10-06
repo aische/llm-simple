@@ -31,6 +31,7 @@ import LLM.Core.Types
     toolCallPart,
     imageUrlPart,
     imageBase64Part,
+    cacheEphemeral,
     pattern UserTurn,
   )
 import LLM.Core.Usage (Usage (..), mkUsage)
@@ -79,9 +80,9 @@ spec = describe "Claude" $ do
           resp.respReasoning `shouldBe` Just "I should call the weather tool."
           resp.respText `shouldBe` "Checking the weather."
           case resp.respContent of
-            [ ContentPart (ThinkingPart tc),
-              ContentPart (TextPart "Checking the weather."),
-              ContentPart (ToolCallPart tool)
+            [ ContentPart (ThinkingPart tc) Nothing,
+              ContentPart (TextPart "Checking the weather.") Nothing,
+              ContentPart (ToolCallPart tool) Nothing
               ] -> do
                 tc.thinkingText `shouldBe` Just "I should call the weather tool."
                 case tc.thinkingOpaque of
@@ -212,6 +213,38 @@ spec = describe "Claude" $ do
           nestedText ["source", "data"] (Object b64O) `shouldBe` Just "aGVsbG8="
           lookupText "text" (Object textO) `shouldBe` Just "describe"
         _ -> expectationFailure "expected image/image/text blocks"
+
+  describe "cache_control breakpoints" $ do
+    it "places cache_control on the marked block without reordering" $ do
+      Right b64 <- pure $ imageBase64Part "image/png" "aGVsbG8="
+      let turn =
+            UserMessage
+              [ imageUrlPart "https://example.com/cat.jpg",
+                cacheEphemeral b64,
+                cacheEphemeral (textPart "describe")
+              ]
+          content = messageContent (head (encodeTurn "claude-haiku-4-5-20251001" turn))
+      contentTypes content `shouldBe` ["image", "image", "text"]
+      case content of
+        [Object urlO, Object b64O, Object textO] -> do
+          KM.lookup "cache_control" urlO `shouldBe` Nothing
+          nestedText ["cache_control", "type"] (Object b64O) `shouldBe` Just "ephemeral"
+          nestedText ["cache_control", "type"] (Object textO) `shouldBe` Just "ephemeral"
+          nestedText ["source", "data"] (Object b64O) `shouldBe` Just "aGVsbG8="
+          lookupText "text" (Object textO) `shouldBe` Just "describe"
+        _ -> expectationFailure "expected image/image/text blocks"
+
+    it "uses a content-block array for a single cached text part" $ do
+      let turn = UserMessage [cacheEphemeral (textPart "static context")]
+          msg = head (encodeTurn "claude-haiku-4-5-20251001" turn)
+      case lookupKey "content" msg of
+        Just (Array arr) -> do
+          V.length arr `shouldBe` 1
+          nestedText ["cache_control", "type"] (V.head arr) `shouldBe` Just "ephemeral"
+          lookupText "text" (V.head arr) `shouldBe` Just "static context"
+        Just (String _) ->
+          expectationFailure "cached single text must not encode as a bare string"
+        _ -> expectationFailure "expected content array"
 
   describe "parseClaudeUsage" $ do
     it "extracts token counts" $ do

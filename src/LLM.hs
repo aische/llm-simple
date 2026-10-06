@@ -55,6 +55,7 @@ module LLM
     assistantTurn,
     ContentPart (..),
     PartBody (..),
+    CacheHint (..),
     ImageSource (..),
     ThinkingContent (..),
     ProviderOpaque (..),
@@ -63,6 +64,8 @@ module LLM
     toolCallPart,
     imageUrlPart,
     imageBase64Part,
+    withCacheHint,
+    cacheEphemeral,
     ToolCall (..),
     ToolResult (..),
     ToolDef (..),
@@ -152,6 +155,7 @@ import LLM.Agent
 import LLM.Core
   ( AbortSignal,
     ChatResponse (..),
+    CacheHint (..),
     ContentPart (..),
     ImageSource (..),
     LLMError (..),
@@ -170,6 +174,7 @@ import LLM.Core
     Usage (..),
     addUsage,
     assistantTurn,
+    cacheEphemeral,
     defaultPricingInfo,
     emptyUsage,
     estimateCost,
@@ -183,6 +188,7 @@ import LLM.Core
     thinkingPart,
     toolCallPart,
     usageOrdinaryInputTokens,
+    withCacheHint,
   )
 import LLM.Generate
   ( GenRequest (..),

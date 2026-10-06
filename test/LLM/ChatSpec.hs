@@ -3,11 +3,12 @@
 module LLM.ChatSpec (spec) where
 
 import Data.Aeson (object, (.=))
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Map qualified as Map
 import Data.Text (Text)
 import Heptapod (generate)
 import LLM.Agent.Events (noEventObserver)
-import LLM.Agent.Generate (generateText)
+import LLM.Agent.Generate (generateText, streamText)
 import LLM.Agent.Types
   ( Agent (..),
     RuntimeArgs (..),
@@ -16,10 +17,14 @@ import LLM.Agent.Types
   )
 import LLM.Core.Abort (AbortSignal, abort, newAbortSignal)
 import LLM.Core.Types
-  ( ChatRequest (..),
+  ( CacheHint (..),
+    ChatRequest (..),
     ChatResponse (..),
+    ContentPart (..),
+    PartBody (..),
     textPart, toolCallPart, mkChatResponse, assistantTurn, pattern UserTurn,
     Turn (..),
+    cacheEphemeral,
     imageUrlPart,
     LLMError (..),
     LLMGateway (..),
@@ -46,6 +51,7 @@ import Test.Hspec
     expectationFailure,
     it,
     shouldBe,
+    shouldSatisfy,
   )
 
 -- | A mock gateway that returns a fixed response
@@ -158,6 +164,51 @@ runGenerate agent models toolMap mSig turns = do
   rt <- mkRuntime mSig
   generateText agent models toolMap rt turns
 
+runStreamGenerate ::
+  Agent ->
+  ModelWithFallbacks ->
+  ToolMap Text ->
+  Maybe AbortSignal ->
+  [Turn] ->
+  IO (Either GenerateErrorResult GenerateTextResult)
+runStreamGenerate agent models toolMap mSig turns = do
+  rt <- mkRuntime mSig
+  streamText (\_ -> pure ()) agent models toolMap rt turns
+
+-- | Gateway that records each request conversation, then behaves like 'mockToolGateway'.
+capturingToolGateway :: IORef [[Turn]] -> LLMGateway
+capturingToolGateway ref =
+  let respond req = do
+        modifyIORef' ref (req.reqConversation :)
+        if any isToolTurn req.reqConversation
+          then pure $ Right (ChatResponse "The weather is sunny." [textPart "The weather is sunny."] (Just (mkUsage 80 15)) Nothing)
+          else
+            let tc = mkToolCall "call_1" "get_weather" (object ["location" .= ("London" :: Text)])
+             in pure $ Right (ChatResponse "" [toolCallPart tc] (Just (mkUsage 50 10)) Nothing)
+   in LLMGateway
+        { gwName = "mock-tool-capture",
+          gwGenerateText = \_ -> respond,
+          gwStreamText = \_ req _onEvent -> respond req,
+          gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
+        }
+  where
+    isToolTurn (ToolTurn _) = True
+    isToolTurn _ = False
+
+hasCachedUserPrefix :: [Turn] -> Bool
+hasCachedUserPrefix =
+  any
+    ( \case
+        UserMessage parts ->
+          any
+            ( \case
+                ContentPart (TextPart _) (Just CacheEphemeral) -> True
+                _ -> False
+            )
+            parts
+        _ -> False
+    )
+
 spec :: Spec
 spec = describe "Chat" $ do
   let toolMap = Map.fromList [("get_weather", weatherTool)]
@@ -191,6 +242,25 @@ spec = describe "Chat" $ do
           -- assistantTurn(tool call) + ToolTurn + assistantTurn(final)
           length r.gtrNewMessages `shouldBe` 3
           r.gtrUsage `shouldBe` mkUsage 130 25 -- 50+80 input, 10+15 output
+        Left err -> expectationFailure $ show err
+
+    it "preserves cache hints on user parts across non-streaming tool rounds" $ do
+      ref <- newIORef []
+      let agent = defaultAgent {agTools = ["get_weather"]}
+          models = ModelWithFallbacks (mockModel (capturingToolGateway ref)) []
+          msgs =
+            [ UserMessage
+                [ cacheEphemeral (textPart "static system-like context"),
+                  textPart "weather in london?"
+                ]
+            ]
+      result <- runGenerate agent models toolMap Nothing msgs
+      case result of
+        Right r -> do
+          r.gtrText `shouldBe` "The weather is sunny."
+          convs <- reverse <$> readIORef ref
+          length convs `shouldBe` 2
+          mapM_ (`shouldSatisfy` hasCachedUserPrefix) convs
         Left err -> expectationFailure $ show err
 
     it "respects maxToolRounds" $ do
@@ -321,3 +391,23 @@ spec = describe "Chat" $ do
       case result of
         Left GenerateErrorResult {gerError = GErrAborted} -> pure ()
         other -> expectationFailure $ "Expected GErrAborted (no fallback), got: " <> show other
+
+  describe "streamText" $ do
+    it "preserves cache hints on user parts across streaming tool rounds" $ do
+      ref <- newIORef []
+      let agent = defaultAgent {agTools = ["get_weather"]}
+          models = ModelWithFallbacks (mockModel (capturingToolGateway ref)) []
+          msgs =
+            [ UserMessage
+                [ cacheEphemeral (textPart "static system-like context"),
+                  textPart "weather in london?"
+                ]
+            ]
+      result <- runStreamGenerate agent models toolMap Nothing msgs
+      case result of
+        Right r -> do
+          r.gtrText `shouldBe` "The weather is sunny."
+          convs <- reverse <$> readIORef ref
+          length convs `shouldBe` 2
+          mapM_ (`shouldSatisfy` hasCachedUserPrefix) convs
+        Left err -> expectationFailure $ show err

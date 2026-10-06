@@ -76,8 +76,8 @@ A provider is only available if its API key is set (except Ollama, which is alwa
 Capability flags are declarations used before each fallback candidate is
 called: image parts require `vision`; enabled thinking requires `thinking`.
 Unsupported candidates fail with `UnsupportedCapability` and the next
-fallback is tried. Cache hints (phase 3B) may be ignored by providers that
-do not support prompt caching.
+fallback is tried. Cache hints may be ignored by providers that do not
+support prompt caching (they do not change prompt semantics).
 
 ### Image input
 
@@ -92,6 +92,26 @@ let Right png = imageBase64Part "image/png" "<base64>"
 
 `imageBase64Part` validates MIME type (`image/jpeg|png|gif|webp|heic|heif`)
 and base64 payload locally. Use a model with `"capabilities": {"vision": true}`.
+
+### Prompt cache breakpoints
+
+Mark stable content with `cacheEphemeral` (or `withCacheHint CacheEphemeral`).
+Claude serializes that as `cache_control: {"type":"ephemeral"}` on the content
+block (provider default TTL). Other providers omit the marker and send the same
+content. Hints persist in conversation JSON and through agent tool rounds.
+
+```haskell
+import LLM (cacheEphemeral, textPart, UserMessage)
+
+let msg =
+      UserMessage
+        [ cacheEphemeral (textPart "large stable context…"),
+          textPart "question about the context"
+        ]
+```
+
+`UserTurn "text"` still matches only a single unannotated text part; use
+`UserMessage` when parts carry cache hints.
 
 ### Provider catalog
 

@@ -3,10 +3,14 @@ module LLM.TypesSpec (spec) where
 import Data.Aeson (eitherDecode, encode, object, (.=))
 import Data.Text qualified as T
 import LLM.Core.Types
-  ( ChatResponse (ChatResponse),
+  ( CacheHint (..),
+    ChatResponse (ChatResponse),
+    ContentPart (..),
     LLMError (EmptyResponse, HttpError, NetworkError),
+    PartBody (..),
     ThinkingContent (..),
     Turn (..),
+    cacheEphemeral,
     imageBase64Part,
     imageUrlPart,
     mkToolCall,
@@ -31,7 +35,14 @@ import LLM.Core.Utils
     hasToolCalls,
     isRetryable,
   )
-import Test.Hspec (Spec, describe, it, shouldBe, shouldSatisfy)
+import Test.Hspec
+  ( Spec,
+    describe,
+    expectationFailure,
+    it,
+    shouldBe,
+    shouldSatisfy,
+  )
 
 spec :: Spec
 spec = describe "Types" $ do
@@ -164,6 +175,21 @@ spec = describe "Types" $ do
           resp = ChatResponse "" [toolCallPart tc] Nothing Nothing
       hasToolCalls resp `shouldBe` True
       getToolCalls resp `shouldBe` [tc]
+
+  describe "cache hints" $ do
+    it "round-trips CacheEphemeral on ContentPart / Turn JSON" $ do
+      let part = cacheEphemeral (textPart "cached prefix")
+          turn = UserMessage [part, textPart "question"]
+      eitherDecode (encode part)
+        `shouldBe` Right (ContentPart (TextPart "cached prefix") (Just CacheEphemeral))
+      eitherDecode (encode turn) `shouldBe` Right turn
+
+    it "UserTurn does not match a cache-annotated single text part" $ do
+      let annotated = UserMessage [cacheEphemeral (textPart "hi")]
+      case annotated of
+        UserTurn _ -> expectationFailure "UserTurn should not match annotated text"
+        UserMessage [ContentPart (TextPart "hi") (Just CacheEphemeral)] -> pure ()
+        other -> expectationFailure $ "unexpected: " <> show other
 
   describe "UserTurn / validateTurn" $ do
     it "UserTurn constructs a single text user message" $ do

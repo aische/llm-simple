@@ -23,7 +23,9 @@
                                 "type": "string"
                             }
                         },
-                        "required": ["location"],
+                        "required": [
+                            "location"
+                        ],
                         "type": "object"
                     },
                     "name": "get_weather"
@@ -36,19 +38,24 @@
                     "arguments": {
                         "location": "London"
                     },
-                    "id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                    "id": "toolu_01GvM5JAsPjxKLnk7qohqRSR",
                     "name": "get_weather",
                     "type": "tool_call"
                 }
             ],
+            "reasoning": null,
             "text": "",
             "usage": {
+                "cache_creation_tokens": 0,
+                "cache_read_tokens": 0,
                 "input_tokens": 623,
                 "output_tokens": 54
             }
-        }
+        },
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-haiku-4-5-20251001\",\"id\":\"msg_011CfxsaAbH28pQFPzpsK9Bc\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":623,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":22,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"diagnostics\":null}            }\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_01GvM5JAsPjxKLnk7qohqRSR\",\"name\":\"get_weather\",\"input\":{},\"caller\":{\"type\":\"direct\"}}              }\n\nevent: ping\ndata: {\"type\": \"ping\"}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\"}  }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"locat\"}         }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"ion\\\": \\\"\"}  }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"London\\\"}\"} }\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0      }\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":623,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":54}              }\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"              }\n\n"
     },
     {
+        "prompt": null,
         "request": {
             "max_tokens": 1024,
             "messages": [
@@ -59,7 +66,7 @@
                 {
                     "content": [
                         {
-                            "id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                            "id": "toolu_01GvM5JAsPjxKLnk7qohqRSR",
                             "input": {
                                 "location": "London"
                             },
@@ -73,7 +80,7 @@
                     "content": [
                         {
                             "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
-                            "tool_use_id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                            "tool_use_id": "toolu_01GvM5JAsPjxKLnk7qohqRSR",
                             "type": "tool_result"
                         }
                     ],
@@ -94,7 +101,9 @@
                                 "type": "string"
                             }
                         },
-                        "required": ["location"],
+                        "required": [
+                            "location"
+                        ],
                         "type": "object"
                     },
                     "name": "get_weather"
@@ -104,24 +113,20 @@
         "response": {
             "content": [
                 {
-                    "text": "The weather in London is currently",
-                    "type": "text"
-                },
-                {
-                    "text": " **partly cloudy** with a temperature of **18°C** and a **light breeze from the west**. It's a mild",
-                    "type": "text"
-                },
-                {
-                    "text": " day, so you might want to bring a light jacket if you're heading out!",
+                    "text": "The weather in London is currently **partly cloudy** with a temperature of **18°C** and a **light breeze from the west**. It's a mild day, so you might want to bring a light jacket if you're heading out!",
                     "type": "text"
                 }
             ],
+            "reasoning": null,
             "text": "The weather in London is currently **partly cloudy** with a temperature of **18°C** and a **light breeze from the west**. It's a mild day, so you might want to bring a light jacket if you're heading out!",
             "usage": {
+                "cache_creation_tokens": 0,
+                "cache_read_tokens": 0,
                 "input_tokens": 708,
                 "output_tokens": 55
             }
-        }
+        },
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-haiku-4-5-20251001\",\"id\":\"msg_011CfxsaDxCHnwCSKMbSgBYN\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":708,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"diagnostics\":null}    }\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}     }\n\nevent: ping\ndata: {\"type\": \"ping\"}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"The\"}     }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" weather in London is\"}            }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" currently **\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"partly cloudy**\"}            }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" with a temperature of\"} }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" **\"}          }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"18°C**\"}             }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" and a **\"}              }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"light breeze from\"}    }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" the west**.\"}  }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" It\"}         }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"'s a mild\"}               }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" day\"}          }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\",\"}            }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" so\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" you might\"}    }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" want to bring\"}         }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" a light jacket if\"}     }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" you're heading\"}     }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" out!\"}     }\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0             }\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":708,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":55}           }\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"               }\n\n"
     },
     {
         "prompt": "and in paris?",
@@ -135,7 +140,7 @@
                 {
                     "content": [
                         {
-                            "id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                            "id": "toolu_01GvM5JAsPjxKLnk7qohqRSR",
                             "input": {
                                 "location": "London"
                             },
@@ -149,7 +154,7 @@
                     "content": [
                         {
                             "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
-                            "tool_use_id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                            "tool_use_id": "toolu_01GvM5JAsPjxKLnk7qohqRSR",
                             "type": "tool_result"
                         }
                     ],
@@ -183,7 +188,9 @@
                                 "type": "string"
                             }
                         },
-                        "required": ["location"],
+                        "required": [
+                            "location"
+                        ],
                         "type": "object"
                     },
                     "name": "get_weather"
@@ -196,19 +203,24 @@
                     "arguments": {
                         "location": "Paris"
                     },
-                    "id": "toolu_01GRMw2m36b1Pg8vyseDuBpS",
+                    "id": "toolu_01Ut7JGiytus1NwfjxXuni3Z",
                     "name": "get_weather",
                     "type": "tool_call"
                 }
             ],
+            "reasoning": null,
             "text": "",
             "usage": {
+                "cache_creation_tokens": 0,
+                "cache_read_tokens": 0,
                 "input_tokens": 770,
                 "output_tokens": 54
             }
-        }
+        },
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-haiku-4-5-20251001\",\"id\":\"msg_011CfxsaHwoLbCoepii2Rhw4\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":770,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":21,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"diagnostics\":null}   }\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_01Ut7JGiytus1NwfjxXuni3Z\",\"name\":\"get_weather\",\"input\":{},\"caller\":{\"type\":\"direct\"}}     }\n\nevent: ping\ndata: {\"type\": \"ping\"}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\"}     }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"locat\"}          }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"ion\\\": \\\"\"}        }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"Paris\\\"}\"}     }\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0             }\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":770,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":54}            }\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"        }\n\n"
     },
     {
+        "prompt": null,
         "request": {
             "max_tokens": 1024,
             "messages": [
@@ -219,7 +231,7 @@
                 {
                     "content": [
                         {
-                            "id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                            "id": "toolu_01GvM5JAsPjxKLnk7qohqRSR",
                             "input": {
                                 "location": "London"
                             },
@@ -233,7 +245,7 @@
                     "content": [
                         {
                             "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
-                            "tool_use_id": "toolu_01HG9wZvUAcakAyGgvhgSUP9",
+                            "tool_use_id": "toolu_01GvM5JAsPjxKLnk7qohqRSR",
                             "type": "tool_result"
                         }
                     ],
@@ -255,7 +267,7 @@
                 {
                     "content": [
                         {
-                            "id": "toolu_01GRMw2m36b1Pg8vyseDuBpS",
+                            "id": "toolu_01Ut7JGiytus1NwfjxXuni3Z",
                             "input": {
                                 "location": "Paris"
                             },
@@ -269,7 +281,7 @@
                     "content": [
                         {
                             "content": "Weather in Paris is sunny, 23°C, no wind.",
-                            "tool_use_id": "toolu_01GRMw2m36b1Pg8vyseDuBpS",
+                            "tool_use_id": "toolu_01Ut7JGiytus1NwfjxXuni3Z",
                             "type": "tool_result"
                         }
                     ],
@@ -290,7 +302,9 @@
                                 "type": "string"
                             }
                         },
-                        "required": ["location"],
+                        "required": [
+                            "location"
+                        ],
                         "type": "object"
                     },
                     "name": "get_weather"
@@ -300,27 +314,19 @@
         "response": {
             "content": [
                 {
-                    "text": "The weather in Paris is **sunny**",
-                    "type": "text"
-                },
-                {
-                    "text": " with a temperature of **23°C** and **no wind**. It's a beautiful day there! Paris is a",
-                    "type": "text"
-                },
-                {
-                    "text": " bit warmer than London and has much nicer conditions for being",
-                    "type": "text"
-                },
-                {
-                    "text": " outside.",
+                    "text": "The weather in Paris is **sunny** with a temperature of **23°C** and **no wind**. It's a beautiful day in Paris - warmer and sunnier than London!",
                     "type": "text"
                 }
             ],
-            "text": "The weather in Paris is **sunny** with a temperature of **23°C** and **no wind**. It's a beautiful day there! Paris is a bit warmer than London and has much nicer conditions for being outside.",
+            "reasoning": null,
+            "text": "The weather in Paris is **sunny** with a temperature of **23°C** and **no wind**. It's a beautiful day in Paris - warmer and sunnier than London!",
             "usage": {
+                "cache_creation_tokens": 0,
+                "cache_read_tokens": 0,
                 "input_tokens": 849,
-                "output_tokens": 51
+                "output_tokens": 42
             }
-        }
+        },
+        "sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-haiku-4-5-20251001\",\"id\":\"msg_011CfxsaM9HegK5K5qdRsJvE\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":849,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":4,\"service_tier\":\"standard\",\"inference_geo\":\"not_available\"},\"diagnostics\":null}           }\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}        }\n\nevent: ping\ndata: {\"type\": \"ping\"}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"The weather in Paris\"}         }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" is **\"}     }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"sunny** with a\"}              }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" temperature of **23\"}      }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"°C** and\"}  }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" **\"}       }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"no wind**.\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" It's a beautiful\"}              }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" day in Paris\"}  }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" -\"}     }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" war\"}     }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"mer and\"}      }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" sunnier than London\"}     }\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"!\"}    }\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0         }\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":849,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":42}        }\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"               }\n\n"
     }
 ]

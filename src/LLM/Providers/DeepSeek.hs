@@ -80,12 +80,13 @@ deepSeekProviderWith baseUrl baseOpts apiKey =
     { providerName = "deepseek",
       buildBody = deepSeekBuildBody,
       sendRequest = sendRequest,
-      sendStreamRequest = \body callback ->
+      openStream = \body k ->
         runReq lenientConfig $ do
           let url = baseUrl /: "v1" /: "chat" /: "completions"
               opts = baseOpts <> authHeader apiKey
           reqBr POST url (ReqBodyJson body) opts $ \resp ->
-            handleStreamResponse resp (`parseOpenAIStream` callback),
+            handleStreamResponse resp k,
+      parseStream = const parseOpenAIStream,
       parseResponse = pure . parseOpenAIResponse,
       buildObjectBody = \r schema ->
         let schemaText = TL.toStrict . TLE.decodeUtf8 $ encode schema

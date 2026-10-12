@@ -6,12 +6,13 @@ import Control.Monad (unless, void, when)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import LLM.Core.Types (LLMGateway, ThinkingMode (..))
-import LLM.Providers.Claude (claudeGateway)
-import LLM.Providers.DeepSeek (deepSeekGateway)
-import LLM.Providers.Gemini (geminiGateway)
-import LLM.Providers.Ollama (ollamaGateway)
-import LLM.Providers.OpenAI (openAIGateway)
+import LLM.Core.LLMProvider (LLMProvider)
+import LLM.Core.Types (ThinkingMode (..))
+import LLM.Providers.Claude (claudeProvider)
+import LLM.Providers.DeepSeek (deepSeekProvider)
+import LLM.Providers.Gemini (geminiProvider)
+import LLM.Providers.Ollama (ollamaProvider)
+import LLM.Providers.OpenAI (openAIProvider)
 import LLM.TestKit (recordConversation, recordedConversationPrompts)
 import Options.Applicative
   ( Parser,
@@ -130,7 +131,7 @@ main = do
     die "--generated-only and --streamed-only are mutually exclusive"
   when (opts.optThinking && opts.optNoThinking) $
     die "--thinking and --no-thinking are mutually exclusive"
-  gateway <- loadGateway opts.optProvider
+  provider <- loadProvider opts.optProvider
   let modelName = fromMaybe (defaultModel opts.optProvider) opts.optModel
       thinking = resolveThinking opts
   putStrLn $
@@ -142,9 +143,9 @@ main = do
         "  prompts: " <> show (map T.unpack recordedConversationPrompts)
       ]
   unless opts.optStreamedOnly $
-    void $ recordConversation False gateway modelName thinking opts.optGeneratedOut
+    void $ recordConversation False provider modelName thinking opts.optGeneratedOut
   unless opts.optGeneratedOnly $
-    void $ recordConversation True gateway modelName thinking opts.optStreamedOut
+    void $ recordConversation True provider modelName thinking opts.optStreamedOut
   putStrLn "Done."
 
 optionsInfo :: ParserInfo Options
@@ -158,13 +159,13 @@ optionsInfo =
         ]
     )
 
-loadGateway :: ProviderName -> IO LLMGateway
-loadGateway = \case
-  Ollama -> pure ollamaGateway
-  OpenAI -> requireEnv "OPENAI_API_KEY" >>= pure . openAIGateway . T.pack
-  Claude -> requireEnv "CLAUDE_API_KEY" >>= pure . claudeGateway . T.pack
-  Gemini -> requireEnv "GEMINI_API_KEY" >>= pure . geminiGateway . T.pack
-  DeepSeek -> requireEnv "DEEPSEEK_API_KEY" >>= pure . deepSeekGateway . T.pack
+loadProvider :: ProviderName -> IO LLMProvider
+loadProvider = \case
+  Ollama -> pure ollamaProvider
+  OpenAI -> requireEnv "OPENAI_API_KEY" >>= pure . openAIProvider . T.pack
+  Claude -> requireEnv "CLAUDE_API_KEY" >>= pure . claudeProvider . T.pack
+  Gemini -> requireEnv "GEMINI_API_KEY" >>= pure . geminiProvider . T.pack
+  DeepSeek -> requireEnv "DEEPSEEK_API_KEY" >>= pure . deepSeekProvider . T.pack
 
 requireEnv :: String -> IO String
 requireEnv name = do

@@ -8,6 +8,7 @@ where
 
 import Control.Exception (try)
 import Data.Aeson (Value)
+import Data.ByteString (ByteString)
 import Data.Text (Text)
 import Data.Text qualified as T
 import LLM.Core.Types
@@ -29,9 +30,13 @@ data LLMProvider = LLMProvider
     buildBody :: Bool -> ChatRequest -> Value,
     -- | Make a non-streaming HTTP call, returning (status code, response JSON).
     sendRequest :: Value -> IO (Int, Value),
-    -- | Make a streaming HTTP call. The handler receives the raw response
-    -- and should parse it (checking status, reading body, etc.).
-    sendStreamRequest :: Value -> (StreamEvent -> IO ()) -> IO LLMTextResult,
+    -- | Make a streaming HTTP call. On a 200 response the continuation receives
+    -- a reader over the raw body (empty chunk = EOF); other statuses become an
+    -- 'HttpError' without calling it.
+    openStream :: Value -> (IO ByteString -> IO LLMTextResult) -> IO LLMTextResult,
+    -- | Parse a raw streaming body. Receives the request body (e.g. for the
+    -- model name), the body reader and the stream event callback.
+    parseStream :: Value -> IO ByteString -> (StreamEvent -> IO ()) -> IO LLMTextResult,
     -- | Parse a complete (non-streaming) JSON response body.
     parseResponse :: Value -> IO LLMTextResult,
     -- | Build the JSON request body for object generation.
@@ -47,7 +52,7 @@ genericStreamText :: LLMProvider -> LLMHooks -> ChatRequest -> (StreamEvent -> I
 genericStreamText p hooks r callback = do
   let body = p.buildBody True r
   hooks.onLLMRequest p.providerName body
-  result <- try (p.sendStreamRequest body callback)
+  result <- try (p.openStream body (\readChunk -> p.parseStream body readChunk callback))
   case result of
     Left e -> do
       hooks.onLLMResponseError p.providerName (T.pack (show (e :: HttpException)))

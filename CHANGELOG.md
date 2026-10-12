@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `LLMProvider.sendStreamRequest` is split into `openStream`
+  (HTTP transport; hands the raw body reader to a continuation) and
+  `parseStream` (turns raw body bytes into a response). Custom providers must
+  implement both. Streaming behaviour is unchanged; the split lets recorded
+  conversation fixtures capture the raw SSE body and replay it through the
+  real stream parsers.
+
 ### Fixed
 
 - `remove_directory` no longer deletes the whole workspace when given a path

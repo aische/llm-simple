@@ -108,7 +108,7 @@ geminiProviderWith baseUrl baseOpts apiKey =
     { providerName = geminiProviderName,
       buildBody = const geminiBuildBody,
       sendRequest = sendRequest,
-      sendStreamRequest = \body callback ->
+      openStream = \body k ->
         runReq lenientConfig $ do
           let model = extractModel body
               url =
@@ -118,7 +118,8 @@ geminiProviderWith baseUrl baseOpts apiKey =
                   /: (model <> ":streamGenerateContent")
               opts = baseOpts <> geminiAuthOpts apiKey <> "alt" =: ("sse" :: Text)
           reqBr POST url (ReqBodyJson (stripModel body)) opts $ \resp ->
-            handleStreamResponse resp (`parseGeminiStream` callback),
+            handleStreamResponse resp k,
+      parseStream = const parseGeminiStream,
       parseResponse = parseGeminiResponse,
       buildObjectBody = \r schema ->
         object $

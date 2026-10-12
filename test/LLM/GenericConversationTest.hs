@@ -1,6 +1,8 @@
 module LLM.GenericConversationTest (createSpec, GenericConversationTextOps (..)) where
 
+import Control.Monad (when)
 import Data.Map qualified as Map
+import Data.Maybe (isNothing)
 import Data.Text qualified as T
 import Heptapod (generate)
 import LLM (LLMHooks (..))
@@ -18,13 +20,14 @@ import LLM.Generate.ModelConfig
     defaultModelCapabilities,
   )
 import LLM.TestKit
-  ( loadRecordedConversation,
+  ( MockRequestResponse (..),
+    loadRecordedConversation,
     mockProvider,
     recordedConversationSystemPrompt,
     streamChatLoop,
   )
 import LLM.WeatherTool (weatherToolTyped)
-import Test.Hspec (Spec, describe, it, shouldBe)
+import Test.Hspec (Spec, describe, it, pendingWith, shouldBe)
 
 data GenericConversationTextOps = GenericConversationTextOps
   { specTitle :: String,
@@ -89,6 +92,8 @@ createSpec opts = describe opts.specTitle $ do
 
   it "streamText" $ do
     (m, p) <- loadRecordedConversation opts.filePathStreamed
+    when (any (isNothing . (.sse)) (Map.elems m)) $
+      pendingWith ("fixture has no raw SSE bodies; re-record " <> opts.filePathStreamed)
     uuid1 <- generate
     let provider = toGateway $ mockProvider m opts.specProvider
         modelConf = mkModelConfig opts provider

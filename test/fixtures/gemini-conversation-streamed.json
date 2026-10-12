@@ -35,7 +35,9 @@
                                         "type": "string"
                                     }
                                 },
-                                "required": ["location"],
+                                "required": [
+                                    "location"
+                                ],
                                 "type": "object"
                             }
                         }
@@ -47,21 +49,33 @@
             "content": [
                 {
                     "arguments": {
-                        "location": "London"
+                        "location": "london"
                     },
                     "id": "call_3",
                     "name": "get_weather",
+                    "provider_meta": {
+                        "model": "gemini-2.5-flash",
+                        "payload": {
+                            "thoughtSignature": "CiQBaRR9E1bQKFDb1IdCRw/EwdzLL8d3nA9HW1uaE6faGtp/yJkKbgFpFH0THbbSxOnGPDEv9ClVdoqXwmLCFArKL60PLMXEWPW7sNdcYw8NpJ+AYt2PrSUqTUa3/CycUwxkaatMAZH+XwtkGk9fWK82f1kIyp/849p37fZlAGNVYetP7OoHqwzVtMfSVS92pTGO7Zy7CskBAWkUfRMyfjq19zfhRokIcvIu7DY+jDwoabfNpANlgtBuXPnDnKlCy2kvjMd9lQCAF9UC4Awi9r9NClqa7D4W5tbKdNswYMlvXfTbcRRcuSJODFQKgLqXtLAS0NLLs1j96KjQrGJKWeGHvUxiQ1NTIGnOk0DimDdsZ9sSm94RYNkPmCsQSbOZJH5/8GO20HhJA90WsqRtufz8KFenR9b+N1yBpEwGVNdzRWvQYNQ40z14yJ8ue0ZHTJFCGL1/k1Rcq798v6ZhKdHR"
+                        },
+                        "provider": "gemini"
+                    },
                     "type": "tool_call"
                 }
             ],
+            "reasoning": null,
             "text": "",
             "usage": {
+                "cache_creation_tokens": 0,
+                "cache_read_tokens": 0,
                 "input_tokens": 80,
                 "output_tokens": 15
             }
-        }
+        },
+        "sse": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"get_weather\",\"args\": {\"location\": \"london\"}},\"thoughtSignature\": \"CiQBaRR9E1bQKFDb1IdCRw/EwdzLL8d3nA9HW1uaE6faGtp/yJkKbgFpFH0THbbSxOnGPDEv9ClVdoqXwmLCFArKL60PLMXEWPW7sNdcYw8NpJ+AYt2PrSUqTUa3/CycUwxkaatMAZH+XwtkGk9fWK82f1kIyp/849p37fZlAGNVYetP7OoHqwzVtMfSVS92pTGO7Zy7CskBAWkUfRMyfjq19zfhRokIcvIu7DY+jDwoabfNpANlgtBuXPnDnKlCy2kvjMd9lQCAF9UC4Awi9r9NClqa7D4W5tbKdNswYMlvXfTbcRRcuSJODFQKgLqXtLAS0NLLs1j96KjQrGJKWeGHvUxiQ1NTIGnOk0DimDdsZ9sSm94RYNkPmCsQSbOZJH5/8GO20HhJA90WsqRtufz8KFenR9b+N1yBpEwGVNdzRWvQYNQ40z14yJ8ue0ZHTJFCGL1/k1Rcq798v6ZhKdHR\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0,\"finishMessage\": \"Model generated function call(s).\"}],\"usageMetadata\": {\"promptTokenCount\": 80,\"candidatesTokenCount\": 15,\"totalTokenCount\": 154,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 80}],\"thoughtsTokenCount\": 59,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash\",\"responseId\": \"OS7Navm-Dv7_vdIPqLDGgAk\"}\r\n\r\n"
     },
     {
+        "prompt": null,
         "request": {
             "_model": "gemini-2.5-flash",
             "contents": [
@@ -78,10 +92,11 @@
                         {
                             "functionCall": {
                                 "args": {
-                                    "location": "London"
+                                    "location": "london"
                                 },
                                 "name": "get_weather"
-                            }
+                            },
+                            "thoughtSignature": "CiQBaRR9E1bQKFDb1IdCRw/EwdzLL8d3nA9HW1uaE6faGtp/yJkKbgFpFH0THbbSxOnGPDEv9ClVdoqXwmLCFArKL60PLMXEWPW7sNdcYw8NpJ+AYt2PrSUqTUa3/CycUwxkaatMAZH+XwtkGk9fWK82f1kIyp/849p37fZlAGNVYetP7OoHqwzVtMfSVS92pTGO7Zy7CskBAWkUfRMyfjq19zfhRokIcvIu7DY+jDwoabfNpANlgtBuXPnDnKlCy2kvjMd9lQCAF9UC4Awi9r9NClqa7D4W5tbKdNswYMlvXfTbcRRcuSJODFQKgLqXtLAS0NLLs1j96KjQrGJKWeGHvUxiQ1NTIGnOk0DimDdsZ9sSm94RYNkPmCsQSbOZJH5/8GO20HhJA90WsqRtufz8KFenR9b+N1yBpEwGVNdzRWvQYNQ40z14yJ8ue0ZHTJFCGL1/k1Rcq798v6ZhKdHR"
                         }
                     ],
                     "role": "model"
@@ -122,7 +137,9 @@
                                         "type": "string"
                                     }
                                 },
-                                "required": ["location"],
+                                "required": [
+                                    "location"
+                                ],
                                 "type": "object"
                             }
                         }
@@ -133,24 +150,20 @@
         "response": {
             "content": [
                 {
-                    "text": "The",
-                    "type": "text"
-                },
-                {
-                    "text": " weather in London is partly cloudy, 18°C, with a light breeze from",
-                    "type": "text"
-                },
-                {
-                    "text": " the west. \n",
+                    "text": "The weather in London is partly cloudy, 18°C, with a light breeze from the west.",
                     "type": "text"
                 }
             ],
-            "text": "The weather in London is partly cloudy, 18°C, with a light breeze from the west. \n",
+            "reasoning": null,
+            "text": "The weather in London is partly cloudy, 18°C, with a light breeze from the west.",
             "usage": {
-                "input_tokens": 128,
+                "cache_creation_tokens": 0,
+                "cache_read_tokens": 0,
+                "input_tokens": 187,
                 "output_tokens": 22
             }
-        }
+        },
+        "sse": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"The weather in London\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 187,\"candidatesTokenCount\": 4,\"totalTokenCount\": 191,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 187}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash\",\"responseId\": \"Oi7NaujWAa2ExN8P89zcgQg\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \" is partly cloudy, 18°C, with a light breeze from the west.\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 187,\"candidatesTokenCount\": 22,\"totalTokenCount\": 209,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 187}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash\",\"responseId\": \"Oi7NaujWAa2ExN8P89zcgQg\"}\r\n\r\n"
     },
     {
         "prompt": "and in paris?",
@@ -170,10 +183,11 @@
                         {
                             "functionCall": {
                                 "args": {
-                                    "location": "London"
+                                    "location": "london"
                                 },
                                 "name": "get_weather"
-                            }
+                            },
+                            "thoughtSignature": "CiQBaRR9E1bQKFDb1IdCRw/EwdzLL8d3nA9HW1uaE6faGtp/yJkKbgFpFH0THbbSxOnGPDEv9ClVdoqXwmLCFArKL60PLMXEWPW7sNdcYw8NpJ+AYt2PrSUqTUa3/CycUwxkaatMAZH+XwtkGk9fWK82f1kIyp/849p37fZlAGNVYetP7OoHqwzVtMfSVS92pTGO7Zy7CskBAWkUfRMyfjq19zfhRokIcvIu7DY+jDwoabfNpANlgtBuXPnDnKlCy2kvjMd9lQCAF9UC4Awi9r9NClqa7D4W5tbKdNswYMlvXfTbcRRcuSJODFQKgLqXtLAS0NLLs1j96KjQrGJKWeGHvUxiQ1NTIGnOk0DimDdsZ9sSm94RYNkPmCsQSbOZJH5/8GO20HhJA90WsqRtufz8KFenR9b+N1yBpEwGVNdzRWvQYNQ40z14yJ8ue0ZHTJFCGL1/k1Rcq798v6ZhKdHR"
                         }
                     ],
                     "role": "model"
@@ -194,7 +208,7 @@
                 {
                     "parts": [
                         {
-                            "text": "The weather in London is partly cloudy, 18°C, with a light breeze from the west. \n"
+                            "text": "The weather in London is partly cloudy, 18°C, with a light breeze from the west."
                         }
                     ],
                     "role": "model"
@@ -230,7 +244,9 @@
                                         "type": "string"
                                     }
                                 },
-                                "required": ["location"],
+                                "required": [
+                                    "location"
+                                ],
                                 "type": "object"
                             }
                         }
@@ -242,21 +258,33 @@
             "content": [
                 {
                     "arguments": {
-                        "location": "Paris"
+                        "location": "paris"
                     },
                     "id": "call_8",
                     "name": "get_weather",
+                    "provider_meta": {
+                        "model": "gemini-2.5-flash",
+                        "payload": {
+                            "thoughtSignature": "CiQBaRR9EyXvkCduORckP6Gd3AwN7JRlQTOFepCIqTV3p1bf5YoKYQFpFH0T6odim/izeA1QBHQ4ooFrwCGXlJ8JzWewHhM6MS5qBnQjM9bUB2pJeoVGWC6wqJTNHp0kh2QP2P9kBvUWsccL/6IAgVZmVR9qOeWhun5Ye7XIo66bHi6ozVag5+sKMAFpFH0TFr+bKrK6F+Q0knAs07pXDXdHPATItqO1PJBM9pvJ9Y/mVOajK8JmoYv5Pgp3AWkUfRPFRL2DVEVug3eX8/UCTche9nghcBzrDhj0FLlEa+vfDqLiV7+xtEjv5ICphg3cq39asZClLQ/qAqIHzNo1XVrpxCQKaLVVBkB3YXJohSex+FQYMsowW1zOwKUycx2akiiaaWR2bCE44y4zJ8YW453nccMKVwFpFH0T4bYsGa/XUdVDKILzrvMYuqgai6XQ3yoOU6fwGnkWOaoqUNTXWOdCsxqE22HL1YsnBzuDlk9yc8QOBfcVcA3kmrJkZbzpdwrVdOLIp6x9FWN23Q=="
+                        },
+                        "provider": "gemini"
+                    },
                     "type": "tool_call"
                 }
             ],
+            "reasoning": null,
             "text": "",
             "usage": {
-                "input_tokens": 158,
+                "cache_creation_tokens": 0,
+                "cache_read_tokens": 0,
+                "input_tokens": 156,
                 "output_tokens": 15
             }
-        }
+        },
+        "sse": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"get_weather\",\"args\": {\"location\": \"paris\"}},\"thoughtSignature\": \"CiQBaRR9EyXvkCduORckP6Gd3AwN7JRlQTOFepCIqTV3p1bf5YoKYQFpFH0T6odim/izeA1QBHQ4ooFrwCGXlJ8JzWewHhM6MS5qBnQjM9bUB2pJeoVGWC6wqJTNHp0kh2QP2P9kBvUWsccL/6IAgVZmVR9qOeWhun5Ye7XIo66bHi6ozVag5+sKMAFpFH0TFr+bKrK6F+Q0knAs07pXDXdHPATItqO1PJBM9pvJ9Y/mVOajK8JmoYv5Pgp3AWkUfRPFRL2DVEVug3eX8/UCTche9nghcBzrDhj0FLlEa+vfDqLiV7+xtEjv5ICphg3cq39asZClLQ/qAqIHzNo1XVrpxCQKaLVVBkB3YXJohSex+FQYMsowW1zOwKUycx2akiiaaWR2bCE44y4zJ8YW453nccMKVwFpFH0T4bYsGa/XUdVDKILzrvMYuqgai6XQ3yoOU6fwGnkWOaoqUNTXWOdCsxqE22HL1YsnBzuDlk9yc8QOBfcVcA3kmrJkZbzpdwrVdOLIp6x9FWN23Q==\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0,\"finishMessage\": \"Model generated function call(s).\"}],\"usageMetadata\": {\"promptTokenCount\": 156,\"candidatesTokenCount\": 15,\"totalTokenCount\": 223,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 156}],\"thoughtsTokenCount\": 52,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash\",\"responseId\": \"Oi7NauCwGuTR28oPquKmuAk\"}\r\n\r\n"
     },
     {
+        "prompt": null,
         "request": {
             "_model": "gemini-2.5-flash",
             "contents": [
@@ -273,10 +301,11 @@
                         {
                             "functionCall": {
                                 "args": {
-                                    "location": "London"
+                                    "location": "london"
                                 },
                                 "name": "get_weather"
-                            }
+                            },
+                            "thoughtSignature": "CiQBaRR9E1bQKFDb1IdCRw/EwdzLL8d3nA9HW1uaE6faGtp/yJkKbgFpFH0THbbSxOnGPDEv9ClVdoqXwmLCFArKL60PLMXEWPW7sNdcYw8NpJ+AYt2PrSUqTUa3/CycUwxkaatMAZH+XwtkGk9fWK82f1kIyp/849p37fZlAGNVYetP7OoHqwzVtMfSVS92pTGO7Zy7CskBAWkUfRMyfjq19zfhRokIcvIu7DY+jDwoabfNpANlgtBuXPnDnKlCy2kvjMd9lQCAF9UC4Awi9r9NClqa7D4W5tbKdNswYMlvXfTbcRRcuSJODFQKgLqXtLAS0NLLs1j96KjQrGJKWeGHvUxiQ1NTIGnOk0DimDdsZ9sSm94RYNkPmCsQSbOZJH5/8GO20HhJA90WsqRtufz8KFenR9b+N1yBpEwGVNdzRWvQYNQ40z14yJ8ue0ZHTJFCGL1/k1Rcq798v6ZhKdHR"
                         }
                     ],
                     "role": "model"
@@ -297,7 +326,7 @@
                 {
                     "parts": [
                         {
-                            "text": "The weather in London is partly cloudy, 18°C, with a light breeze from the west. \n"
+                            "text": "The weather in London is partly cloudy, 18°C, with a light breeze from the west."
                         }
                     ],
                     "role": "model"
@@ -315,10 +344,11 @@
                         {
                             "functionCall": {
                                 "args": {
-                                    "location": "Paris"
+                                    "location": "paris"
                                 },
                                 "name": "get_weather"
-                            }
+                            },
+                            "thoughtSignature": "CiQBaRR9EyXvkCduORckP6Gd3AwN7JRlQTOFepCIqTV3p1bf5YoKYQFpFH0T6odim/izeA1QBHQ4ooFrwCGXlJ8JzWewHhM6MS5qBnQjM9bUB2pJeoVGWC6wqJTNHp0kh2QP2P9kBvUWsccL/6IAgVZmVR9qOeWhun5Ye7XIo66bHi6ozVag5+sKMAFpFH0TFr+bKrK6F+Q0knAs07pXDXdHPATItqO1PJBM9pvJ9Y/mVOajK8JmoYv5Pgp3AWkUfRPFRL2DVEVug3eX8/UCTche9nghcBzrDhj0FLlEa+vfDqLiV7+xtEjv5ICphg3cq39asZClLQ/qAqIHzNo1XVrpxCQKaLVVBkB3YXJohSex+FQYMsowW1zOwKUycx2akiiaaWR2bCE44y4zJ8YW453nccMKVwFpFH0T4bYsGa/XUdVDKILzrvMYuqgai6XQ3yoOU6fwGnkWOaoqUNTXWOdCsxqE22HL1YsnBzuDlk9yc8QOBfcVcA3kmrJkZbzpdwrVdOLIp6x9FWN23Q=="
                         }
                     ],
                     "role": "model"
@@ -359,7 +389,9 @@
                                         "type": "string"
                                     }
                                 },
-                                "required": ["location"],
+                                "required": [
+                                    "location"
+                                ],
                                 "type": "object"
                             }
                         }
@@ -370,19 +402,19 @@
         "response": {
             "content": [
                 {
-                    "text": "The weather in Paris",
-                    "type": "text"
-                },
-                {
-                    "text": " is sunny, 23°C, with no wind.",
+                    "text": "The weather in Paris is sunny, 23°C, with no wind.",
                     "type": "text"
                 }
             ],
+            "reasoning": null,
             "text": "The weather in Paris is sunny, 23°C, with no wind.",
             "usage": {
-                "input_tokens": 202,
-                "output_tokens": 17
+                "cache_creation_tokens": 0,
+                "cache_read_tokens": 0,
+                "input_tokens": 252,
+                "output_tokens": 16
             }
-        }
+        },
+        "sse": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"The weather in Paris\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 252,\"candidatesTokenCount\": 4,\"totalTokenCount\": 256,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 252}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash\",\"responseId\": \"Oy7NauqyJtzAxN8Pho7W0A0\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \" is sunny, \"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 252,\"candidatesTokenCount\": 7,\"totalTokenCount\": 259,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 252}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash\",\"responseId\": \"Oy7NauqyJtzAxN8Pho7W0A0\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"23°C, with no wind.\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 252,\"candidatesTokenCount\": 16,\"totalTokenCount\": 268,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 252}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash\",\"responseId\": \"Oy7NauqyJtzAxN8Pho7W0A0\"}\r\n\r\n"
     }
 ]

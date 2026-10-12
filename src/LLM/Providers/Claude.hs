@@ -131,13 +131,15 @@ claudeProviderWith baseUrl baseOpts apiKey =
     { providerName = claudeProviderName,
       buildBody = claudeBuildBody,
       sendRequest = sendRequest,
-      sendStreamRequest = \body callback ->
+      openStream = \body k ->
         runReq lenientConfig $ do
           let url = baseUrl /: "v1" /: "messages"
               opts = baseOpts <> claudeAuthOpts apiKey
-              modelHint = fromMaybe "" (parseMaybe (withObject "body" (.: "model")) body)
           reqBr POST url (ReqBodyJson body) opts $ \resp ->
-            handleStreamResponse resp (\br -> parseClaudeStream modelHint (HC.brRead br) callback),
+            handleStreamResponse resp (k . HC.brRead),
+      parseStream = \body readChunk callback ->
+        let modelHint = fromMaybe "" (parseMaybe (withObject "body" (.: "model")) body)
+         in parseClaudeStream modelHint readChunk callback,
       parseResponse = pure . parseClaudeResponse,
       buildObjectBody = \r schema ->
         let schemaText = TL.toStrict . decodeUtf8 $ encode schema

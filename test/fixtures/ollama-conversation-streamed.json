@@ -28,7 +28,9 @@
                                     "type": "string"
                                 }
                             },
-                            "required": ["location"],
+                            "required": [
+                                "location"
+                            ],
                             "type": "object"
                         }
                     },
@@ -42,16 +44,19 @@
                     "arguments": {
                         "location": "London"
                     },
-                    "id": "call_exlttt87",
+                    "id": "call_7h1w7jtm",
                     "name": "get_weather",
                     "type": "tool_call"
                 }
             ],
+            "reasoning": null,
             "text": "",
             "usage": null
-        }
+        },
+        "sse": "data: {\"id\":\"chatcmpl-380\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call_7h1w7jtm\",\"index\":0,\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"location\\\":\\\"London\\\"}\"}}]},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-380\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n"
     },
     {
+        "prompt": null,
         "request": {
             "messages": [
                 {
@@ -70,7 +75,7 @@
                                 "arguments": "{\"location\":\"London\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_exlttt87",
+                            "id": "call_7h1w7jtm",
                             "type": "function"
                         }
                     ]
@@ -78,7 +83,7 @@
                 {
                     "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
                     "role": "tool",
-                    "tool_call_id": "call_exlttt87"
+                    "tool_call_id": "call_7h1w7jtm"
                 }
             ],
             "model": "llama3.2:latest",
@@ -97,7 +102,9 @@
                                     "type": "string"
                                 }
                             },
-                            "required": ["location"],
+                            "required": [
+                                "location"
+                            ],
                             "type": "object"
                         }
                     },
@@ -108,221 +115,15 @@
         "response": {
             "content": [
                 {
-                    "text": "Currently",
-                    "type": "text"
-                },
-                {
-                    "text": ",",
-                    "type": "text"
-                },
-                {
-                    "text": " it",
-                    "type": "text"
-                },
-                {
-                    "text": "'s",
-                    "type": "text"
-                },
-                {
-                    "text": " partly",
-                    "type": "text"
-                },
-                {
-                    "text": " cloudy",
-                    "type": "text"
-                },
-                {
-                    "text": " in",
-                    "type": "text"
-                },
-                {
-                    "text": " London",
-                    "type": "text"
-                },
-                {
-                    "text": " with",
-                    "type": "text"
-                },
-                {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " temperature",
-                    "type": "text"
-                },
-                {
-                    "text": " of",
-                    "type": "text"
-                },
-                {
-                    "text": " ",
-                    "type": "text"
-                },
-                {
-                    "text": "18",
-                    "type": "text"
-                },
-                {
-                    "text": "°C",
-                    "type": "text"
-                },
-                {
-                    "text": " (",
-                    "type": "text"
-                },
-                {
-                    "text": "64",
-                    "type": "text"
-                },
-                {
-                    "text": "°F",
-                    "type": "text"
-                },
-                {
-                    "text": ")",
-                    "type": "text"
-                },
-                {
-                    "text": " and",
-                    "type": "text"
-                },
-                {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " gentle",
-                    "type": "text"
-                },
-                {
-                    "text": " breeze",
-                    "type": "text"
-                },
-                {
-                    "text": " blowing",
-                    "type": "text"
-                },
-                {
-                    "text": " from",
-                    "type": "text"
-                },
-                {
-                    "text": " the",
-                    "type": "text"
-                },
-                {
-                    "text": " west",
-                    "type": "text"
-                },
-                {
-                    "text": ".",
-                    "type": "text"
-                },
-                {
-                    "text": " If",
-                    "type": "text"
-                },
-                {
-                    "text": " you",
-                    "type": "text"
-                },
-                {
-                    "text": "'d",
-                    "type": "text"
-                },
-                {
-                    "text": " like",
-                    "type": "text"
-                },
-                {
-                    "text": " to",
-                    "type": "text"
-                },
-                {
-                    "text": " know",
-                    "type": "text"
-                },
-                {
-                    "text": " more",
-                    "type": "text"
-                },
-                {
-                    "text": " about",
-                    "type": "text"
-                },
-                {
-                    "text": " the",
-                    "type": "text"
-                },
-                {
-                    "text": " weather",
-                    "type": "text"
-                },
-                {
-                    "text": " or",
-                    "type": "text"
-                },
-                {
-                    "text": " get",
-                    "type": "text"
-                },
-                {
-                    "text": " the",
-                    "type": "text"
-                },
-                {
-                    "text": " forecast",
-                    "type": "text"
-                },
-                {
-                    "text": " for",
-                    "type": "text"
-                },
-                {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " specific",
-                    "type": "text"
-                },
-                {
-                    "text": " date",
-                    "type": "text"
-                },
-                {
-                    "text": ",",
-                    "type": "text"
-                },
-                {
-                    "text": " I",
-                    "type": "text"
-                },
-                {
-                    "text": " can",
-                    "type": "text"
-                },
-                {
-                    "text": " try",
-                    "type": "text"
-                },
-                {
-                    "text": " to",
-                    "type": "text"
-                },
-                {
-                    "text": " help",
-                    "type": "text"
-                },
-                {
-                    "text": "!",
+                    "text": "According to current weather conditions in London, it is a pleasant day with partly cloudy skies and a temperature of 18 degrees Celsius. There is a gentle breeze blowing at a light velocity from the west.",
                     "type": "text"
                 }
             ],
-            "text": "Currently, it's partly cloudy in London with a temperature of 18°C (64°F) and a gentle breeze blowing from the west. If you'd like to know more about the weather or get the forecast for a specific date, I can try to help!",
+            "reasoning": null,
+            "text": "According to current weather conditions in London, it is a pleasant day with partly cloudy skies and a temperature of 18 degrees Celsius. There is a gentle breeze blowing at a light velocity from the west.",
             "usage": null
-        }
+        },
+        "sse": "data: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"According\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" to\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" current\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" weather\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" conditions\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" in\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" London\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\",\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" it\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" is\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" a\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" pleasant\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" day\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" with\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" partly\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" cloudy\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" skies\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" and\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" a\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" temperature\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" of\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" \"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831593,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"18\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" degrees\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" Celsius\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\".\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" There\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" is\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" a\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" gentle\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" breeze\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" blowing\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" at\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" a\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" light\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" velocity\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" from\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" the\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" west\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\".\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-630\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
     },
     {
         "prompt": "and in paris?",
@@ -344,7 +145,7 @@
                                 "arguments": "{\"location\":\"London\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_exlttt87",
+                            "id": "call_7h1w7jtm",
                             "type": "function"
                         }
                     ]
@@ -352,10 +153,10 @@
                 {
                     "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
                     "role": "tool",
-                    "tool_call_id": "call_exlttt87"
+                    "tool_call_id": "call_7h1w7jtm"
                 },
                 {
-                    "content": "Currently, it's partly cloudy in London with a temperature of 18°C (64°F) and a gentle breeze blowing from the west. If you'd like to know more about the weather or get the forecast for a specific date, I can try to help!",
+                    "content": "According to current weather conditions in London, it is a pleasant day with partly cloudy skies and a temperature of 18 degrees Celsius. There is a gentle breeze blowing at a light velocity from the west.",
                     "role": "assistant"
                 },
                 {
@@ -379,7 +180,9 @@
                                     "type": "string"
                                 }
                             },
-                            "required": ["location"],
+                            "required": [
+                                "location"
+                            ],
                             "type": "object"
                         }
                     },
@@ -393,16 +196,19 @@
                     "arguments": {
                         "location": "Paris"
                     },
-                    "id": "call_stz2hn4d",
+                    "id": "call_i80qciax",
                     "name": "get_weather",
                     "type": "tool_call"
                 }
             ],
+            "reasoning": null,
             "text": "",
             "usage": null
-        }
+        },
+        "sse": "data: {\"id\":\"chatcmpl-516\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call_i80qciax\",\"index\":0,\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"location\\\":\\\"Paris\\\"}\"}}]},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-516\",\"object\":\"chat.completion.chunk\",\"created\":1791831594,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n"
     },
     {
+        "prompt": null,
         "request": {
             "messages": [
                 {
@@ -421,7 +227,7 @@
                                 "arguments": "{\"location\":\"London\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_exlttt87",
+                            "id": "call_7h1w7jtm",
                             "type": "function"
                         }
                     ]
@@ -429,10 +235,10 @@
                 {
                     "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
                     "role": "tool",
-                    "tool_call_id": "call_exlttt87"
+                    "tool_call_id": "call_7h1w7jtm"
                 },
                 {
-                    "content": "Currently, it's partly cloudy in London with a temperature of 18°C (64°F) and a gentle breeze blowing from the west. If you'd like to know more about the weather or get the forecast for a specific date, I can try to help!",
+                    "content": "According to current weather conditions in London, it is a pleasant day with partly cloudy skies and a temperature of 18 degrees Celsius. There is a gentle breeze blowing at a light velocity from the west.",
                     "role": "assistant"
                 },
                 {
@@ -447,7 +253,7 @@
                                 "arguments": "{\"location\":\"Paris\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_stz2hn4d",
+                            "id": "call_i80qciax",
                             "type": "function"
                         }
                     ]
@@ -455,7 +261,7 @@
                 {
                     "content": "Weather in Paris is sunny, 23°C, no wind.",
                     "role": "tool",
-                    "tool_call_id": "call_stz2hn4d"
+                    "tool_call_id": "call_i80qciax"
                 }
             ],
             "model": "llama3.2:latest",
@@ -474,7 +280,9 @@
                                     "type": "string"
                                 }
                             },
-                            "required": ["location"],
+                            "required": [
+                                "location"
+                            ],
                             "type": "object"
                         }
                     },
@@ -485,240 +293,14 @@
         "response": {
             "content": [
                 {
-                    "text": "Currently",
-                    "type": "text"
-                },
-                {
-                    "text": ",",
-                    "type": "text"
-                },
-                {
-                    "text": " it",
-                    "type": "text"
-                },
-                {
-                    "text": "'s",
-                    "type": "text"
-                },
-                {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " beautiful",
-                    "type": "text"
-                },
-                {
-                    "text": " day",
-                    "type": "text"
-                },
-                {
-                    "text": " in",
-                    "type": "text"
-                },
-                {
-                    "text": " Paris",
-                    "type": "text"
-                },
-                {
-                    "text": " with",
-                    "type": "text"
-                },
-                {
-                    "text": " plenty",
-                    "type": "text"
-                },
-                {
-                    "text": " of",
-                    "type": "text"
-                },
-                {
-                    "text": " sunlight",
-                    "type": "text"
-                },
-                {
-                    "text": " and",
-                    "type": "text"
-                },
-                {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " warm",
-                    "type": "text"
-                },
-                {
-                    "text": " temperature",
-                    "type": "text"
-                },
-                {
-                    "text": " of",
-                    "type": "text"
-                },
-                {
-                    "text": " ",
-                    "type": "text"
-                },
-                {
-                    "text": "23",
-                    "type": "text"
-                },
-                {
-                    "text": "°C",
-                    "type": "text"
-                },
-                {
-                    "text": " (",
-                    "type": "text"
-                },
-                {
-                    "text": "73",
-                    "type": "text"
-                },
-                {
-                    "text": "°F",
-                    "type": "text"
-                },
-                {
-                    "text": ").",
-                    "type": "text"
-                },
-                {
-                    "text": " The",
-                    "type": "text"
-                },
-                {
-                    "text": " wind",
-                    "type": "text"
-                },
-                {
-                    "text": " speed",
-                    "type": "text"
-                },
-                {
-                    "text": " is",
-                    "type": "text"
-                },
-                {
-                    "text": " zero",
-                    "type": "text"
-                },
-                {
-                    "text": ",",
-                    "type": "text"
-                },
-                {
-                    "text": " indicating",
-                    "type": "text"
-                },
-                {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " calm",
-                    "type": "text"
-                },
-                {
-                    "text": " atmosphere",
-                    "type": "text"
-                },
-                {
-                    "text": ".",
-                    "type": "text"
-                },
-                {
-                    "text": " If",
-                    "type": "text"
-                },
-                {
-                    "text": " you",
-                    "type": "text"
-                },
-                {
-                    "text": "'re",
-                    "type": "text"
-                },
-                {
-                    "text": " planning",
-                    "type": "text"
-                },
-                {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " trip",
-                    "type": "text"
-                },
-                {
-                    "text": " to",
-                    "type": "text"
-                },
-                {
-                    "text": " the",
-                    "type": "text"
-                },
-                {
-                    "text": " City",
-                    "type": "text"
-                },
-                {
-                    "text": " of",
-                    "type": "text"
-                },
-                {
-                    "text": " Light",
-                    "type": "text"
-                },
-                {
-                    "text": ",",
-                    "type": "text"
-                },
-                {
-                    "text": " this",
-                    "type": "text"
-                },
-                {
-                    "text": " weather",
-                    "type": "text"
-                },
-                {
-                    "text": " forecast",
-                    "type": "text"
-                },
-                {
-                    "text": " might",
-                    "type": "text"
-                },
-                {
-                    "text": " be",
-                    "type": "text"
-                },
-                {
-                    "text": " just",
-                    "type": "text"
-                },
-                {
-                    "text": " what",
-                    "type": "text"
-                },
-                {
-                    "text": " you",
-                    "type": "text"
-                },
-                {
-                    "text": " needed",
-                    "type": "text"
-                },
-                {
-                    "text": "!",
+                    "text": "According to current weather conditions in Paris, it is a sunny day with a temperature of 23 degrees Celsius. The sky is clear and there is no wind to speak of, making it a perfect day to enjoy the city's famous landmarks and attractions.",
                     "type": "text"
                 }
             ],
-            "text": "Currently, it's a beautiful day in Paris with plenty of sunlight and a warm temperature of 23°C (73°F). The wind speed is zero, indicating a calm atmosphere. If you're planning a trip to the City of Light, this weather forecast might be just what you needed!",
+            "reasoning": null,
+            "text": "According to current weather conditions in Paris, it is a sunny day with a temperature of 23 degrees Celsius. The sky is clear and there is no wind to speak of, making it a perfect day to enjoy the city's famous landmarks and attractions.",
             "usage": null
-        }
+        },
+        "sse": "data: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"According\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" to\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" current\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" weather\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" conditions\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" in\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" Paris\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\",\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" it\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" is\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" a\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" sunny\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" day\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" with\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" a\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" temperature\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" of\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" \"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"23\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" degrees\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" Celsius\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\".\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" The\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" sky\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" is\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" clear\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" and\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" there\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" is\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" no\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" wind\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" to\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" speak\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" of\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\",\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" making\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" it\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" a\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" perfect\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" day\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" to\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" enjoy\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" the\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" city\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"'s\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" famous\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" landmarks\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" and\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" attractions\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\".\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-689\",\"object\":\"chat.completion.chunk\",\"created\":1791831595,\"model\":\"llama3.2:latest\",\"system_fingerprint\":\"fp_ollama\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
     }
 ]

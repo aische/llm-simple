@@ -31,7 +31,9 @@
                                     "type": "string"
                                 }
                             },
-                            "required": ["location"],
+                            "required": [
+                                "location"
+                            ],
                             "type": "object"
                         }
                     },
@@ -45,19 +47,24 @@
                     "arguments": {
                         "location": "London"
                     },
-                    "id": "call_p60PwLdhsOTJiiy6W3ntwCx7",
+                    "id": "call_rolc2qOqqIpkgBi9c3AjGJdp",
                     "name": "get_weather",
                     "type": "tool_call"
                 }
             ],
+            "reasoning": null,
             "text": "",
             "usage": {
+                "cache_creation_tokens": 0,
+                "cache_read_tokens": 0,
                 "input_tokens": 84,
                 "output_tokens": 14
             }
-        }
+        },
+        "sse": "data: {\"id\":\"chatcmpl-EYFXgnXPiWvhYoXnGEs3qsPAwkkzH\",\"object\":\"chat.completion.chunk\",\"created\":1791831604,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"index\":0,\"id\":\"call_rolc2qOqqIpkgBi9c3AjGJdp\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"\"}}],\"refusal\":null},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"va0ZsDC5\"}\n\ndata: {\"id\":\"chatcmpl-EYFXgnXPiWvhYoXnGEs3qsPAwkkzH\",\"object\":\"chat.completion.chunk\",\"created\":1791831604,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"\"}}]},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"KI\"}\n\ndata: {\"id\":\"chatcmpl-EYFXgnXPiWvhYoXnGEs3qsPAwkkzH\",\"object\":\"chat.completion.chunk\",\"created\":1791831604,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"location\"}}]},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"xoXvkYjMN1CWu\"}\n\ndata: {\"id\":\"chatcmpl-EYFXgnXPiWvhYoXnGEs3qsPAwkkzH\",\"object\":\"chat.completion.chunk\",\"created\":1791831604,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\":\\\"\"}}]},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"\"}\n\ndata: {\"id\":\"chatcmpl-EYFXgnXPiWvhYoXnGEs3qsPAwkkzH\",\"object\":\"chat.completion.chunk\",\"created\":1791831604,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"London\"}}]},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"bSKKjNvByhoAiII\"}\n\ndata: {\"id\":\"chatcmpl-EYFXgnXPiWvhYoXnGEs3qsPAwkkzH\",\"object\":\"chat.completion.chunk\",\"created\":1791831604,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"}\"}}]},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"i7\"}\n\ndata: {\"id\":\"chatcmpl-EYFXgnXPiWvhYoXnGEs3qsPAwkkzH\",\"object\":\"chat.completion.chunk\",\"created\":1791831604,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{},\"logprobs\":null,\"finish_reason\":\"tool_calls\"}],\"usage\":null,\"obfuscation\":\"Ycm\"}\n\ndata: {\"id\":\"chatcmpl-EYFXgnXPiWvhYoXnGEs3qsPAwkkzH\",\"object\":\"chat.completion.chunk\",\"created\":1791831604,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[],\"usage\":{\"prompt_tokens\":84,\"completion_tokens\":14,\"total_tokens\":98,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"obfuscation\":\"D1Zx8xfEzl9CR8\"}\n\ndata: [DONE]\n\n"
     },
     {
+        "prompt": null,
         "request": {
             "max_completion_tokens": 1024,
             "messages": [
@@ -77,7 +84,7 @@
                                 "arguments": "{\"location\":\"London\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_p60PwLdhsOTJiiy6W3ntwCx7",
+                            "id": "call_rolc2qOqqIpkgBi9c3AjGJdp",
                             "type": "function"
                         }
                     ]
@@ -85,7 +92,7 @@
                 {
                     "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
                     "role": "tool",
-                    "tool_call_id": "call_p60PwLdhsOTJiiy6W3ntwCx7"
+                    "tool_call_id": "call_rolc2qOqqIpkgBi9c3AjGJdp"
                 }
             ],
             "model": "gpt-4.1-2025-04-14",
@@ -106,7 +113,9 @@
                                     "type": "string"
                                 }
                             },
-                            "required": ["location"],
+                            "required": [
+                                "location"
+                            ],
                             "type": "object"
                         }
                     },
@@ -117,104 +126,20 @@
         "response": {
             "content": [
                 {
-                    "text": "The",
-                    "type": "text"
-                },
-                {
-                    "text": " weather",
-                    "type": "text"
-                },
-                {
-                    "text": " in",
-                    "type": "text"
-                },
-                {
-                    "text": " London",
-                    "type": "text"
-                },
-                {
-                    "text": " is",
-                    "type": "text"
-                },
-                {
-                    "text": " partly",
-                    "type": "text"
-                },
-                {
-                    "text": " cloudy",
-                    "type": "text"
-                },
-                {
-                    "text": " with",
-                    "type": "text"
-                },
-                {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " temperature",
-                    "type": "text"
-                },
-                {
-                    "text": " of",
-                    "type": "text"
-                },
-                {
-                    "text": " ",
-                    "type": "text"
-                },
-                {
-                    "text": "18",
-                    "type": "text"
-                },
-                {
-                    "text": "°C",
-                    "type": "text"
-                },
-                {
-                    "text": " and",
-                    "type": "text"
-                },
-                {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " light",
-                    "type": "text"
-                },
-                {
-                    "text": " breeze",
-                    "type": "text"
-                },
-                {
-                    "text": " coming",
-                    "type": "text"
-                },
-                {
-                    "text": " from",
-                    "type": "text"
-                },
-                {
-                    "text": " the",
-                    "type": "text"
-                },
-                {
-                    "text": " west",
-                    "type": "text"
-                },
-                {
-                    "text": ".",
+                    "text": "The weather in London is partly cloudy, with a temperature of 18°C and a light breeze coming from the west.",
                     "type": "text"
                 }
             ],
-            "text": "The weather in London is partly cloudy with a temperature of 18°C and a light breeze coming from the west.",
+            "reasoning": null,
+            "text": "The weather in London is partly cloudy, with a temperature of 18°C and a light breeze coming from the west.",
             "usage": {
+                "cache_creation_tokens": 0,
+                "cache_read_tokens": 0,
                 "input_tokens": 123,
-                "output_tokens": 24
+                "output_tokens": 25
             }
-        }
+        },
+        "sse": "data: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\",\"refusal\":null},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"Rg2310DL4NDTt\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"The\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"FLX8yAJ2iTL8\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" weather\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"5OeA6mU\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" in\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"o0zkOIiJPVD0\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" London\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"DriFrE1n\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" is\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"boexk7KlBxvY\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" partly\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"Ir4rXbYv\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" cloudy\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"UDXQldlH\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\",\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"TKACdWqZD0437K\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" with\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"a5nYEZRMg7\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" a\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"E8tWufncVyTR6\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" temperature\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"YKC\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" of\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"9mPYJaLgHI9b\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"40WgCSgs89AvxD\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"18\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"w33nHLLkiMakd\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"°C\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"z5Zs5ASmVpgca\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" and\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"oDeYj4S96PN\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" a\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"QwphErMf4ICfi\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" light\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"BDJ9SB0aV\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" breeze\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"MEeYj2C5\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" coming\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"ILYESqZy\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" from\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"JPAK9v887j\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" the\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"7GBrKpekfjg\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" west\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"JhxHG9IHVF\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\".\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"Qq8N3mfgEKTmh6\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":null,\"obfuscation\":\"cDU785Xq7\"}\n\ndata: {\"id\":\"chatcmpl-EYFXhFwnrBsOI7NC135l7gX10dK7g\",\"object\":\"chat.completion.chunk\",\"created\":1791831605,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[],\"usage\":{\"prompt_tokens\":123,\"completion_tokens\":25,\"total_tokens\":148,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"obfuscation\":\"reJ4krfYXryt\"}\n\ndata: [DONE]\n\n"
     },
     {
         "prompt": "and in paris?",
@@ -237,7 +162,7 @@
                                 "arguments": "{\"location\":\"London\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_p60PwLdhsOTJiiy6W3ntwCx7",
+                            "id": "call_rolc2qOqqIpkgBi9c3AjGJdp",
                             "type": "function"
                         }
                     ]
@@ -245,10 +170,10 @@
                 {
                     "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
                     "role": "tool",
-                    "tool_call_id": "call_p60PwLdhsOTJiiy6W3ntwCx7"
+                    "tool_call_id": "call_rolc2qOqqIpkgBi9c3AjGJdp"
                 },
                 {
-                    "content": "The weather in London is partly cloudy with a temperature of 18°C and a light breeze coming from the west.",
+                    "content": "The weather in London is partly cloudy, with a temperature of 18°C and a light breeze coming from the west.",
                     "role": "assistant"
                 },
                 {
@@ -274,7 +199,9 @@
                                     "type": "string"
                                 }
                             },
-                            "required": ["location"],
+                            "required": [
+                                "location"
+                            ],
                             "type": "object"
                         }
                     },
@@ -288,19 +215,24 @@
                     "arguments": {
                         "location": "Paris"
                     },
-                    "id": "call_PQMI350flR8fjuZzMSvi5PxP",
+                    "id": "call_mZiezYE31U7yku40mf9oVc7B",
                     "name": "get_weather",
                     "type": "tool_call"
                 }
             ],
+            "reasoning": null,
             "text": "",
             "usage": {
-                "input_tokens": 158,
+                "cache_creation_tokens": 0,
+                "cache_read_tokens": 0,
+                "input_tokens": 159,
                 "output_tokens": 14
             }
-        }
+        },
+        "sse": "data: {\"id\":\"chatcmpl-EYFXjUquzNtVFbuJ6QX9Ros0rrMqU\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"index\":0,\"id\":\"call_mZiezYE31U7yku40mf9oVc7B\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"\"}}],\"refusal\":null},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"0JpuBFff\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjUquzNtVFbuJ6QX9Ros0rrMqU\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"\"}}]},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"j5\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjUquzNtVFbuJ6QX9Ros0rrMqU\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"location\"}}]},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"WB5D1oeSiS4DZ\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjUquzNtVFbuJ6QX9Ros0rrMqU\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\":\\\"\"}}]},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjUquzNtVFbuJ6QX9Ros0rrMqU\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"Paris\"}}]},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjUquzNtVFbuJ6QX9Ros0rrMqU\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"}\"}}]},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"69\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjUquzNtVFbuJ6QX9Ros0rrMqU\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{},\"logprobs\":null,\"finish_reason\":\"tool_calls\"}],\"usage\":null,\"obfuscation\":\"4PH\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjUquzNtVFbuJ6QX9Ros0rrMqU\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[],\"usage\":{\"prompt_tokens\":159,\"completion_tokens\":14,\"total_tokens\":173,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"obfuscation\":\"yL2QUw8rFx9D\"}\n\ndata: [DONE]\n\n"
     },
     {
+        "prompt": null,
         "request": {
             "max_completion_tokens": 1024,
             "messages": [
@@ -320,7 +252,7 @@
                                 "arguments": "{\"location\":\"London\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_p60PwLdhsOTJiiy6W3ntwCx7",
+                            "id": "call_rolc2qOqqIpkgBi9c3AjGJdp",
                             "type": "function"
                         }
                     ]
@@ -328,10 +260,10 @@
                 {
                     "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
                     "role": "tool",
-                    "tool_call_id": "call_p60PwLdhsOTJiiy6W3ntwCx7"
+                    "tool_call_id": "call_rolc2qOqqIpkgBi9c3AjGJdp"
                 },
                 {
-                    "content": "The weather in London is partly cloudy with a temperature of 18°C and a light breeze coming from the west.",
+                    "content": "The weather in London is partly cloudy, with a temperature of 18°C and a light breeze coming from the west.",
                     "role": "assistant"
                 },
                 {
@@ -346,7 +278,7 @@
                                 "arguments": "{\"location\":\"Paris\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_PQMI350flR8fjuZzMSvi5PxP",
+                            "id": "call_mZiezYE31U7yku40mf9oVc7B",
                             "type": "function"
                         }
                     ]
@@ -354,7 +286,7 @@
                 {
                     "content": "Weather in Paris is sunny, 23°C, no wind.",
                     "role": "tool",
-                    "tool_call_id": "call_PQMI350flR8fjuZzMSvi5PxP"
+                    "tool_call_id": "call_mZiezYE31U7yku40mf9oVc7B"
                 }
             ],
             "model": "gpt-4.1-2025-04-14",
@@ -375,7 +307,9 @@
                                     "type": "string"
                                 }
                             },
-                            "required": ["location"],
+                            "required": [
+                                "location"
+                            ],
                             "type": "object"
                         }
                     },
@@ -386,79 +320,19 @@
         "response": {
             "content": [
                 {
-                    "text": "The",
-                    "type": "text"
-                },
-                {
-                    "text": " weather",
-                    "type": "text"
-                },
-                {
-                    "text": " in",
-                    "type": "text"
-                },
-                {
-                    "text": " Paris",
-                    "type": "text"
-                },
-                {
-                    "text": " is",
-                    "type": "text"
-                },
-                {
-                    "text": " sunny",
-                    "type": "text"
-                },
-                {
-                    "text": " with",
-                    "type": "text"
-                },
-                {
-                    "text": " a",
-                    "type": "text"
-                },
-                {
-                    "text": " temperature",
-                    "type": "text"
-                },
-                {
-                    "text": " of",
-                    "type": "text"
-                },
-                {
-                    "text": " ",
-                    "type": "text"
-                },
-                {
-                    "text": "23",
-                    "type": "text"
-                },
-                {
-                    "text": "°C",
-                    "type": "text"
-                },
-                {
-                    "text": " and",
-                    "type": "text"
-                },
-                {
-                    "text": " no",
-                    "type": "text"
-                },
-                {
-                    "text": " wind",
-                    "type": "text"
-                },
-                {
-                    "text": ".",
+                    "text": "The weather in Paris is sunny, with a temperature of 23°C and no wind.",
                     "type": "text"
                 }
             ],
-            "text": "The weather in Paris is sunny with a temperature of 23°C and no wind.",
+            "reasoning": null,
+            "text": "The weather in Paris is sunny, with a temperature of 23°C and no wind.",
             "usage": {
-                "input_tokens": 193,
-                "output_tokens": 18
+                "cache_creation_tokens": 0,
+                "cache_read_tokens": 0,
+                "input_tokens": 194,
+                "output_tokens": 19
             }
-        }
+        },
+        "sse": "data: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\",\"refusal\":null},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"AF0OZRnw8ytw5\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"The\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"prrzYtM3NFgP\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" weather\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"lahdur4\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" in\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"oQD1nUYZce8T\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" Paris\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"BLSE38u0g\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" is\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"yXU9Ewor0nAR\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" sunny\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"KCydgTmTm\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\",\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"gyCuksQfSZKQdg\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" with\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"DFVurpOU07\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" a\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"kN54izS8DAiZO\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" temperature\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"ig8\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" of\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"37xdnUnN6QCw\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"QU3gsc6sxaB4JJ\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"23\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"w03JQcB4YDdiR\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"°C\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"3m30a1OTU9Oze\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" and\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"lxaH9sU7HU9\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" no\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"c00kDsMHK4CT\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" wind\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"abxw3dD7GL\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\".\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null,\"obfuscation\":\"epYTgq2pXsh1Lp\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[{\"index\":0,\"delta\":{},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":null,\"obfuscation\":\"nwFLoPGYk\"}\n\ndata: {\"id\":\"chatcmpl-EYFXjaepQSO9zofmXZ8tduRkU3929\",\"object\":\"chat.completion.chunk\",\"created\":1791831607,\"model\":\"gpt-4.1-2025-04-14\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_99c6909298\",\"choices\":[],\"usage\":{\"prompt_tokens\":194,\"completion_tokens\":19,\"total_tokens\":213,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"obfuscation\":\"WxxeqAvN1ywr\"}\n\ndata: [DONE]\n\n"
     }
 ]

@@ -67,11 +67,12 @@ ollamaProviderWith baseUrl baseOpts =
       -- (Ollama doesn't support include_usage in streaming).
       buildBody = ollamaBuildBody,
       sendRequest = sendRequest,
-      sendStreamRequest = \body callback ->
+      openStream = \body k ->
         runReq lenientConfig $ do
           let url = baseUrl /: "v1" /: "chat" /: "completions"
           reqBr POST url (ReqBodyJson body) baseOpts $ \resp ->
-            handleStreamResponse resp (`parseOpenAIStream` callback),
+            handleStreamResponse resp k,
+      parseStream = const parseOpenAIStream,
       parseResponse = pure . parseOpenAIResponse,
       buildObjectBody = \r schema ->
         object $

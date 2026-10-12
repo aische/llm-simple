@@ -7,6 +7,7 @@ module LLM.Providers.Claude
     parseClaudeStream,
     parseClaudeUsage,
     claudeBuildBody,
+    checkClaudeThinkingBudget,
     encodeTurn,
     effortToBudgetTokens,
   )
@@ -51,8 +52,8 @@ import LLM.Core.Types
       ),
     ContentPart (..),
     ImageSource (..),
-    LLMError (EmptyResponse),
-    LLMGateway,
+    LLMError (EmptyResponse, UnsupportedCapability),
+    LLMGateway (..),
     LLMResult,
     LLMTextResult,
     PartBody (..),
@@ -95,12 +96,27 @@ claudeProviderName = "claude"
 
 -- | Create a LLMGateway for the Claude provider at api.anthropic.com.
 claudeGateway :: Text -> LLMGateway
-claudeGateway apiKey = toGateway $ claudeProvider apiKey
+claudeGateway apiKey = guardThinkingBudget $ toGateway $ claudeProvider apiKey
 
 -- | Create a Claude-compatible client with a custom base URL (origin).
 -- The library appends @/v1/messages@.
 claudeGatewayWith :: Url scheme -> Option scheme -> Text -> LLMGateway
-claudeGatewayWith baseUrl baseOpts apiKey = toGateway (claudeProviderWith baseUrl baseOpts apiKey)
+claudeGatewayWith baseUrl baseOpts apiKey =
+  guardThinkingBudget $ toGateway (claudeProviderWith baseUrl baseOpts apiKey)
+
+-- | Refuse requests that Anthropic would reject because @max_tokens@ leaves
+-- no room for the minimum thinking budget (see 'checkClaudeThinkingBudget'),
+-- instead of sending them.
+guardThinkingBudget :: LLMGateway -> LLMGateway
+guardThinkingBudget gw =
+  gw
+    { gwGenerateText = \hooks r ->
+        either (pure . Left) (const (gw.gwGenerateText hooks r)) (checkClaudeThinkingBudget r),
+      gwStreamText = \hooks r cb ->
+        either (pure . Left) (const (gw.gwStreamText hooks r cb)) (checkClaudeThinkingBudget r),
+      gwGenerateObject = \hooks schema r ->
+        either (pure . Left) (const (gw.gwGenerateObject hooks schema r)) (checkClaudeThinkingBudget r)
+    }
 
 -- | Create a LLMProvider for the Claude provider at api.anthropic.com.
 claudeProvider :: Text -> LLMProvider
@@ -155,6 +171,36 @@ effortToBudgetTokens = \case
       [(n, "")] | n >= 1024 -> n
       _ -> 10000
 
+-- | Anthropic's minimum extended-thinking @budget_tokens@.
+minThinkingBudget :: Int
+minThinkingBudget = 1024
+
+-- | The @budget_tokens@ sent for a request: the effort budget, capped below
+-- @max_tokens@ (Anthropic requires @budget_tokens < max_tokens@).
+thinkingBudget :: ChatRequest -> ThinkingMode -> Int
+thinkingBudget r tm =
+  min (maybe 10000 effortToBudgetTokens tm.tmEffort) (r.reqMaxTokens - 1)
+
+-- | Thinking needs @max_tokens > 1024@, because the budget must be at least
+-- 1024 and below @max_tokens@. Returns 'UnsupportedCapability' otherwise, so
+-- the call fails before any I/O and the next fallback model is tried.
+checkClaudeThinkingBudget :: ChatRequest -> Either LLMError ()
+checkClaudeThinkingBudget r =
+  case r.reqThinking of
+    Just tm
+      | tm.tmEnabled,
+        thinkingBudget r tm < minThinkingBudget ->
+          Left $
+            UnsupportedCapability $
+              "thinking needs max_tokens > "
+                <> T.pack (show minThinkingBudget)
+                <> " for model "
+                <> r.reqModel
+                <> " (max_tokens is "
+                <> T.pack (show r.reqMaxTokens)
+                <> ")"
+    _ -> Right ()
+
 claudeBuildBody :: Bool -> ChatRequest -> Value
 claudeBuildBody stream r =
   object $
@@ -181,7 +227,7 @@ thinkingPairs r =
   case r.reqThinking of
     Just tm
       | tm.tmEnabled ->
-          let budget = maybe 10000 effortToBudgetTokens tm.tmEffort
+          let budget = thinkingBudget r tm
            in [ "thinking"
                   .= object
                     [ "type" .= ("enabled" :: Text),

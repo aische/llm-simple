@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before the next attempt (only if the failed attempt streamed something);
   consumers should discard the chunks of the current round when they get it.
   Exhaustive pattern matches on `StreamChunk` need a new case.
+- Claude thinking: `budget_tokens` is capped at `max_tokens - 1`; Anthropic
+  rejects a budget that is not below `max_tokens`, so medium effort or above
+  with `maxTokens: 4096` failed with HTTP 400 on every call. If `max_tokens`
+  leaves no room for the 1024-token minimum budget, the Claude gateway returns
+  `UnsupportedCapability` without sending the request (new
+  `checkClaudeThinkingBudget`). Example catalog: `haiku_4_5` uses
+  `maxTokens: 16000` so thinking leaves room for the answer.
 
 ## [0.2.0.0] - 2026-10-06
 

@@ -20,6 +20,8 @@ import LLM.Core.Types
   ( ChatRequest (..),
     ChatResponse (respContent, respReasoning, respText),
     ContentPart (..),
+    LLMError (..),
+    LLMGateway (..),
     PartBody (..),
     ProviderOpaque (..),
     StreamEvent (..),
@@ -39,8 +41,12 @@ import LLM.Core.Types
   )
 import LLM.Core.Usage (Usage (..), mkUsage)
 import LLM.Core.Utils (getToolCalls, hasToolCalls)
+import LLM.Generate.GenerateUtils (llmHooks)
+import LLM.Generate.Logger (noHooks)
 import LLM.Providers.Claude
   ( claudeBuildBody,
+    claudeGateway,
+    checkClaudeThinkingBudget,
     encodeTurn,
     effortToBudgetTokens,
     parseClaudeResponse,
@@ -238,8 +244,30 @@ spec = describe "Claude" $ do
               }
           body = claudeBuildBody False req
       nestedText ["thinking", "type"] body `shouldBe` Just "enabled"
-      nestedInt ["thinking", "budget_tokens"] body `shouldBe` Just (effortToBudgetTokens "high")
+      -- "high" is 10000, but budget_tokens must stay below max_tokens.
+      nestedInt ["thinking", "budget_tokens"] body `shouldBe` Just 4095
       lookupKey "temperature" body `shouldBe` Nothing
+
+    it "uses the effort budget unchanged when max_tokens is large enough" $ do
+      let body = claudeBuildBody False (thinkingReq 16000 "high")
+      nestedInt ["thinking", "budget_tokens"] body `shouldBe` Just (effortToBudgetTokens "high")
+
+    it "accepts the smallest max_tokens that leaves room for the minimum budget" $ do
+      checkClaudeThinkingBudget (thinkingReq 1025 "low") `shouldBe` Right ()
+      nestedInt ["thinking", "budget_tokens"] (claudeBuildBody False (thinkingReq 1025 "high"))
+        `shouldBe` Just 1024
+
+    it "rejects thinking when max_tokens leaves no room for the minimum budget" $ do
+      case checkClaudeThinkingBudget (thinkingReq 1024 "low") of
+        Left (UnsupportedCapability _) -> pure ()
+        other -> expectationFailure ("expected UnsupportedCapability, got " <> show other)
+      checkClaudeThinkingBudget (thinkingReq 1024 "low") {reqThinking = Nothing} `shouldBe` Right ()
+
+    it "the gateway returns the budget error without sending a request" $ do
+      r <- (claudeGateway "").gwGenerateText (llmHooks noHooks) (thinkingReq 512 "low")
+      case r of
+        Left (UnsupportedCapability _) -> pure ()
+        other -> expectationFailure ("expected UnsupportedCapability, got " <> show other)
 
     it "keeps temperature when thinking is off" $ do
       let req =
@@ -412,3 +440,15 @@ nestedInt [key] (Object o) =
 nestedInt (key : rest) (Object o) =
   KM.lookup (K.fromText key) o >>= nestedInt rest
 nestedInt _ _ = Nothing
+
+thinkingReq :: Int -> Text -> ChatRequest
+thinkingReq maxTokens effort =
+  ChatRequest
+    { reqModel = "claude-haiku-4-5-20251001",
+      reqConversation = [UserTurn "hi"],
+      reqSystem = Nothing,
+      reqMaxTokens = maxTokens,
+      reqTemperature = Nothing,
+      reqTools = [],
+      reqThinking = Just ThinkingMode {tmEnabled = True, tmEffort = Just effort}
+    }

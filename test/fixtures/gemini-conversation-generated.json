@@ -30,10 +30,8 @@
               "description": "Get the current weather for a given location",
               "name": "get_weather",
               "parameters": {
-                "$comment": "WeatherToolArgs",
                 "properties": {
                   "location": {
-                    "$comment": "City name, e.g. London",
                     "type": "string"
                   }
                 },
@@ -143,10 +141,8 @@
               "description": "Get the current weather for a given location",
               "name": "get_weather",
               "parameters": {
-                "$comment": "WeatherToolArgs",
                 "properties": {
                   "location": {
-                    "$comment": "City name, e.g. London",
                     "type": "string"
                   }
                 },
@@ -265,10 +261,8 @@
               "description": "Get the current weather for a given location",
               "name": "get_weather",
               "parameters": {
-                "$comment": "WeatherToolArgs",
                 "properties": {
                   "location": {
-                    "$comment": "City name, e.g. London",
                     "type": "string"
                   }
                 },
@@ -421,10 +415,8 @@
               "description": "Get the current weather for a given location",
               "name": "get_weather",
               "parameters": {
-                "$comment": "WeatherToolArgs",
                 "properties": {
                   "location": {
-                    "$comment": "City name, e.g. London",
                     "type": "string"
                   }
                 },

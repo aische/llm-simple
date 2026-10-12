@@ -96,16 +96,51 @@ stripJsonFences t =
           else t''
    in t'''
 
--- | Recursively removes "minimum" and "maximum" keys from a JSON Value, also $comment fields
+-- | Remove @minimum@, @maximum@ and @$comment@ keywords from a JSON Schema.
+--
+-- Only schema keywords are removed: the walk follows sub-schema positions
+-- (@properties@, @items@, @anyOf@, @$defs@, ...). Property names and
+-- literal values (@enum@, @const@, @default@, @examples@) are kept, so a
+-- property called @minimum@ survives.
 stripBoundsAndComments :: Value -> Value
 stripBoundsAndComments (Object obj) =
   Object $
     KM.fromList
-      [ (k, stripBoundsAndComments v)
+      [ (k, stripKeyword k v)
         | (k, v) <- KM.toList obj,
-          k /= "minimum",
-          k /= "maximum",
-          k /= "$comment"
+          k `notElem` ["minimum", "maximum", "$comment"]
       ]
-stripBoundsAndComments (Array arr) = Array (fmap stripBoundsAndComments arr)
+  where
+    stripKeyword k v
+      | k `elem` schemaMapKeywords = mapObject stripBoundsAndComments v
+      | k `elem` schemaKeywords = stripSchemaOrList v
+      | otherwise = v
+    mapObject f (Object o) = Object (fmap f o)
+    mapObject _ v = v
+    stripSchemaOrList (Array a) = Array (fmap stripBoundsAndComments a)
+    stripSchemaOrList v = stripBoundsAndComments v
 stripBoundsAndComments other = other
+
+-- | Keywords whose value maps names to sub-schemas.
+schemaMapKeywords :: [KM.Key]
+schemaMapKeywords = ["properties", "patternProperties", "$defs", "definitions", "dependentSchemas"]
+
+-- | Keywords whose value is a sub-schema or a list of sub-schemas.
+schemaKeywords :: [KM.Key]
+schemaKeywords =
+  [ "items",
+    "prefixItems",
+    "additionalItems",
+    "additionalProperties",
+    "unevaluatedProperties",
+    "unevaluatedItems",
+    "propertyNames",
+    "contains",
+    "anyOf",
+    "oneOf",
+    "allOf",
+    "not",
+    "if",
+    "then",
+    "else"
+  ]

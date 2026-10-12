@@ -117,7 +117,7 @@ geminiProviderWith baseUrl baseOpts apiKey =
                   /: "models"
                   /: (model <> ":streamGenerateContent")
               opts = baseOpts <> geminiAuthOpts apiKey <> "alt" =: ("sse" :: Text)
-          reqBr POST url (ReqBodyJson (stripBoundsAndComments $ stripModel body)) opts $ \resp ->
+          reqBr POST url (ReqBodyJson (stripModel body)) opts $ \resp ->
             handleStreamResponse resp (`parseGeminiStream` callback),
       parseResponse = parseGeminiResponse,
       buildObjectBody = \r schema ->
@@ -128,7 +128,7 @@ geminiProviderWith baseUrl baseOpts apiKey =
               .= object
                 ( [ "maxOutputTokens" .= r.reqMaxTokens,
                     "responseMimeType" .= ("application/json" :: Text),
-                    "responseSchema" .= schema
+                    "responseSchema" .= stripBoundsAndComments schema
                   ]
                     ++ ["temperature" .= t | Just t <- [r.reqTemperature]]
                     ++ thinkingConfigPairs r
@@ -153,7 +153,7 @@ geminiProviderWith baseUrl baseOpts apiKey =
                 /: "models"
                 /: (model <> ":generateContent")
             opts = baseOpts <> geminiAuthOpts apiKey
-        resp <- req POST url (ReqBodyJson (stripBoundsAndComments $ stripModel body)) jsonResponse opts
+        resp <- req POST url (ReqBodyJson (stripModel body)) jsonResponse opts
         pure (responseStatusCode resp, responseBody resp)
 
 geminiAuthOpts :: Text -> Option scheme
@@ -326,7 +326,7 @@ encodeToolDef td =
   object
     [ "name" .= td.toolName,
       "description" .= td.toolDescription,
-      "parameters" .= td.toolParameters
+      "parameters" .= stripBoundsAndComments td.toolParameters
     ]
 
 encodeFunctionCall :: Text -> ToolCall -> Value

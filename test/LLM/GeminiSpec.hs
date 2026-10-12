@@ -3,11 +3,17 @@
 module LLM.GeminiSpec (spec) where
 
 import Data.Aeson (Value (Array, Object, String), eitherDecodeFileStrict', object, (.=))
+import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Vector qualified as V
+import LLM.Core.LLMProvider (LLMProvider (..))
+import LLM.Core.ProviderUtils (normalizeSchemaOpenAI, stripBoundsAndComments)
 import LLM.Core.Types
-  ( ChatResponse (respText),
+  ( ChatRequest (..),
+    ChatResponse (respText),
+    ToolDef (..),
     ProviderOpaque (..),
     ThinkingContent (..),
     ToolCall (..),
@@ -22,7 +28,7 @@ import LLM.Core.Types
   )
 import LLM.Core.Usage (Usage (..), mkUsage)
 import LLM.Core.Utils (getToolCalls, hasToolCalls)
-import LLM.Providers.Gemini (encodeTurn, parseGeminiResponse, parseGeminiUsage, signatureForModel)
+import LLM.Providers.Gemini (encodeTurn, geminiProvider, parseGeminiResponse, parseGeminiUsage, signatureForModel)
 import Test.Hspec
   ( Spec,
     describe,
@@ -33,6 +39,111 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Gemini" $ do
+  describe "stripBoundsAndComments" $ do
+    it "keeps properties named minimum/maximum and strips their constraints" $ do
+      let schema =
+            object
+              [ "type" .= ("object" :: Text),
+                "properties"
+                  .= object
+                    [ "minimum" .= object ["type" .= ("number" :: Text), "minimum" .= (0 :: Int), "$comment" .= ("c" :: Text)],
+                      "maximum" .= object ["type" .= ("string" :: Text)]
+                    ]
+              ]
+      stripBoundsAndComments schema
+        `shouldBe` object
+          [ "type" .= ("object" :: Text),
+            "properties"
+              .= object
+                [ "minimum" .= object ["type" .= ("number" :: Text)],
+                  "maximum" .= object ["type" .= ("string" :: Text)]
+                ]
+          ]
+
+    it "recurses into items and anyOf but leaves default values alone" $ do
+      let schema =
+            object
+              [ "type" .= ("array" :: Text),
+                "items"
+                  .= object
+                    [ "anyOf"
+                        .= [ object ["type" .= ("integer" :: Text), "maximum" .= (9 :: Int)],
+                             object ["type" .= ("null" :: Text)]
+                           ]
+                    ],
+                "default" .= [object ["minimum" .= (1 :: Int)]]
+              ]
+      stripBoundsAndComments schema
+        `shouldBe` object
+          [ "type" .= ("array" :: Text),
+            "items"
+              .= object
+                [ "anyOf"
+                    .= [ object ["type" .= ("integer" :: Text)],
+                         object ["type" .= ("null" :: Text)]
+                       ]
+                ],
+            "default" .= [object ["minimum" .= (1 :: Int)]]
+          ]
+
+  describe "normalizeSchemaOpenAI" $ do
+    it "does not treat a property named type as an object schema" $ do
+      let schema =
+            object
+              [ "type" .= ("object" :: Text),
+                "properties" .= object ["type" .= object ["type" .= ("string" :: Text)]]
+              ]
+      normalizeSchemaOpenAI schema
+        `shouldBe` object
+          [ "type" .= ("object" :: Text),
+            "properties" .= object ["type" .= object ["type" .= ("string" :: Text)]],
+            "additionalProperties" .= False,
+            "required" .= (["type"] :: [Text])
+          ]
+
+  describe "request body schema stripping" $ do
+    it "strips bounds from tool parameters but not from conversation content" $ do
+      let params =
+            object
+              [ "type" .= ("object" :: Text),
+                "properties" .= object ["minimum" .= object ["type" .= ("number" :: Text), "minimum" .= (0 :: Int)]]
+              ]
+          args = object ["minimum" .= (5 :: Int)]
+          req =
+            ChatRequest
+              { reqModel = "gemini-2.5-flash",
+                reqConversation = [AssistantMessage [toolCallPart (mkToolCall "c1" "f" args)]],
+                reqSystem = Nothing,
+                reqMaxTokens = 100,
+                reqTemperature = Nothing,
+                reqTools = [ToolDef {toolName = "f", toolDescription = "d", toolReadonly = True, toolParameters = params}],
+                reqThinking = Nothing
+              }
+          body = (geminiProvider "").buildBody False req
+          strippedParams =
+            object
+              [ "type" .= ("object" :: Text),
+                "properties" .= object ["minimum" .= object ["type" .= ("number" :: Text)]]
+              ]
+      lookupPath ["tools", "0", "function_declarations", "0", "parameters"] body `shouldBe` Just strippedParams
+      lookupPath ["contents", "0", "parts", "0", "functionCall", "args"] body `shouldBe` Just args
+
+    it "strips bounds from the object responseSchema" $ do
+      let schema = object ["type" .= ("integer" :: Text), "maximum" .= (3 :: Int)]
+          req =
+            ChatRequest
+              { reqModel = "gemini-2.5-flash",
+                reqConversation = [],
+                reqSystem = Nothing,
+                reqMaxTokens = 100,
+                reqTemperature = Nothing,
+                reqTools = [],
+                reqThinking = Nothing
+              }
+          body = (geminiProvider "").buildObjectBody req schema
+      lookupPath ["generationConfig", "responseSchema"] body
+        `shouldBe` Just (object ["type" .= ("integer" :: Text)])
+
   describe "parseGeminiResponse" $ do
     it "parses a text response" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/gemini-text.json"
@@ -207,3 +318,12 @@ assistantParts (Object o) =
     Just (Array arr) -> V.toList arr
     _ -> []
 assistantParts _ = []
+
+-- | Follow object keys / array indices (as decimal strings).
+lookupPath :: [Text] -> Value -> Maybe Value
+lookupPath [] v = Just v
+lookupPath (k : ks) (Object o) = KM.lookup (K.fromText k) o >>= lookupPath ks
+lookupPath (k : ks) (Array a) = case reads (T.unpack k) of
+  [(i, "")] -> a V.!? i >>= lookupPath ks
+  _ -> Nothing
+lookupPath _ _ = Nothing

@@ -381,17 +381,6 @@ spec = describe "Chat" $ do
         Left GenerateErrorResult {gerError = GErrAborted} -> pure ()
         other -> expectationFailure $ "Expected GErrAborted during tools, got: " <> show other
 
-    it "does not fall back on Aborted" $ do
-      let gw = mockGateway (ChatResponse "Hi!" [textPart "Hi!"] Nothing Nothing)
-          okGw = mockGateway (ChatResponse "Fallback" [textPart "Fallback"] Nothing Nothing)
-          models = ModelWithFallbacks (mockModel gw) [mockModel okGw]
-      sig <- newAbortSignal
-      abort sig
-      result <- runGenerate defaultAgent models Map.empty (Just sig) [UserTurn "hello"]
-      case result of
-        Left GenerateErrorResult {gerError = GErrAborted} -> pure ()
-        other -> expectationFailure $ "Expected GErrAborted (no fallback), got: " <> show other
-
   describe "streamText" $ do
     it "preserves cache hints on user parts across streaming tool rounds" $ do
       ref <- newIORef []

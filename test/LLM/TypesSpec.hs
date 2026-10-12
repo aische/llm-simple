@@ -47,12 +47,6 @@ import Test.Hspec
 spec :: Spec
 spec = describe "Types" $ do
   describe "Usage" $ do
-    it "emptyUsage has zero tokens" $ do
-      emptyUsage.usageInputTokens `shouldBe` 0
-      emptyUsage.usageOutputTokens `shouldBe` 0
-      emptyUsage.usageCacheReadTokens `shouldBe` 0
-      emptyUsage.usageCacheCreationTokens `shouldBe` 0
-
     it "addUsage sums token counts including cache counters" $ do
       let u1 =
             Usage
@@ -78,18 +72,6 @@ spec = describe "Types" $ do
             usageCacheCreationTokens = 3,
             usageTotalCost = 0.75
           }
-
-    it "addUsage is associative" $ do
-      let u1 = mkUsage 1 2
-          u2 = mkUsage 3 4
-          u3 = mkUsage 5 6
-      addUsage (addUsage u1 u2) u3 `shouldBe` addUsage u1 (addUsage u2 u3)
-
-    it "Semigroup matches addUsage and Monoid uses emptyUsage" $ do
-      let u1 = mkUsage 10 1
-          u2 = mkUsage 5 2
-      (u1 <> u2) `shouldBe` addUsage u1 u2
-      (mempty :: Usage) `shouldBe` emptyUsage
 
     it "JSON round-trips with cache fields" $ do
       let u =

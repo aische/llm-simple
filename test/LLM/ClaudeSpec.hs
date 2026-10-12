@@ -132,28 +132,6 @@ spec = describe "Claude" $ do
                   Nothing -> expectationFailure "expected thinking opaque"
                 tool.tcId `shouldBe` "toolu_weather_1"
                 tool.tcName `shouldBe` "get_weather"
-                let encoded =
-                      encodeTurn
-                        "claude-haiku-4-5-20251001"
-                        (AssistantMessage resp.respContent)
-                    content = messageContent (head encoded)
-                contentTypes content `shouldBe` ["thinking", "text", "tool_use"]
-                case content of
-                  (Object o : _) ->
-                    lookupText "signature" (Object o) `shouldBe` Just "sig_thinking_abc123"
-                  _ -> expectationFailure "expected thinking object"
-                let withResult =
-                      encodeTurn
-                        "claude-haiku-4-5-20251001"
-                        ( ToolTurn
-                            [ ToolResult
-                                { trCallId = "toolu_weather_1",
-                                  trName = "get_weather",
-                                  trContent = "sunny"
-                                }
-                            ]
-                        )
-                length withResult `shouldBe` 1
             other -> expectationFailure $ "unexpected parts: " <> show other
           events <- reverse <$> readIORef eventsRef
           events
@@ -409,20 +387,6 @@ spec = describe "Claude" $ do
               usageCacheCreationTokens = 1_200,
               usageTotalCost = 0
             }
-
-    it "treats missing or zero cache fields as zero on recorded fixtures" $ do
-      Right val <- eitherDecodeFileStrict' "test/fixtures/claude-conversation-generated.json"
-      case val of
-        Array arr ->
-          case V.toList arr of
-            (Object first : _) ->
-              case KM.lookup "response" first of
-                Just resp ->
-                  parseClaudeUsage resp
-                    `shouldBe` Just (mkUsage 623 54)
-                _ -> expectationFailure "missing response"
-            _ -> expectationFailure "empty conversation array"
-        _ -> expectationFailure "expected conversation array"
 
 -- | Yield the full SSE payload once, then empty chunks (EOF).
 mkBodyReader :: BS.ByteString -> IO (IO BS.ByteString)

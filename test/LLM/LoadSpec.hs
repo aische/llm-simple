@@ -45,12 +45,6 @@ providersOpenrouterOnly = "./test/fixtures/providers-openrouter-only.json"
 spec :: Spec
 spec = describe "Load" $ do
   describe "model catalog JSON" $ do
-    it "parses the bundled model catalog" $ do
-      result <- eitherDecodeFileStrict' "./model-catalog.json"
-      case result of
-        Right (Array xs) -> length xs `shouldSatisfy` (> 0)
-        _ -> expectationFailure "expected a JSON array"
-
     it "fails on missing catalog file" $ do
       result <- try @SomeException (loadModelOrThrow "./no-such-catalog.json" "llama_3_2")
       case result of

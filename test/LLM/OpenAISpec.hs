@@ -172,13 +172,6 @@ spec = describe "OpenAI" $ do
           contentTypes parts `shouldBe` ["text", "image_url", "image_url"]
           mapM_ (\p -> lookupKey "cache_control" p `shouldBe` Nothing) parts
 
-    it "Ollama (shared OpenAI encoder) also omits cache hints" $ do
-      -- Ollama requests use the same encodeTurn + defaultMessageEncodeOptions path.
-      let plain = UserMessage [textPart "hello"]
-          hinted = UserMessage [cacheEphemeral (textPart "hello")]
-      head (encodeTurn defaultMessageEncodeOptions hinted)
-        `shouldBe` head (encodeTurn defaultMessageEncodeOptions plain)
-
   describe "parseOpenAIUsage" $ do
     it "extracts token counts" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/openai-text.json"

@@ -54,6 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   literal values (`enum`, `const`, `default`, `examples`) alone. Gemini applies
   it only to tool `parameters` and `responseSchema` at body-build time, not to
   the whole request (which could strip keys from tool-call arguments).
+- OpenAI-compatible stream parser (OpenAI, DeepSeek, Ollama) keeps every tool
+  call in a chunk, not just the first. Ollama often sends all calls complete in
+  one chunk, sometimes without `index`; the array position is used then. Tool
+  calls are emitted in index order.
 
 ## [0.2.0.0] - 2026-10-06
 

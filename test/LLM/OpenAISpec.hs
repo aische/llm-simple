@@ -19,7 +19,7 @@ import Data.Text qualified as T
 import LLM.Core.Types
   ( ChatResponse (respText),
     LLMError (..),
-    ToolCall (tcId, tcName),
+    ToolCall (tcArguments, tcId, tcName),
     Turn (..),
     cacheEphemeral,
     defaultMessageEncodeOptions,
@@ -105,6 +105,29 @@ spec = describe "OpenAI" $ do
       case result of
         Left (ParseError msg) -> T.unpack msg `shouldContain` "length"
         other -> expectationFailure ("expected ParseError, got " <> show other)
+
+  describe "parseOpenAIStream multiple tool calls" $ do
+    it "parses every tool call in a chunk, in index order" $ do
+      reader <- fixtureReader "test/fixtures/openai-multi-tool-chunk.sse"
+      result <- parseOpenAIStream reader (\_ -> pure ())
+      case result of
+        Right resp ->
+          [(tc.tcId, tc.tcName, tc.tcArguments) | tc <- getToolCalls resp]
+            `shouldBe` [ ("call_a", "get_weather", object ["location" .= ("London" :: Text)]),
+                         ("call_b", "get_time", object ["zone" .= ("CET" :: Text)])
+                       ]
+        Left err -> expectationFailure ("unexpected error: " <> show err)
+
+    it "parses Ollama-style complete tool calls without index fields" $ do
+      reader <- fixtureReader "test/fixtures/ollama-multi-tool-chunk.sse"
+      result <- parseOpenAIStream reader (\_ -> pure ())
+      case result of
+        Right resp ->
+          [(tc.tcId, tc.tcArguments) | tc <- getToolCalls resp]
+            `shouldBe` [ ("call_x", object ["location" .= ("London" :: Text)]),
+                         ("call_y", object ["location" .= ("Paris" :: Text)])
+                       ]
+        Left err -> expectationFailure ("unexpected error: " <> show err)
 
   describe "image request encoding" $ do
     it "encodes URL and base64 data-URL image parts" $ do

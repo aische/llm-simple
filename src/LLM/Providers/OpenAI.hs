@@ -32,10 +32,11 @@ import Data.Aeson
   )
 import Data.Aeson.Types (Pair, Parser, parseMaybe)
 import Data.ByteString.Lazy qualified as BSL
-import Control.Monad (when)
+import Control.Monad (when, zipWithM)
 import Data.Either (lefts, rights)
-import Data.Foldable (for_, forM_)
+import Data.Foldable (foldl', for_, forM_)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
+import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
 import Control.Applicative ((<|>))
 import Data.Text (Text)
@@ -398,20 +399,21 @@ parseOpenAIStream reader callback = do
   blocksRef <- newIORef ([] :: [ContentPart])
   reasoningRef <- newIORef Nothing
   usageRef <- newIORef Nothing
-  toolAccRef <- newIORef ([] :: [(Int, Text, Text, Text)])
+  -- Tool calls being assembled, keyed by index: (id, name, argument text).
+  toolAccRef <- newIORef (Map.empty :: Map.Map Int (Text, Text, Text))
   errorRef <- newIORef (Nothing :: Maybe LLMError)
   finishReasonRef <- newIORef (Nothing :: Maybe Text)
   badToolRef <- newIORef (Nothing :: Maybe Text) -- first tool with invalid JSON args
   let flushTools = do
         tools <- readIORef toolAccRef
-        forM_ tools $ \(_, cid, name, argsStr) ->
+        forM_ (Map.elems tools) $ \(cid, name, argsStr) ->
           case decodeToolArguments argsStr of
             Just args -> do
               let tc = mkToolCall cid name args
               modifyIORef' blocksRef (toolCallPart tc :)
               callback (StreamToolCall tc)
             Nothing -> modifyIORef' badToolRef (<|> Just name)
-        writeIORef toolAccRef []
+        writeIORef toolAccRef Map.empty
   readSSEEvents (HC.brRead reader) $ \sse -> do
     let raw = sse.sseData
     if raw == "[DONE]"
@@ -431,17 +433,8 @@ parseOpenAIStream reader callback = do
               modifyIORef' blocksRef (textPart txt :)
               callback (StreamDelta txt)
             _ -> pure ()
-          case parseMaybe parseStreamToolDelta v of
-            Just (idx, mId, mName, argChunk) -> do
-              modifyIORef' toolAccRef $ \acc ->
-                case lookup idx [(i, (i, cid, n, a)) | (i, cid, n, a) <- acc] of
-                  Nothing ->
-                    let cid = fromMaybe "" mId
-                        n = fromMaybe "" mName
-                     in acc ++ [(idx, cid, n, argChunk)]
-                  Just (_, cid, n, a) ->
-                    [(if i == idx then (i, cid, n, a <> argChunk) else entry) | entry@(i, _, _, _) <- acc]
-            Nothing -> pure ()
+          for_ (parseMaybe parseStreamToolDeltas v) $ \deltas ->
+            modifyIORef' toolAccRef (\acc -> foldl' addToolDelta acc deltas)
           case parseMaybe parseFinishReason v of
             Just reason -> do
               writeIORef finishReasonRef (Just reason)
@@ -504,8 +497,28 @@ parseStreamTextDelta = withObject "chunk" $ \o -> do
   (c : _) <- o .: "choices" :: Parser [Value]
   withObject "choice" (\co -> do d <- co .: "delta"; withObject "delta" (.: "content") d) c
 
-parseStreamToolDelta :: Value -> Parser (Int, Maybe Text, Maybe Text, Text)
-parseStreamToolDelta = withObject "chunk" $ \o -> do
+-- | One streamed tool-call fragment: index, id, name, argument text.
+type ToolDelta = (Int, Maybe Text, Maybe Text, Text)
+
+-- | Merge a fragment into the accumulated tool calls. A fragment whose id
+-- differs from the call already at its index starts a new call (servers
+-- that omit @index@ would otherwise merge distinct calls).
+addToolDelta :: Map.Map Int (Text, Text, Text) -> ToolDelta -> Map.Map Int (Text, Text, Text)
+addToolDelta acc (idx, mId, mName, argChunk) =
+  case Map.lookup idx acc of
+    Just (cid, n, a)
+      | maybe True (== cid) mId || T.null cid ->
+          Map.insert idx (fromMaybe cid mId, fromMaybe n mName, a <> argChunk) acc
+      | otherwise -> Map.insert (nextIndex acc) new acc
+    Nothing -> Map.insert idx new acc
+  where
+    new = (fromMaybe "" mId, fromMaybe "" mName, argChunk)
+    nextIndex m = maybe 0 ((+ 1) . fst) (Map.lookupMax m)
+
+-- | All tool-call fragments in a chunk. Ollama may send several complete
+-- calls in one chunk and may omit @index@; the position is used then.
+parseStreamToolDeltas :: Value -> Parser [ToolDelta]
+parseStreamToolDeltas = withObject "chunk" $ \o -> do
   (c : _) <- o .: "choices" :: Parser [Value]
   withObject
     "choice"
@@ -514,27 +527,25 @@ parseStreamToolDelta = withObject "chunk" $ \o -> do
         withObject
           "delta"
           ( \d' -> do
-              (tc : _) <- d' .: "tool_calls" :: Parser [Value]
-              withObject
-                "tool_call"
-                ( \tco -> do
-                    idx <- tco .: "index"
-                    mId <- tco .:? "id"
-                    fn <- tco .:? "function" .!= object []
-                    withObject
-                      "function"
-                      ( \f -> do
-                          mName <- f .:? "name"
-                          args <- f .:? "arguments" .!= ""
-                          pure (idx, mId, mName, args)
-                      )
-                      fn
-                )
-                tc
+              tcs <- d' .: "tool_calls" :: Parser [Value]
+              zipWithM parseOne [0 ..] tcs
           )
           d
     )
     c
+  where
+    parseOne pos = withObject "tool_call" $ \tco -> do
+      idx <- tco .:? "index" .!= pos
+      mId <- tco .:? "id"
+      fn <- tco .:? "function" .!= object []
+      withObject
+        "function"
+        ( \f -> do
+            mName <- f .:? "name"
+            args <- f .:? "arguments" .!= ""
+            pure (idx, mId, mName, args)
+        )
+        fn
 
 parseFinishReason :: Value -> Parser Text
 parseFinishReason = withObject "chunk" $ \o -> do

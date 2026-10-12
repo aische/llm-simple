@@ -1,0 +1,8 @@
+data: {"id":"c3","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"get_weather","arguments":"{\"location\": "}},{"index":1,"id":"call_b","type":"function","function":{"name":"get_time","arguments":"{\"zone\": "}}]},"finish_reason":null}]}
+
+data: {"id":"c3","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"\"CET\"}"}},{"index":0,"function":{"arguments":"\"London\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"c3","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+

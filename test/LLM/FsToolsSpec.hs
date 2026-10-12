@@ -164,6 +164,51 @@ spec = describe "FsTools" $ do
       runTool_ tm "remove_directory" (object ["path" .= ("tmp" :: Text)])
       doesDirectoryExist (sb </> "tmp") `shouldReturn` False
 
+  describe "workspace root guard" $ do
+    let rootPaths = [".", "", "./", "sub/.."] :: [Text]
+    it "remove_directory refuses the workspace root" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      runTool_ tm "create_directory" (object ["path" .= ("sub" :: Text)])
+      runTool_ tm "writefile" (object ["path" .= ("keep.txt" :: Text), "content" .= ("k" :: Text)])
+      mapM_
+        ( \p -> do
+            result <- runTool tm "remove_directory" (object ["path" .= p])
+            T.unpack result `shouldContain` "Error"
+            T.unpack result `shouldContain` "workspace root"
+        )
+        rootPaths
+      doesFileExist (sb </> "keep.txt") `shouldReturn` True
+      doesDirectoryExist (sb </> "sub") `shouldReturn` True
+
+    it "remove_file refuses the workspace root" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      runTool_ tm "create_directory" (object ["path" .= ("sub" :: Text)])
+      mapM_
+        ( \p -> do
+            result <- runTool tm "remove_file" (object ["path" .= p])
+            T.unpack result `shouldContain` "workspace root"
+        )
+        rootPaths
+      doesDirectoryExist sb `shouldReturn` True
+
+    it "move_file refuses the workspace root as source" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      runTool_ tm "create_directory" (object ["path" .= ("sub" :: Text)])
+      mapM_
+        ( \p -> do
+            result <- runTool tm "move_file" (object ["source" .= p, "destination" .= ("sub/moved" :: Text)])
+            T.unpack result `shouldContain` "workspace root"
+        )
+        rootPaths
+      doesDirectoryExist (sb </> "sub") `shouldReturn` True
+
+    it "remove_file reports a clear error for a directory" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      runTool_ tm "create_directory" (object ["path" .= ("sub" :: Text)])
+      result <- runTool tm "remove_file" (object ["path" .= ("sub" :: Text)])
+      T.unpack result `shouldContain` "is a directory"
+      doesDirectoryExist (sb </> "sub") `shouldReturn` True
+
 withSandbox :: (FilePath -> IO a) -> IO a
 withSandbox act = withSystemTempDirectory "llm-simple-fstools" $ \root -> do
   let sb = root </> "sandbox"

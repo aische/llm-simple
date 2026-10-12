@@ -6,7 +6,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isSymlink, sandboxPath, sandboxWritePath)
+import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, isSymlink, sandboxPath, sandboxWritePath)
 import System.Directory (doesDirectoryExist, doesFileExist, doesPathExist, renameFile)
 
 data MoveFileToolArgs = MoveFileToolArgs
@@ -43,19 +43,22 @@ moveFileExecTyped cfg args = do
   -- the link itself (surprising) or, after `sandboxPath` resolution,
   -- potentially target a file outside the sandbox.
   srcIsLink <- isSymlink srcResolved
-  if srcIsLink
-    then pure $ "Error: refusing to move symbolic link source: " <> src
-    else do
-      srcExists <- doesPathExist srcResolved
-      if not srcExists
-        then pure $ "Error: source does not exist: " <> src
+  if isSandboxRoot cfg srcResolved
+    then pure $ "Error: refusing to move the workspace root: " <> src
+    else
+      if srcIsLink
+        then pure $ "Error: refusing to move symbolic link source: " <> src
         else do
-          srcIsFile <- doesFileExist srcResolved
-          srcIsDir <- doesDirectoryExist srcResolved
-          case (srcIsFile, srcIsDir) of
-            (False, True) -> pure $ "Error: source is a directory, not a regular file: " <> src
-            (False, False) -> pure $ "Error: source is not a regular file: " <> src
-            _ -> do
-              dstResolved <- sandboxWritePath cfg (T.unpack dst)
-              renameFile srcResolved dstResolved
-              pure $ "Successfully moved " <> src <> " to " <> dst
+          srcExists <- doesPathExist srcResolved
+          if not srcExists
+            then pure $ "Error: source does not exist: " <> src
+            else do
+              srcIsFile <- doesFileExist srcResolved
+              srcIsDir <- doesDirectoryExist srcResolved
+              case (srcIsFile, srcIsDir) of
+                (False, True) -> pure $ "Error: source is a directory, not a regular file: " <> src
+                (False, False) -> pure $ "Error: source is not a regular file: " <> src
+                _ -> do
+                  dstResolved <- sandboxWritePath cfg (T.unpack dst)
+                  renameFile srcResolved dstResolved
+                  pure $ "Successfully moved " <> src <> " to " <> dst

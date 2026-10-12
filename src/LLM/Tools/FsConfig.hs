@@ -5,6 +5,7 @@ module LLM.Tools.FsConfig
     mkFsConfig,
     sandboxPath,
     sandboxWritePath,
+    isSandboxRoot,
     isFileHidden,
     isSymlink,
   )
@@ -82,6 +83,15 @@ sandboxPath cfg relPath = do
       -- 'directory' package.
       verifyNoSymlinksInChain base (joinPath baseComps) tailComps
       pure canonical
+
+-- | True when a path already resolved by 'sandboxPath' is the workspace
+-- root itself (e.g. the model passed @\".\"@, @\"\"@ or @\"sub\/..\"@).
+-- Destructive tools use this to refuse operating on the whole workspace.
+isSandboxRoot :: FsConfig -> FilePath -> Bool
+isSandboxRoot cfg resolved =
+  equalFilePath
+    (dropTrailingPathSeparator cfg.fsBasePath)
+    (dropTrailingPathSeparator resolved)
 
 -- | Element-wise path-prefix comparison.
 -- Returns the trailing components of @full@ after stripping @prefix@,

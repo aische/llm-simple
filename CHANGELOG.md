@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `remove_directory` no longer deletes the whole workspace when given a path
+  that resolves to the workspace root (`"."`, `""`, `"./"`, `"sub/.."`); it
+  returns an error message instead. `remove_file` and `move_file` (source)
+  refuse the root too, and `remove_file` on a directory returns a clear error
+  instead of throwing. New helper `isSandboxRoot` in `LLM.Tools.FsConfig`.
+
 ## [0.2.0.0] - 2026-10-06
 
 ### Changed

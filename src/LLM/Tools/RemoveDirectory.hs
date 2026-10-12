@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isSymlink, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, isSymlink, sandboxPath)
 import System.Directory
   ( doesDirectoryExist,
     listDirectory,
@@ -43,8 +43,11 @@ removeDirectoryExecTyped :: FsConfig -> RemoveDirectoryToolArgs -> IO Text
 removeDirectoryExecTyped cfg args = do
   let p = args._rdPath
   resolved <- sandboxPath cfg (T.unpack p)
-  safeRemoveDirectoryRecursive resolved
-  pure $ "Successfully removed directory " <> p
+  if isSandboxRoot cfg resolved
+    then pure $ "Error: refusing to remove the workspace root: " <> p
+    else do
+      safeRemoveDirectoryRecursive resolved
+      pure $ "Successfully removed directory " <> p
 
 -- | Like 'System.Directory.removeDirectoryRecursive', but refuses to
 -- follow directory symlinks. A symbolic link encountered during the

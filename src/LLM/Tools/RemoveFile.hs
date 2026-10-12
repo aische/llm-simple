@@ -6,8 +6,8 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, sandboxPath)
-import System.Directory (removeFile)
+import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, sandboxPath)
+import System.Directory (doesDirectoryExist, removeFile)
 
 newtype RemoveFileToolArgs = RemoveFileToolArgs
   { _rftPath :: Text
@@ -35,5 +35,12 @@ removeFileExecTyped :: FsConfig -> RemoveFileToolArgs -> IO Text
 removeFileExecTyped cfg args = do
   let p = args._rftPath
   resolved <- sandboxPath cfg (T.unpack p)
-  removeFile resolved
-  pure $ "Successfully removed " <> p
+  isDir <- doesDirectoryExist resolved
+  if isSandboxRoot cfg resolved
+    then pure $ "Error: refusing to remove the workspace root: " <> p
+    else
+      if isDir
+        then pure $ "Error: path is a directory, not a file (use remove_directory): " <> p
+        else do
+          removeFile resolved
+          pure $ "Successfully removed " <> p

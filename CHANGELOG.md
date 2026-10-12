@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   first stream event, so long answers are no longer cut off. New
   `withFirstEventTimeout` (`LLM.Core.Utils`) and `callWithRetry`
   (`LLM.Generate.GenerateUtils`).
+- **Breaking:** `StreamChunk` gains `StreamAttemptReset`. Streaming consumers
+  used to see duplicated output when an attempt failed after streaming some
+  chunks and a retry or fallback model started over. The reset is emitted
+  before the next attempt (only if the failed attempt streamed something);
+  consumers should discard the chunks of the current round when they get it.
+  Exhaustive pattern matches on `StreamChunk` need a new case.
 
 ## [0.2.0.0] - 2026-10-06
 

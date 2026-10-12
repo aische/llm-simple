@@ -100,6 +100,11 @@ data StreamChunk
     RoundTextRoleCommitted RoundTextRole
   | -- | A complete tool call from the provider stream.
     StreamToolCallChunk ToolCall
+  | -- | The previous attempt of this model call failed after streaming some
+    -- chunks, and a retry or fallback model starts over. Discard every chunk
+    -- received since the start of this model call (round). Only sent when
+    -- the failed attempt emitted at least one chunk.
+    StreamAttemptReset
   deriving (Show, Eq)
 
 -- | Constraint for typed structured output via Autodocodec.

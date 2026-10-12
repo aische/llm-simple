@@ -8,7 +8,7 @@ module LLM.Generate.Generate
 where
 
 import Control.Monad (unless, when)
-import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Maybe (fromMaybe)
 import LLM.Core.Types
   ( ChatResponse (..),
@@ -61,9 +61,10 @@ streamTextWithFallbacks ::
   GenRequest ->
   ModelWithFallbacks ->
   IO (GenerateResult ChatResponse)
-streamTextWithFallbacks onChunk gr models =
+streamTextWithFallbacks onChunk gr models = do
+  emittedRef <- newIORef False
   withModelFallbacks gr models $ \mc -> do
-    r <- streamTextLLM onChunk gr mc
+    r <- streamTextAttempts emittedRef onChunk gr mc
     case r of
       Left err -> pure $ Left err
       Right resp ->
@@ -78,13 +79,33 @@ generateTextLLM gr mc =
 
 -- | Stream one model call with retries. 'mcRequestTimeout' bounds the time
 -- until the first stream event of each attempt, not the whole stream.
+--
+-- If an attempt fails after streaming chunks, the next attempt first emits
+-- 'StreamAttemptReset'.
 streamTextLLM :: (StreamChunk -> IO ()) -> GenRequest -> ModelConfig -> IO LLMTextResult
-streamTextLLM onChunk gr mc =
+streamTextLLM onChunk gr mc = do
+  emittedRef <- newIORef False
+  streamTextAttempts emittedRef onChunk gr mc
+
+-- | 'streamTextLLM' with the \"chunks emitted\" flag supplied by the caller,
+-- so it is shared across retries and model fallbacks of one model call.
+streamTextAttempts ::
+  IORef Bool ->
+  (StreamChunk -> IO ()) ->
+  GenRequest ->
+  ModelConfig ->
+  IO LLMTextResult
+streamTextAttempts emittedRef onChunk gr mc =
   callWithRetry gr mc $
     let request = mkRequest gr mc
+        onChunk' c = writeIORef emittedRef True >> onChunk c
      in do
+          emitted <- readIORef emittedRef
+          when emitted $ do
+            onChunk StreamAttemptReset
+            writeIORef emittedRef False
           ProviderStreamCallback {pscOnEvent, pscFinalize} <-
-            mkProviderStreamCallback gr onChunk
+            mkProviderStreamCallback gr onChunk'
           result <-
             withFirstEventTimeout
               mc.mcRequestTimeout

@@ -20,10 +20,10 @@ import LLM.Core.Types
     toolCallPart,
   )
 import LLM.Core.Usage (PricingInfo (..), defaultPricingInfo, mkUsage)
-import LLM.Generate.Generate (generateTextLLM, streamTextLLM)
+import LLM.Generate.Generate (generateTextLLM, streamTextLLM, streamTextWithFallbacks)
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
-import LLM.Generate.ModelConfig (ModelConfig (..), defaultModelCapabilities)
+import LLM.Generate.ModelConfig (ModelConfig (..), ModelWithFallbacks (..), defaultModelCapabilities)
 import LLM.Generate.Types
   ( GenRequest (..),
     RoundTextRole (..),
@@ -122,6 +122,68 @@ spec = describe "Streaming" $ do
           mc = (testModelConfig gw) {mcRequestTimeout = Just 100}
       r <- streamTextLLM (\_ -> pure ()) (testGenRequest []) mc
       fmap (.respText) r `shouldBe` Left TimeoutError
+
+  describe "stream reset between attempts" $ do
+    it "emits StreamAttemptReset before a retry when the failed attempt streamed" $ do
+      gw <- flakyGateway "abc" "xyz"
+      let mc = (testModelConfig gw) {mcRetryCount = 1}
+      ref <- newIORef []
+      r <- streamTextLLM (\c -> modifyIORef' ref (c :)) (testGenRequest []) mc
+      fmap (.respText) r `shouldBe` Right "xyz"
+      chunks <- reverse <$> readIORef ref
+      chunks
+        `shouldBe` [ TextDelta "abc",
+                     StreamAttemptReset,
+                     TextDelta "xyz",
+                     RoundTextRoleCommitted AnswerRole
+                   ]
+
+    it "does not emit StreamAttemptReset when the failed attempt streamed nothing" $ do
+      gw <- flakyGateway "" "xyz"
+      let mc = (testModelConfig gw) {mcRetryCount = 1}
+      ref <- newIORef []
+      _ <- streamTextLLM (\c -> modifyIORef' ref (c :)) (testGenRequest []) mc
+      chunks <- reverse <$> readIORef ref
+      chunks `shouldBe` [TextDelta "xyz", RoundTextRoleCommitted AnswerRole]
+
+    it "emits StreamAttemptReset before falling back to the next model" $ do
+      let failing =
+            (streamGateway [] (ChatResponse "" [] Nothing Nothing))
+              { gwStreamText = \_ _ onEvent -> do
+                  onEvent (StreamDelta "abc")
+                  pure (Left (HttpError 400 "bad"))
+              }
+          ok = streamGateway [StreamDelta "xyz"] (ChatResponse "xyz" [textPart "xyz"] Nothing Nothing)
+          models = ModelWithFallbacks (testModelConfig failing) [testModelConfig ok]
+      ref <- newIORef []
+      r <- streamTextWithFallbacks (\c -> modifyIORef' ref (c :)) (testGenRequest []) models
+      fmap (.respText) r `shouldBe` Right "xyz"
+      chunks <- reverse <$> readIORef ref
+      chunks
+        `shouldBe` [ TextDelta "abc",
+                     StreamAttemptReset,
+                     TextDelta "xyz",
+                     RoundTextRoleCommitted AnswerRole
+                   ]
+
+-- | First call streams @first@ (if non-empty) then fails with a retryable
+-- 503; later calls stream @second@ and succeed.
+flakyGateway :: Text -> Text -> IO LLMGateway
+flakyGateway first second = do
+  attempts <- newIORef (0 :: Int)
+  let resp = ChatResponse second [textPart second] Nothing Nothing
+  pure
+    (streamGateway [] resp)
+      { gwStreamText = \_ _ onEvent -> do
+          n <- atomicModifyIORef' attempts (\k -> (k + 1, k))
+          if n == 0
+            then do
+              when (first /= "") $ onEvent (StreamDelta first)
+              pure (Left (HttpError 503 "overloaded"))
+            else do
+              onEvent (StreamDelta second)
+              pure (Right resp)
+      }
 
 streamGateway :: [StreamEvent] -> ChatResponse -> LLMGateway
 streamGateway events resp =

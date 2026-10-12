@@ -1,0 +1,6 @@
+data: {"id":"c1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","content":"Partial answer"},"finish_reason":null}]}
+
+data: {"error":{"message":"Rate limit reached","type":"rate_limit_exceeded","code":null}}
+
+data: [DONE]
+

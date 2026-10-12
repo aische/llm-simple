@@ -5,16 +5,18 @@ module LLM.Core.ProviderUtils
     normalizeSchemaOpenAI,
     stripJsonFences,
     stripBoundsAndComments,
+    decodeToolArguments,
+    invalidToolArgumentsError,
   )
 where
 
-import Data.Aeson (ToJSON (toJSON), Value (..))
+import Data.Aeson (ToJSON (toJSON), Value (..), decodeStrict', object)
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString qualified as BS
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Encoding (decodeUtf8)
-import LLM.Core.Types (LLMError (HttpError), LLMTextResult)
+import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import LLM.Core.Types (LLMError (HttpError, ParseError), LLMTextResult)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Req (HttpConfig, defaultHttpConfig, httpConfigCheckResponse)
 import Network.HTTP.Types.Status (statusCode)
@@ -31,6 +33,26 @@ readAll :: HC.BodyReader -> IO [BS.ByteString]
 readAll br = do
   chunk <- HC.brRead br
   if BS.null chunk then pure [] else (chunk :) <$> readAll br
+
+-- | Decode tool-call arguments sent as a JSON string. Empty input means the
+-- tool takes no arguments. 'Nothing' if the text is not valid JSON (for
+-- example because the response was cut off by the token limit).
+decodeToolArguments :: Text -> Maybe Value
+decodeToolArguments t
+  | T.null (T.strip t) = Just (object [])
+  | otherwise = decodeStrict' (encodeUtf8 t)
+
+-- | Error for a tool call whose arguments are unusable. Pass the provider's
+-- stop reason when it says the response hit the token limit
+-- (@max_tokens@ / @length@), so the message names the cause.
+invalidToolArgumentsError :: Text -> Maybe Text -> LLMError
+invalidToolArgumentsError name mTruncated =
+  ParseError $
+    "tool call "
+      <> name
+      <> case mTruncated of
+        Just reason -> " was cut off (stop reason: " <> reason <> "); increase max tokens"
+        Nothing -> ": arguments are not valid JSON"
 
 -- | Handle streaming response: check status, read error body or delegate
 -- to the provider-specific stream parser.

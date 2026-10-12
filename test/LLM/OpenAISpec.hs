@@ -10,11 +10,15 @@ import Data.Aeson
   )
 import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Vector qualified as V
+import Data.ByteString qualified as BS
+import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.Text qualified as T
 import LLM.Core.Types
   ( ChatResponse (respText),
+    LLMError (..),
     ToolCall (tcId, tcName),
     Turn (..),
     cacheEphemeral,
@@ -24,14 +28,15 @@ import LLM.Core.Types
     textPart,
   )
 import LLM.Core.Usage (Usage (..), mkUsage)
-import LLM.Core.Utils (getToolCalls, hasToolCalls)
-import LLM.Providers.OpenAI (encodeTurn, parseOpenAIResponse, parseOpenAIUsage)
+import LLM.Core.Utils (getToolCalls, hasToolCalls, isRetryable)
+import LLM.Providers.OpenAI (encodeTurn, parseOpenAIResponse, parseOpenAIStream, parseOpenAIUsage)
 import Test.Hspec
   ( Spec,
     describe,
     expectationFailure,
     it,
     shouldBe,
+    shouldContain,
     shouldSatisfy,
   )
 
@@ -55,6 +60,51 @@ spec = describe "OpenAI" $ do
           tc.tcName `shouldBe` "get_weather"
           tc.tcId `shouldBe` "call_abc123"
         Left err -> expectationFailure $ "Parse failed: " <> show err
+
+    it "returns a ParseError when finish_reason is length and tool arguments are cut off" $ do
+      let resp =
+            object
+              [ "choices"
+                  .= [ object
+                         [ "finish_reason" .= ("length" :: Text),
+                           "message"
+                             .= object
+                               [ "role" .= ("assistant" :: Text),
+                                 "tool_calls"
+                                   .= [ object
+                                          [ "id" .= ("call_1" :: Text),
+                                            "type" .= ("function" :: Text),
+                                            "function"
+                                              .= object
+                                                [ "name" .= ("get_weather" :: Text),
+                                                  "arguments" .= ("{\"location\": \"Lon" :: Text)
+                                                ]
+                                          ]
+                                      ]
+                               ]
+                         ]
+                     ]
+              ]
+      case parseOpenAIResponse resp of
+        Left (ParseError msg) -> T.unpack msg `shouldContain` "length"
+        other -> expectationFailure ("expected ParseError, got " <> show other)
+
+  describe "parseOpenAIStream errors and truncation" $ do
+    it "returns a retryable 429 for a mid-stream rate limit error" $ do
+      reader <- fixtureReader "test/fixtures/openai-midstream-error.sse"
+      result <- parseOpenAIStream reader (\_ -> pure ())
+      case result of
+        Left err@(HttpError 429 body) -> do
+          T.unpack body `shouldContain` "Rate limit"
+          isRetryable err `shouldBe` True
+        other -> expectationFailure ("expected HttpError 429, got " <> show other)
+
+    it "returns a ParseError instead of String args when finish_reason is length" $ do
+      reader <- fixtureReader "test/fixtures/openai-length-tool.sse"
+      result <- parseOpenAIStream reader (\_ -> pure ())
+      case result of
+        Left (ParseError msg) -> T.unpack msg `shouldContain` "length"
+        other -> expectationFailure ("expected ParseError, got " <> show other)
 
   describe "image request encoding" $ do
     it "encodes URL and base64 data-URL image parts" $ do
@@ -183,3 +233,13 @@ nestedText [key] v = lookupText key v
 nestedText (key : rest) (Object o) =
   KM.lookup (K.fromText key) o >>= nestedText rest
 nestedText _ _ = Nothing
+
+-- | Yield the whole fixture once, then EOF.
+fixtureReader :: FilePath -> IO (IO BS.ByteString)
+fixtureReader path = do
+  bs <- BS.readFile path
+  ref <- newIORef (Just bs)
+  pure $ do
+    m <- readIORef ref
+    writeIORef ref Nothing
+    pure (fromMaybe BS.empty m)

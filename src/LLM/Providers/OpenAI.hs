@@ -20,7 +20,7 @@ where
 import Data.Aeson
   ( KeyValue ((.=)),
     Object,
-    Value (String),
+    Value (Object, String),
     decodeStrict',
     encode,
     object,
@@ -32,15 +32,17 @@ import Data.Aeson
   )
 import Data.Aeson.Types (Pair, Parser, parseMaybe)
 import Data.ByteString.Lazy qualified as BSL
-import Data.Foldable (forM_)
+import Control.Monad (when)
+import Data.Either (lefts, rights)
+import Data.Foldable (for_, forM_)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
 import Control.Applicative ((<|>))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, normalizeSchemaOpenAI, stripJsonFences)
+import LLM.Core.ProviderUtils (decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, normalizeSchemaOpenAI, stripJsonFences)
 import LLM.Core.SSE (SSEEvent (sseData), readSSEEvents)
 import LLM.Core.Types
   ( ChatRequest
@@ -53,7 +55,7 @@ import LLM.Core.Types
         reqTools
       ),
     ContentPart (..),
-    LLMError (EmptyResponse),
+    LLMError (EmptyResponse, HttpError),
     LLMGateway,
     LLMTextResult,
     MessageEncodeOptions (..),
@@ -294,23 +296,28 @@ encodeToolResult tr =
 parseOpenAIResponse :: Value -> LLMTextResult
 parseOpenAIResponse v = case parseMaybe go v of
   Nothing -> Left EmptyResponse
-  Just parts ->
-    if null parts
-      then Left EmptyResponse
-      else Right (mkChatResponse parts (parseOpenAIUsage v))
+  Just (finishReason, parts) ->
+    case lefts parts of
+      name : _ -> Left (invalidToolArgumentsError name (truncationReason finishReason))
+      []
+        | null parts -> Left EmptyResponse
+        | otherwise -> Right (mkChatResponse (rights parts) (parseOpenAIUsage v))
   where
-    go :: Value -> Parser [ContentPart]
+    go :: Value -> Parser (Maybe Text, [Either Text ContentPart])
     go = withObject "OpenAIResponse" $ \o -> do
       (choice : _) <- o .: "choices" :: Parser [Value]
       withObject
         "choice"
         ( \co -> do
+            finishReason <- co .:? "finish_reason"
             msg <- co .: "message"
-            withObject "message" parseMessage msg
+            parts <- withObject "message" parseMessage msg
+            pure (finishReason, parts)
         )
         choice
 
-    parseMessage :: Object -> Parser [ContentPart]
+    -- Tool calls with invalid JSON arguments come back as 'Left' tool name.
+    parseMessage :: Object -> Parser [Either Text ContentPart]
     parseMessage mo = do
       mReasoning <- mo .:? "reasoning_content" :: Parser (Maybe Text)
       contentBlocks <- do
@@ -324,9 +331,9 @@ parseOpenAIResponse v = case parseMaybe go v of
               | Just rc <- [mReasoning],
                 not (T.null rc)
             ]
-      pure (thinkingBlocks ++ contentBlocks ++ toolBlocks)
+      pure (map Right (thinkingBlocks ++ contentBlocks) ++ toolBlocks)
 
-    parseToolCall :: Value -> Parser ContentPart
+    parseToolCall :: Value -> Parser (Either Text ContentPart)
     parseToolCall = withObject "tool_call" $ \tc -> do
       cid <- tc .: "id"
       fn <- tc .: "function"
@@ -335,12 +342,15 @@ parseOpenAIResponse v = case parseMaybe go v of
         ( \f -> do
             name <- f .: "name"
             argsStr <- f .: "arguments" :: Parser Text
-            let args = case decodeStrict' (encodeUtf8 argsStr) of
-                  Just v' -> v'
-                  Nothing -> String argsStr
-            pure $ toolCallPart (mkToolCall cid name args)
+            pure $ case decodeToolArguments argsStr of
+              Just args -> Right (toolCallPart (mkToolCall cid name args))
+              Nothing -> Left name
         )
         fn
+
+-- | The finish reason, if it says the response hit the token limit.
+truncationReason :: Maybe Text -> Maybe Text
+truncationReason r = if r == Just "length" then r else Nothing
 
 parseOpenAIUsage :: Value -> Maybe Usage
 parseOpenAIUsage = parseMaybe $ withObject "OpenAIResponse" $ \o -> do
@@ -389,6 +399,19 @@ parseOpenAIStream reader callback = do
   reasoningRef <- newIORef Nothing
   usageRef <- newIORef Nothing
   toolAccRef <- newIORef ([] :: [(Int, Text, Text, Text)])
+  errorRef <- newIORef (Nothing :: Maybe LLMError)
+  finishReasonRef <- newIORef (Nothing :: Maybe Text)
+  badToolRef <- newIORef (Nothing :: Maybe Text) -- first tool with invalid JSON args
+  let flushTools = do
+        tools <- readIORef toolAccRef
+        forM_ tools $ \(_, cid, name, argsStr) ->
+          case decodeToolArguments argsStr of
+            Just args -> do
+              let tc = mkToolCall cid name args
+              modifyIORef' blocksRef (toolCallPart tc :)
+              callback (StreamToolCall tc)
+            Nothing -> modifyIORef' badToolRef (<|> Just name)
+        writeIORef toolAccRef []
   readSSEEvents (HC.brRead reader) $ \sse -> do
     let raw = sse.sseData
     if raw == "[DONE]"
@@ -396,6 +419,8 @@ parseOpenAIStream reader callback = do
       else case decodeStrict' (encodeUtf8 raw) of
         Nothing -> pure ()
         Just v -> do
+          for_ (parseMaybe parseStreamError v) $ \status ->
+            modifyIORef' errorRef (<|> Just (HttpError status raw))
           case parseMaybe parseStreamReasoningDelta v of
             Just (Just txt) | not (T.null txt) -> do
               modifyIORef' reasoningRef (Just . maybe txt (<> txt))
@@ -418,28 +443,14 @@ parseOpenAIStream reader callback = do
                     [(if i == idx then (i, cid, n, a <> argChunk) else entry) | entry@(i, _, _, _) <- acc]
             Nothing -> pure ()
           case parseMaybe parseFinishReason v of
-            Just "tool_calls" -> do
-              tools <- readIORef toolAccRef
-              forM_ tools $ \(_, cid, name, argsStr) -> do
-                let args = case decodeStrict' (encodeUtf8 argsStr) of
-                      Just a -> a
-                      Nothing -> String argsStr
-                    tc = mkToolCall cid name args
-                modifyIORef' blocksRef (toolCallPart tc :)
-                callback (StreamToolCall tc)
-              writeIORef toolAccRef []
-            _ -> pure ()
+            Just reason -> do
+              writeIORef finishReasonRef (Just reason)
+              when (reason == "tool_calls") flushTools
+            Nothing -> pure ()
           case parseMaybe parseStreamUsage v of
             Just u -> writeIORef usageRef (Just u)
             Nothing -> pure ()
-  tools <- readIORef toolAccRef
-  forM_ tools $ \(_, cid, name, argsStr) -> do
-    let args = case decodeStrict' (encodeUtf8 argsStr) of
-          Just a -> a
-          Nothing -> String argsStr
-        tc = mkToolCall cid name args
-    modifyIORef' blocksRef (toolCallPart tc :)
-    callback (StreamToolCall tc)
+  flushTools
   textBlocks <- reverse <$> readIORef blocksRef
   mReasoning <- readIORef reasoningRef
   usage <- readIORef usageRef
@@ -449,9 +460,39 @@ parseOpenAIStream reader callback = do
             not (T.null rc)
         ]
       parts = thinkingBlocks ++ textBlocks
-  if null parts
-    then pure $ Left EmptyResponse
-    else pure $ Right (mkChatResponse parts usage)
+  mError <- readIORef errorRef
+  mBadTool <- readIORef badToolRef
+  finishReason <- readIORef finishReasonRef
+  pure $ case (mError, mBadTool) of
+    (Just err, _) -> Left err
+    (Nothing, Just name) -> Left (invalidToolArgumentsError name (truncationReason finishReason))
+    _
+      | null parts -> Left EmptyResponse
+      | otherwise -> Right (mkChatResponse parts usage)
+
+-- | A mid-stream @{"error": ...}@ chunk, mapped to an HTTP status so
+-- 'LLM.Core.Utils.isRetryable' treats it like the same error sent before
+-- streaming started. Uses a numeric @code@/@status@ when the server sends
+-- one; otherwise 429 for rate limits, 503 for overload, else 500.
+parseStreamError :: Value -> Parser Int
+parseStreamError = withObject "chunk" $ \o -> do
+  e <- o .: "error"
+  case e of
+    String msg -> pure (classify [msg])
+    Object eo -> do
+      mCode <- eo .:? "code" <|> pure Nothing
+      mStatus <- eo .:? "status" <|> pure Nothing
+      texts <- mapM (\k -> eo .:? k <|> pure Nothing) ["type", "code", "message"]
+      pure $ case filter (\c -> c >= 400 && c < 600) (catMaybes [mCode, mStatus]) of
+        c : _ -> c
+        [] -> classify (catMaybes texts)
+    _ -> fail "not an error"
+  where
+    classify ts
+      | any (hasWord "rate") ts = 429
+      | any (hasWord "overload") ts = 503
+      | otherwise = 500
+    hasWord w t = w `T.isInfixOf` T.toLower t
 
 parseStreamReasoningDelta :: Value -> Parser (Maybe Text)
 parseStreamReasoningDelta = withObject "chunk" $ \o -> do

@@ -33,6 +33,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `UnsupportedCapability` without sending the request (new
   `checkClaudeThinkingBudget`). Example catalog: `haiku_4_5` uses
   `maxTokens: 16000` so thinking leaves room for the answer.
+- Mid-stream errors are no longer ignored. A Claude `event: error` or an
+  OpenAI-compatible `data: {"error": ...}` chunk (OpenAI, DeepSeek, Ollama)
+  now yields `HttpError status body` instead of partial content or
+  `EmptyResponse`. Claude error types map to Anthropic's HTTP statuses
+  (`overloaded_error` → 529, `rate_limit_error` → 429, `api_error` → 500, …),
+  so overload and rate limits are retried. OpenAI-style errors use their numeric
+  code if present, otherwise 429 / 503 / 500.
+- Tool calls whose arguments are not valid JSON (e.g. cut off by `max_tokens` /
+  `finish_reason: "length"`) now yield `ParseError` instead of a tool call with
+  `String` arguments, in both streaming and non-streaming parsers. Empty
+  argument strings decode as `{}`. A non-streaming Claude response that stops
+  at `max_tokens` inside a `tool_use` block is also a `ParseError`.
 
 ## [0.2.0.0] - 2026-10-06
 

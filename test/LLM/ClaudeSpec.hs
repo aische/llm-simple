@@ -15,6 +15,7 @@ import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Maybe (mapMaybe)
 import Data.Scientific (toBoundedInteger, toRealFloat)
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Vector qualified as V
 import LLM.Core.Types
   ( ChatRequest (..),
@@ -40,7 +41,7 @@ import LLM.Core.Types
     pattern UserTurn,
   )
 import LLM.Core.Usage (Usage (..), mkUsage)
-import LLM.Core.Utils (getToolCalls, hasToolCalls)
+import LLM.Core.Utils (getToolCalls, hasToolCalls, isRetryable)
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
 import LLM.Providers.Claude
@@ -163,6 +164,48 @@ spec = describe "Claude" $ do
             [tc] -> tc.tcId `shouldBe` "toolu_weather_1"
             other -> expectationFailure $ "expected one StreamToolCall, got: " <> show other
         Left err -> expectationFailure $ "Stream parse failed: " <> show err
+
+  describe "parseClaudeStream errors and truncation" $ do
+    it "returns a retryable 529 for a mid-stream overloaded_error" $ do
+      sse <- BS.readFile "test/fixtures/claude-midstream-error.sse"
+      reader <- mkBodyReader sse
+      result <- parseClaudeStream "claude-haiku-4-5-20251001" reader (\_ -> pure ())
+      case result of
+        Left err@(HttpError 529 body) -> do
+          T.unpack body `shouldContain` "overloaded_error"
+          isRetryable err `shouldBe` True
+        other -> expectationFailure ("expected HttpError 529, got " <> show other)
+
+    it "returns a ParseError instead of String args when a tool call is cut off by max_tokens" $ do
+      sse <- BS.readFile "test/fixtures/claude-max-tokens-tool.sse"
+      eventsRef <- newIORef ([] :: [StreamEvent])
+      reader <- mkBodyReader sse
+      result <- parseClaudeStream "claude-haiku-4-5-20251001" reader (\ev -> modifyIORef' eventsRef (ev :))
+      case result of
+        Left (ParseError msg) -> T.unpack msg `shouldContain` "max_tokens"
+        other -> expectationFailure ("expected ParseError, got " <> show other)
+      events <- readIORef eventsRef
+      [tc | StreamToolCall tc <- events] `shouldBe` []
+
+  describe "parseClaudeResponse truncation" $ do
+    it "returns a ParseError when max_tokens cut off a tool_use block" $ do
+      let resp =
+            object
+              [ "model" .= ("claude-haiku-4-5-20251001" :: Text),
+                "stop_reason" .= ("max_tokens" :: Text),
+                "content"
+                  .= [ object
+                         [ "type" .= ("tool_use" :: Text),
+                           "id" .= ("toolu_1" :: Text),
+                           "name" .= ("get_weather" :: Text),
+                           "input" .= object []
+                         ]
+                     ],
+                "usage" .= object ["input_tokens" .= (1 :: Int), "output_tokens" .= (1 :: Int)]
+              ]
+      case parseClaudeResponse resp of
+        Left (ParseError msg) -> T.unpack msg `shouldContain` "max_tokens"
+        other -> expectationFailure ("expected ParseError, got " <> show other)
 
   describe "encodeTurn replay" $ do
     it "replays signed thinking blocks before tool_use for the same model" $ do

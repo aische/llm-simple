@@ -13,6 +13,7 @@ module LLM.Providers.Claude
   )
 where
 
+import Control.Applicative ((<|>))
 import Data.Aeson
   ( KeyValue ((.=)),
     Value (Object, String),
@@ -37,7 +38,7 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, stripJsonFences)
+import LLM.Core.ProviderUtils (decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, stripJsonFences)
 import LLM.Core.SSE (SSEEvent (sseData, sseEvent), readSSEEvents)
 import LLM.Core.Types
   ( CacheHint (..),
@@ -52,7 +53,7 @@ import LLM.Core.Types
       ),
     ContentPart (..),
     ImageSource (..),
-    LLMError (EmptyResponse, UnsupportedCapability),
+    LLMError (EmptyResponse, HttpError, UnsupportedCapability),
     LLMGateway (..),
     LLMResult,
     LLMTextResult,
@@ -350,9 +351,15 @@ parseClaudeResponse v = case parseMaybe (go modelVer) v of
   Just parts ->
     case parts of
       [] -> Left EmptyResponse
-      _ -> Right (mkChatResponse parts (parseClaudeUsage v))
+      _
+        -- A tool_use block that hit max_tokens may have incomplete input.
+        | stopReason == Just "max_tokens",
+          ContentPart (ToolCallPart tc) _ <- last parts ->
+            Left (invalidToolArgumentsError tc.tcName (Just "max_tokens"))
+        | otherwise -> Right (mkChatResponse parts (parseClaudeUsage v))
   where
     modelVer = parseMaybe (withObject "ClaudeResponse" (.: "model")) v
+    stopReason = parseMaybe (withObject "ClaudeResponse" (.: "stop_reason")) v :: Maybe Text
 
     go :: Maybe Text -> Value -> Parser [ContentPart]
     go mv = withObject "ClaudeResponse" $ \o -> do
@@ -461,8 +468,14 @@ parseClaudeStream modelHint readChunk callback = do
   thinkingAccRef <- newIORef (Nothing :: Maybe (Text, Maybe Text)) -- text, signature
   redactedRef <- newIORef (Nothing :: Maybe Text)
   modelRef <- newIORef modelHint
+  errorRef <- newIORef (Nothing :: Maybe LLMError)
+  stopReasonRef <- newIORef (Nothing :: Maybe Text)
+  badToolRef <- newIORef (Nothing :: Maybe Text) -- first tool with invalid JSON args
   readSSEEvents readChunk $ \sse -> do
     case sse.sseEvent of
+      Just "error" -> do
+        let status = maybe 500 claudeErrorStatus (parseMaybe parseErrorType =<< decodeStrict' (encodeUtf8 sse.sseData))
+        modifyIORef' errorRef (<|> Just (HttpError status sse.sseData))
       Just "message_start" ->
         case decodeStrict' (encodeUtf8 sse.sseData) of
           Just v -> do
@@ -525,28 +538,60 @@ parseClaudeStream modelHint readChunk callback = do
         mTool <- readIORef toolAccRef
         case mTool of
           Just (cid, name, jsonStr) -> do
-            let args = case decodeStrict' (encodeUtf8 jsonStr) of
-                  Just a -> a
-                  Nothing -> String jsonStr
-                tc = mkToolCall cid name args
-            modifyIORef' blocksRef (StreamTool cid name args :)
-            callback (StreamToolCall tc)
+            case decodeToolArguments jsonStr of
+              Just args -> do
+                modifyIORef' blocksRef (StreamTool cid name args :)
+                callback (StreamToolCall (mkToolCall cid name args))
+              Nothing -> modifyIORef' badToolRef (<|> Just name)
             writeIORef toolAccRef Nothing
           Nothing -> pure ()
       Just "message_delta" ->
         case decodeStrict' (encodeUtf8 sse.sseData) of
-          Just v -> case parseMaybe parseMessageDeltaUsage v of
-            Just outputToks -> modifyIORef' usageRef $ \u -> u {usageOutputTokens = outputToks}
-            Nothing -> pure ()
+          Just v -> do
+            case parseMaybe parseMessageDeltaUsage v of
+              Just outputToks -> modifyIORef' usageRef $ \u -> u {usageOutputTokens = outputToks}
+              Nothing -> pure ()
+            for_ (parseMaybe parseMessageDeltaStopReason v) (writeIORef stopReasonRef . Just)
           Nothing -> pure ()
       _ -> pure ()
   rawBlocks <- reverse <$> readIORef blocksRef
   usage <- readIORef usageRef
   model <- readIORef modelRef
+  mError <- readIORef errorRef
+  mBadTool <- readIORef badToolRef
+  stopReason <- readIORef stopReasonRef
   let parts = map (streamBlockToPart model) rawBlocks
-  if null parts
-    then pure $ Left EmptyResponse
-    else pure $ Right (mkChatResponse parts (Just usage))
+      truncated = if stopReason == Just "max_tokens" then stopReason else Nothing
+  pure $ case (mError, mBadTool) of
+    (Just err, _) -> Left err
+    (Nothing, Just name) -> Left (invalidToolArgumentsError name truncated)
+    _
+      | null parts -> Left EmptyResponse
+      | otherwise -> Right (mkChatResponse parts (Just usage))
+
+-- | HTTP status Anthropic uses for each error type, so mid-stream errors are
+-- classified like the same error returned before streaming started.
+claudeErrorStatus :: Text -> Int
+claudeErrorStatus = \case
+  "invalid_request_error" -> 400
+  "authentication_error" -> 401
+  "permission_error" -> 403
+  "not_found_error" -> 404
+  "request_too_large" -> 413
+  "rate_limit_error" -> 429
+  "api_error" -> 500
+  "overloaded_error" -> 529
+  _ -> 500
+
+parseErrorType :: Value -> Parser Text
+parseErrorType = withObject "error_event" $ \o -> do
+  e <- o .: "error"
+  withObject "error" (.: "type") e
+
+parseMessageDeltaStopReason :: Value -> Parser Text
+parseMessageDeltaStopReason = withObject "message_delta" $ \o -> do
+  d <- o .: "delta"
+  withObject "delta" (.: "stop_reason") d
 
 streamBlockToPart :: Text -> StreamBlock -> ContentPart
 streamBlockToPart _ (StreamText t) = textPart t

@@ -16,7 +16,7 @@ where
 
 import Autodocodec qualified as AC
 import Autodocodec.Schema (jsonSchemaVia)
-import Control.Exception (SomeException, fromException, try)
+import Control.Exception (SomeException, fromException)
 import Data.Aeson (FromJSON)
 import Data.Aeson qualified as AE
 import Data.Map qualified as Map
@@ -39,7 +39,7 @@ import LLM.Core.Types
     TypedTool (TypedTool),
   )
 import LLM.Core.Usage (Usage)
-import LLM.Core.Utils (toolResult)
+import LLM.Core.Utils (toolResult, trySync)
 import LLM.Generate.Logger (Hooks (..))
 import LLM.Generate.Types
   ( GenRequest (..),
@@ -60,7 +60,7 @@ executeTool hooks ctx tools tc = case lookup tc.tcName toolMap of
         pure $ toolResult tc msg
       else do
         hooks.onToolCall tc.tcName (AE.toJSON tc.tcArguments)
-        result <- try (tool.toolExecute ctx tc.tcArguments)
+        result <- trySync (tool.toolExecute ctx tc.tcArguments)
         case result of
           Right text -> do
             hooks.onToolResult tc.tcName text

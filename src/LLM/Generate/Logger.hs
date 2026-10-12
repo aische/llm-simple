@@ -13,7 +13,6 @@ module LLM.Generate.Logger
   )
 where
 
-import Control.Exception (SomeException, try)
 import Control.Monad (void)
 import Data.Aeson (Value)
 import Data.Aeson.Encode.Pretty (encodePretty)
@@ -22,6 +21,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Time.Clock.POSIX (getPOSIXTime)
+import LLM.Core.Utils (trySync)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
 import System.IO (stderr)
@@ -98,18 +98,19 @@ dumpJson dir provider label val = do
       name = T.unpack provider <> "-" <> T.unpack label <> "-" <> tsStr <> ".json"
   BSL.writeFile (dir </> name) (encodePretty val)
 
--- | Wrap all hook callbacks so exceptions are silently caught.
+-- | Wrap all hook callbacks so synchronous exceptions are silently caught.
 -- Hooks are observability-only and should never abort control flow.
+-- Asynchronous exceptions (timeout, cancellation) still propagate.
 safeHooks :: Hooks -> Hooks
 safeHooks h =
   Hooks
-    { onLog = \level msg -> void (try (h.onLog level msg) :: IO (Either SomeException ())),
-      onRequest = \p v -> void (try (h.onRequest p v) :: IO (Either SomeException ())),
-      onResponse = \p v -> void (try (h.onResponse p v) :: IO (Either SomeException ())),
-      onResponseError = \p v -> void (try (h.onResponseError p v) :: IO (Either SomeException ())),
-      onToolCall = \p v -> void (try (h.onToolCall p v) :: IO (Either SomeException ())),
-      onToolResult = \p v -> void (try (h.onToolResult p v) :: IO (Either SomeException ())),
-      onToolError = \p v -> void (try (h.onToolError p v) :: IO (Either SomeException ()))
+    { onLog = \level msg -> void (trySync (h.onLog level msg)),
+      onRequest = \p v -> void (trySync (h.onRequest p v)),
+      onResponse = \p v -> void (trySync (h.onResponse p v)),
+      onResponseError = \p v -> void (trySync (h.onResponseError p v)),
+      onToolCall = \p v -> void (trySync (h.onToolCall p v)),
+      onToolResult = \p v -> void (trySync (h.onToolResult p v)),
+      onToolError = \p v -> void (trySync (h.onToolError p v))
     }
 
 debugHooks :: FilePath -> Hooks

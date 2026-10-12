@@ -45,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `String` arguments, in both streaming and non-streaming parsers. Empty
   argument strings decode as `{}`. A non-streaming Claude response that stops
   at `max_tokens` inside a `tool_use` block is also a `ParseError`.
+- Tool execution, `safeHooks` and `emitEvent` no longer catch asynchronous
+  exceptions. A `timeout`, `killThread` or `cancel` during a tool call used to
+  become a "Tool error" result and the agent loop kept going. New `trySync`
+  in `LLM.Core.Utils`.
 
 ## [0.2.0.0] - 2026-10-06
 

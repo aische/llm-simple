@@ -6,6 +6,7 @@ module LLM.Core.Utils
     withRetry,
     withTimeout,
     withFirstEventTimeout,
+    trySync,
     streamResponseJson,
     printValue,
     parseChatResponse,
@@ -15,10 +16,14 @@ where
 import Control.Concurrent (forkIOWithUnmask, killThread, myThreadId, threadDelay, throwTo)
 import Control.Exception
   ( Exception (..),
+    SomeAsyncException,
+    SomeException,
     asyncExceptionFromException,
     asyncExceptionToException,
     bracket,
     handleJust,
+    throwIO,
+    try,
     uninterruptibleMask_,
   )
 import Control.Monad (guard, unless)
@@ -104,6 +109,16 @@ withFirstEventTimeout (Just ms) run onEvent = do
     (guard . (== ex))
     (\_ -> pure (Left TimeoutError))
     (bracket watchdog (uninterruptibleMask_ . killThread) (\_ -> run onEvent'))
+
+-- | Like @try \@SomeException@, but re-throws asynchronous exceptions
+-- ('System.Timeout.timeout', 'Control.Concurrent.killThread', @cancel@), so
+-- a caller that interrupts the thread is not turned into an ordinary error.
+trySync :: IO a -> IO (Either SomeException a)
+trySync act = do
+  r <- try act
+  case r of
+    Left e | Just (_ :: SomeAsyncException) <- fromException e -> throwIO e
+    _ -> pure r
 
 newtype FirstEventTimeout = FirstEventTimeout Unique
   deriving (Eq)

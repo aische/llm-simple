@@ -6,7 +6,7 @@ import LLM.Core.Types
   ( CacheHint (..),
     ChatResponse (ChatResponse),
     ContentPart (..),
-    LLMError (EmptyResponse, HttpError, NetworkError),
+    LLMError (EmptyResponse, HttpError, NetworkError, TimeoutError),
     PartBody (..),
     ThinkingContent (..),
     Turn (..),
@@ -236,6 +236,8 @@ spec = describe "Types" $ do
       isRetryable (HttpError 503 "overloaded") `shouldBe` True
     it "retries on network errors" $ do
       isRetryable (NetworkError "connection refused") `shouldBe` True
+    it "retries on timeouts" $ do
+      isRetryable TimeoutError `shouldBe` True
     it "does not retry on 400" $ do
       isRetryable (HttpError 400 "bad request") `shouldBe` False
     it "does not retry on empty response" $ do

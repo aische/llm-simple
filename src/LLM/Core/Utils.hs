@@ -5,20 +5,33 @@ module LLM.Core.Utils
     isRetryable,
     withRetry,
     withTimeout,
+    withFirstEventTimeout,
     streamResponseJson,
     printValue,
     parseChatResponse,
   )
 where
 
+import Control.Concurrent (forkIOWithUnmask, killThread, myThreadId, threadDelay, throwTo)
+import Control.Exception
+  ( Exception (..),
+    asyncExceptionFromException,
+    asyncExceptionToException,
+    bracket,
+    handleJust,
+    uninterruptibleMask_,
+  )
+import Control.Monad (guard, unless)
 import Control.Retry (RetryPolicyM, RetryStatus (rsIterNumber), retrying)
 import Data.Aeson (Value, encode, object, (.=))
 import Data.Aeson qualified as AE
 import Data.Aeson.Types (Parser)
 import Data.ByteString.Lazy.Char8 qualified as L8
+import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Unique (Unique, newUnique)
 import LLM.Core.Types
   ( ChatResponse (..),
     ContentPart (..),
@@ -54,14 +67,53 @@ getToolCalls r = turnToolCalls r.respContent
 isRetryable :: LLMError -> Bool
 isRetryable (HttpError status _) = status `elem` [429, 503, 529]
 isRetryable (NetworkError _) = True
+isRetryable TimeoutError = True
 isRetryable _ = False
 
 -- | Wrap an action with a timeout (ms). Returns 'TimeoutError' on expiry.
 withTimeout :: Maybe Int -> IO (LLMResult a) -> IO (LLMResult a)
 withTimeout Nothing action = action
-withTimeout (Just us) action = do
-  result <- timeout (us * 1000) action
+withTimeout (Just ms) action = do
+  result <- timeout (ms * 1000) action
   pure $ fromMaybe (Left TimeoutError) result
+
+-- | Like 'withTimeout', but for streaming: the timeout (ms) only covers the
+-- time until the first event reaches the callback. Once an event has
+-- arrived, the stream may run as long as it needs. Returns 'TimeoutError'
+-- if no event arrives in time.
+--
+-- @run@ receives the wrapped callback and must pass every event through it.
+withFirstEventTimeout ::
+  Maybe Int ->
+  ((e -> IO ()) -> IO (LLMResult a)) ->
+  (e -> IO ()) ->
+  IO (LLMResult a)
+withFirstEventTimeout Nothing run onEvent = run onEvent
+withFirstEventTimeout (Just ms) run onEvent = do
+  startedRef <- newIORef False
+  caller <- myThreadId
+  ex <- FirstEventTimeout <$> newUnique
+  -- Same structure as 'System.Timeout.timeout': a watchdog thread throws a
+  -- unique async exception at the caller unless the first event came in.
+  let watchdog = forkIOWithUnmask $ \unmask -> unmask $ do
+        threadDelay (ms * 1000)
+        started <- readIORef startedRef
+        unless started $ throwTo caller ex
+      onEvent' e = writeIORef startedRef True >> onEvent e
+  handleJust
+    (guard . (== ex))
+    (\_ -> pure (Left TimeoutError))
+    (bracket watchdog (uninterruptibleMask_ . killThread) (\_ -> run onEvent'))
+
+newtype FirstEventTimeout = FirstEventTimeout Unique
+  deriving (Eq)
+
+instance Show FirstEventTimeout where
+  show _ = "<<first event timeout>>"
+
+instance Exception FirstEventTimeout where
+  toException = asyncExceptionToException
+  fromException = asyncExceptionFromException
 
 -- | Retry an action using the retry package's policy (exponential backoff + jitter).
 -- The policy controls max attempts, delays, and jitter.

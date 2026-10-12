@@ -2,6 +2,7 @@ module LLM.Generate.GenerateUtils
   ( maybeThrottle,
     mkRequest,
     usageWithModelCost,
+    callWithRetry,
     callWithRetryTimeout,
     withModelFallbacks,
     validateModelCapabilities,
@@ -83,15 +84,30 @@ validateModelCapabilities mc turns = do
                     <> " does not support thinking"
         _ -> Right ()
 
+-- | Run one model call with the model's throttle delay and retry policy.
+-- @attempt@ is run once per try; any per-attempt timeout must be inside it.
+callWithRetry ::
+  GenRequest ->
+  ModelConfig ->
+  IO (Either LLMError a) ->
+  IO (Either LLMError a)
+callWithRetry gr mc attempt =
+  maybeThrottle mc.mcThrottleDelay $
+    withRetry (modelRetryPolicy mc) (gr.grHooks.onLog Warn) attempt
+
+-- | 'callWithRetry' where each attempt is limited by 'mcRequestTimeout'.
+--
+-- The timeout applies to each attempt separately, not to the whole
+-- sequence of retries and backoff sleeps. A timed-out attempt yields
+-- 'TimeoutError', which is retryable. For streaming, see
+-- 'LLM.Core.Utils.withFirstEventTimeout' (used by 'streamTextLLM').
 callWithRetryTimeout ::
   GenRequest ->
   ModelConfig ->
   IO (Either LLMError a) ->
   IO (Either LLMError a)
 callWithRetryTimeout gr mc invoke =
-  maybeThrottle mc.mcThrottleDelay $
-    withTimeout mc.mcRequestTimeout $
-      withRetry (modelRetryPolicy mc) (gr.grHooks.onLog Warn) invoke
+  callWithRetry gr mc (withTimeout mc.mcRequestTimeout invoke)
 
 withModelFallbacks ::
   GenRequest ->

@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returns an error message instead. `remove_file` and `move_file` (source)
   refuse the root too, and `remove_file` on a directory returns a clear error
   instead of throwing. New helper `isSandboxRoot` in `LLM.Tools.FsConfig`.
+- `mcRequestTimeout` now applies to each attempt instead of covering all
+  retries and backoff sleeps, and `TimeoutError` is now retryable
+  (`isRetryable`). For streaming, the timeout only covers the time until the
+  first stream event, so long answers are no longer cut off. New
+  `withFirstEventTimeout` (`LLM.Core.Utils`) and `callWithRetry`
+  (`LLM.Generate.GenerateUtils`).
 
 ## [0.2.0.0] - 2026-10-06
 

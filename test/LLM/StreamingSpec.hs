@@ -2,11 +2,14 @@
 
 module LLM.StreamingSpec (spec) where
 
+import Control.Concurrent (threadDelay)
+import Control.Monad (when)
 import Data.Aeson (object, (.=))
-import Data.IORef (modifyIORef', newIORef, readIORef)
+import Data.IORef (atomicModifyIORef', modifyIORef', newIORef, readIORef)
 import Data.Text (Text)
 import LLM.Core.Types
   ( ChatResponse (..),
+    LLMError (..),
     LLMGateway (..),
     StreamEvent (..),
     Turn (..),
@@ -17,7 +20,7 @@ import LLM.Core.Types
     toolCallPart,
   )
 import LLM.Core.Usage (PricingInfo (..), defaultPricingInfo, mkUsage)
-import LLM.Generate.Generate (streamTextLLM)
+import LLM.Generate.Generate (generateTextLLM, streamTextLLM)
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig (ModelConfig (..), defaultModelCapabilities)
@@ -72,6 +75,54 @@ spec = describe "Streaming" $ do
       chunks <- runStream gw []
       reverse chunks `shouldBe` [ReasoningDelta "think", RoundTextRoleCommitted AnswerRole]
 
+  describe "request timeout" $ do
+    it "applies the timeout per attempt, so a retry can succeed" $ do
+      attempts <- newIORef (0 :: Int)
+      let resp = ChatResponse "ok" [textPart "ok"] Nothing Nothing
+          gw =
+            (streamGateway [] resp)
+              { gwGenerateText = \_ _ -> do
+                  n <- atomicModifyIORef' attempts (\k -> (k + 1, k))
+                  when (n == 0) $ threadDelay 1_000_000
+                  pure (Right resp)
+              }
+          mc = (testModelConfig gw) {mcRequestTimeout = Just 100, mcRetryCount = 1}
+      r <- generateTextLLM (testGenRequest []) mc
+      fmap (.respText) r `shouldBe` Right "ok"
+      readIORef attempts >>= (`shouldBe` 2)
+
+    it "streaming: does not cut off a stream that started within the timeout" $ do
+      let resp = ChatResponse "abc" [textPart "abc"] Nothing Nothing
+          gw =
+            (streamGateway [] resp)
+              { gwStreamText = \_ _ onEvent -> do
+                  onEvent (StreamDelta "a")
+                  threadDelay 150_000
+                  onEvent (StreamDelta "b")
+                  threadDelay 150_000
+                  onEvent (StreamDelta "c")
+                  pure (Right resp)
+              }
+          mc = (testModelConfig gw) {mcRequestTimeout = Just 100}
+      ref <- newIORef []
+      r <- streamTextLLM (\c -> modifyIORef' ref (c :)) (testGenRequest []) mc
+      fmap (.respText) r `shouldBe` Right "abc"
+      chunks <- reverse <$> readIORef ref
+      take 3 chunks `shouldBe` [TextDelta "a", TextDelta "b", TextDelta "c"]
+
+    it "streaming: times out when no event arrives in time" $ do
+      let resp = ChatResponse "late" [textPart "late"] Nothing Nothing
+          gw =
+            (streamGateway [] resp)
+              { gwStreamText = \_ _ onEvent -> do
+                  threadDelay 1_000_000
+                  onEvent (StreamDelta "late")
+                  pure (Right resp)
+              }
+          mc = (testModelConfig gw) {mcRequestTimeout = Just 100}
+      r <- streamTextLLM (\_ -> pure ()) (testGenRequest []) mc
+      fmap (.respText) r `shouldBe` Left TimeoutError
+
 streamGateway :: [StreamEvent] -> ChatResponse -> LLMGateway
 streamGateway events resp =
   LLMGateway
@@ -85,31 +136,35 @@ runStream :: LLMGateway -> [Turn] -> IO [StreamChunk]
 runStream gw turns = do
   ref <- newIORef []
   let onChunk c = modifyIORef' ref (c :)
-      gr =
-        GenRequest
-          { grSystemPrompt = Nothing,
-            grMessages = turns,
-            grTools = [],
-            grAbortSignal = Nothing,
-            grLLMHooks = llmHooks noHooks,
-            grHooks = noHooks
-          }
-      mc =
-        ModelConfig
-          { mcGateway = gw,
-            mcModel = "test",
-            mcPricing = zeroPricing,
-            mcMaxTokens = 256,
-            mcTemperature = Nothing,
-            mcThinking = Nothing,
-            mcCapabilities = defaultModelCapabilities,
-            mcRequestTimeout = Nothing,
-            mcThrottleDelay = Nothing,
-            mcRetryCount = 0,
-            mcJitterBackoff = 0
-          }
-  _ <- streamTextLLM onChunk gr mc
+  _ <- streamTextLLM onChunk (testGenRequest turns) (testModelConfig gw)
   readIORef ref
+
+testGenRequest :: [Turn] -> GenRequest
+testGenRequest turns =
+  GenRequest
+    { grSystemPrompt = Nothing,
+      grMessages = turns,
+      grTools = [],
+      grAbortSignal = Nothing,
+      grLLMHooks = llmHooks noHooks,
+      grHooks = noHooks
+    }
+
+testModelConfig :: LLMGateway -> ModelConfig
+testModelConfig gw =
+  ModelConfig
+    { mcGateway = gw,
+      mcModel = "test",
+      mcPricing = zeroPricing,
+      mcMaxTokens = 256,
+      mcTemperature = Nothing,
+      mcThinking = Nothing,
+      mcCapabilities = defaultModelCapabilities,
+      mcRequestTimeout = Nothing,
+      mcThrottleDelay = Nothing,
+      mcRetryCount = 0,
+      mcJitterBackoff = 0
+    }
 
 zeroPricing :: PricingInfo
 zeroPricing = defaultPricingInfo 0 0

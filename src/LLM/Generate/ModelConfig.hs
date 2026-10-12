@@ -68,7 +68,9 @@ data ModelConfig = ModelConfig
     mcThinking :: Maybe ThinkingMode,
     -- | Declared capabilities (vision, thinking, prompt caching).
     mcCapabilities :: ModelCapabilities,
-    -- | Whole-request timeout in milliseconds ('Nothing' = no timeout).
+    -- | Per-attempt timeout in milliseconds ('Nothing' = no timeout). Each
+    -- retry gets the full timeout; a timeout is retryable. For streaming it
+    -- bounds only the time until the first stream event.
     mcRequestTimeout :: Maybe Int,
     -- | Delay in milliseconds before each API call (rate limiting).
     mcThrottleDelay :: Maybe Int,

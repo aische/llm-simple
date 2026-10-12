@@ -18,8 +18,10 @@ import LLM.Core.Types
     Turn (..),
   )
 import LLM.Core.Usage (emptyUsage)
+import LLM.Core.Utils (withFirstEventTimeout)
 import LLM.Generate.GenerateUtils
-  ( callWithRetryTimeout,
+  ( callWithRetry,
+    callWithRetryTimeout,
     mkRequest,
     usageWithModelCost,
     withModelFallbacks,
@@ -74,14 +76,20 @@ generateTextLLM gr mc =
     let request = mkRequest gr mc
      in mc.mcGateway.gwGenerateText gr.grLLMHooks request
 
+-- | Stream one model call with retries. 'mcRequestTimeout' bounds the time
+-- until the first stream event of each attempt, not the whole stream.
 streamTextLLM :: (StreamChunk -> IO ()) -> GenRequest -> ModelConfig -> IO LLMTextResult
 streamTextLLM onChunk gr mc =
-  callWithRetryTimeout gr mc $
+  callWithRetry gr mc $
     let request = mkRequest gr mc
      in do
           ProviderStreamCallback {pscOnEvent, pscFinalize} <-
             mkProviderStreamCallback gr onChunk
-          result <- mc.mcGateway.gwStreamText gr.grLLMHooks request pscOnEvent
+          result <-
+            withFirstEventTimeout
+              mc.mcRequestTimeout
+              (mc.mcGateway.gwStreamText gr.grLLMHooks request)
+              pscOnEvent
           case result of
             Right _ -> pscFinalize >> pure result
             Left err -> pure (Left err)

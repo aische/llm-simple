@@ -64,7 +64,7 @@ Models are defined in a JSON array. Each entry maps a logical config name to a p
 | `pricing`         | `pricePerMillionInput` / `pricePerMillionOutput` for usage cost tracking; optional `pricePerMillionCacheRead` / `pricePerMillionCacheWrite` (fall back to input rate) |
 | `maxTokens`       | Max tokens per request                                                   |
 | `temperature`     | Sampling temperature (optional)                                          |
-| `requestTimeout`  | Request timeout in ms (optional)                                         |
+| `requestTimeout`  | Timeout in ms per attempt (optional); for streaming, time until the first event; timeouts are retried |
 | `throttleDelay`   | Delay between requests in ms (optional)                                  |
 | `retryCount`      | Number of retries on failure                                             |
 | `jitterBackoff`   | Backoff jitter in ms between retries                                     |

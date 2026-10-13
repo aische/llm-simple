@@ -19,13 +19,18 @@ import Data.Text qualified as T
 import LLM.Core.Types
   ( ChatResponse (respText),
     LLMError (..),
+    ProviderOpaque (..),
+    ThinkingContent (..),
     ToolCall (tcArguments, tcId, tcName),
     Turn (..),
     cacheEphemeral,
     defaultMessageEncodeOptions,
     imageBase64Part,
     imageUrlPart,
+    mkToolCall,
     textPart,
+    thinkingPart,
+    toolCallPart,
   )
 import LLM.Core.Usage (Usage (..), mkUsage)
 import LLM.Core.Utils (getToolCalls, hasToolCalls, isRetryable)
@@ -128,6 +133,29 @@ spec = describe "OpenAI" $ do
                          ("call_y", object ["location" .= ("Paris" :: Text)])
                        ]
         Left err -> expectationFailure ("unexpected error: " <> show err)
+
+  describe "assistant message encoding" $ do
+    it "sends empty content for a turn with only foreign thinking" $ do
+      let redacted =
+            ThinkingContent
+              { thinkingText = Nothing,
+                thinkingOpaque =
+                  Just
+                    ProviderOpaque
+                      { poProvider = "claude",
+                        poModel = Just "claude-haiku-4-5",
+                        poPayload = object ["type" .= ("redacted_thinking" :: Text), "data" .= ("xyz" :: Text)]
+                      }
+              }
+          msg = head (encodeTurn defaultMessageEncodeOptions (AssistantMessage [thinkingPart redacted]))
+      lookupText "content" msg `shouldBe` Just ""
+      lookupKey "tool_calls" msg `shouldBe` Nothing
+
+    it "omits content for a tool-call-only turn" $ do
+      let turn = AssistantMessage [toolCallPart (mkToolCall "c1" "get_weather" (object []))]
+          msg = head (encodeTurn defaultMessageEncodeOptions turn)
+      lookupKey "content" msg `shouldBe` Nothing
+      lookupKey "tool_calls" msg `shouldSatisfy` (/= Nothing)
 
   describe "image request encoding" $ do
     it "encodes URL and base64 data-URL image parts" $ do

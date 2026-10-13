@@ -92,6 +92,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MessageEncodeOptions` is now a two-field record with the new
   `meoRequireReasoning`; code that constructs it directly must set it. The
   streamed DeepSeek fixture's requests gained the empty field.
+- OpenAI-protocol providers (OpenAI, OpenRouter, Ollama, DeepSeek) no longer
+  send an assistant message with neither `content` nor `tool_calls`, e.g. a
+  Claude turn that held only (redacted) thinking. OpenAI rejected
+  `{"role":"assistant"}` with "expected a string, got null"; such turns now
+  send `"content": ""`. Tool-call-only turns still omit `content`.
 
 ## [0.2.0.0] - 2026-10-06
 

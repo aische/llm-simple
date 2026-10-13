@@ -226,7 +226,10 @@ encodeTurn opts (AssistantMessage parts) =
         | otherwise = id
    in [ object $
           ["role" .= ("assistant" :: Text)]
-            ++ ["content" .= text | not (T.null text)]
+            -- Without tool calls, send content even when empty: OpenAI
+            -- rejects an assistant message with neither (e.g. a Claude turn
+            -- that held only thinking).
+            ++ ["content" .= text | not (T.null text) || null calls]
             ++ [ "reasoning_content" .= rc
                  | opts.meoIncludeReasoning,
                    Just rc <- [requireReasoning mReasoning]

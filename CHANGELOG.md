@@ -97,6 +97,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Claude turn that held only (redacted) thinking. OpenAI rejected
   `{"role":"assistant"}` with "expected a string, got null"; such turns now
   send `"content": ""`. Tool-call-only turns still omit `content`.
+- Image media types are checked per provider. `mkImageBase64` accepts HEIC
+  and HEIF, but only Gemini does; Claude, OpenAI, Ollama and DeepSeek return
+  400 for anything but jpeg, png, gif and webp. A HEIC image in a Gemini
+  conversation broke the fallback to those providers, because the vision
+  check passed. `validateModelCapabilities` now skips a model whose gateway
+  does not accept every inline image's media type (`UnsupportedCapability`,
+  like a model without vision). URL images have no known type and are not
+  checked. New `commonImageMediaTypes` (`LLM.Core.Types`). **Breaking:**
+  `LLMGateway` gained `gwImageMediaTypes` and `LLMProvider` gained
+  `providerImageMediaTypes` (copied by `toGateway`); code that constructs
+  either directly must set it.
 
 ## [0.2.0.0] - 2026-10-06
 

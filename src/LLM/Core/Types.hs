@@ -20,6 +20,7 @@ module LLM.Core.Types
     cacheEphemeral,
     mkImageBase64,
     supportedImageMediaTypes,
+    commonImageMediaTypes,
     projectText,
     projectReasoning,
     turnToolCalls,
@@ -82,6 +83,9 @@ import LLM.Core.Usage (Usage)
 data LLMGateway = LLMGateway
   { -- | Short name used in logs and hooks (e.g. @openai@).
     gwName :: Text,
+    -- | MIME types of inline ('ImageBase64') images the provider accepts.
+    -- Models on this gateway are skipped for conversations with other types.
+    gwImageMediaTypes :: [Text],
     -- | Non-streaming chat completion.
     gwGenerateText :: LLMHooks -> ChatRequest -> IO LLMTextResult,
     -- | Streaming chat; invoke the callback for each 'StreamEvent'.
@@ -195,16 +199,21 @@ instance FromJSON ImageSource where
           <*> o .: "data"
       _ -> fail $ "Unknown image source type: " <> T.unpack typ
 
--- | MIME types accepted by 'mkImageBase64' / 'imageBase64Part'.
-supportedImageMediaTypes :: [Text]
-supportedImageMediaTypes =
+-- | Image MIME types every provider with vision accepts (Claude, OpenAI,
+-- Ollama, DeepSeek). Gemini also accepts HEIC / HEIF.
+commonImageMediaTypes :: [Text]
+commonImageMediaTypes =
   [ "image/jpeg",
     "image/png",
     "image/gif",
-    "image/webp",
-    "image/heic",
-    "image/heif"
+    "image/webp"
   ]
+
+-- | MIME types accepted by 'mkImageBase64' / 'imageBase64Part'. Not every
+-- provider accepts all of them; see 'gwImageMediaTypes'.
+supportedImageMediaTypes :: [Text]
+supportedImageMediaTypes =
+  commonImageMediaTypes ++ ["image/heic", "image/heif"]
 
 -- | Validate MIME type and base64 payload for an inline image.
 mkImageBase64 :: Text -> Text -> Either Text ImageSource

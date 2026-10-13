@@ -46,7 +46,8 @@ import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
 import LLM.Core.ProviderUtils (decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, normalizeSchemaOpenAI, stripJsonFences)
 import LLM.Core.SSE (SSEEvent (sseData), readSSEEvents)
 import LLM.Core.Types
-  ( ChatRequest
+  ( commonImageMediaTypes,
+    ChatRequest
       ( reqConversation,
         reqMaxTokens,
         reqModel,
@@ -121,6 +122,7 @@ openAIProviderWithName :: Text -> Url scheme -> Option scheme -> Text -> LLMProv
 openAIProviderWithName name baseUrl baseOpts apiKey =
   LLMProvider
     { providerName = name,
+      providerImageMediaTypes = commonImageMediaTypes,
       buildBody = openAIBuildBody,
       sendRequest = sendRequest,
       openStream = \body k ->

@@ -26,6 +26,8 @@ import Network.HTTP.Req (HttpException)
 data LLMProvider = LLMProvider
   { -- | Provider name for logging/hooks (e.g. "claude", "gemini", "openai")
     providerName :: Text,
+    -- | MIME types of inline images the provider accepts (see 'gwImageMediaTypes').
+    providerImageMediaTypes :: [Text],
     -- | Build the JSON request body. Bool indicates whether streaming is requested.
     buildBody :: Bool -> ChatRequest -> Value,
     -- | Make a non-streaming HTTP call, returning (status code, response JSON).
@@ -108,6 +110,7 @@ toGateway :: LLMProvider -> LLMGateway
 toGateway p =
   LLMGateway
     { gwName = p.providerName,
+      gwImageMediaTypes = p.providerImageMediaTypes,
       gwGenerateText = genericGenerateText p,
       gwStreamText = genericStreamText p,
       gwGenerateObject = genericGenerateObject p

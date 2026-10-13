@@ -11,6 +11,7 @@ import LLM.Core.Types
   ( ChatResponse (..),
     LLMError (..),
     LLMGateway (..),
+    supportedImageMediaTypes,
     StreamEvent (..),
     Turn (..),
     assistantTurn,
@@ -189,6 +190,7 @@ streamGateway :: [StreamEvent] -> ChatResponse -> LLMGateway
 streamGateway events resp =
   LLMGateway
     { gwName = "stream-mock",
+      gwImageMediaTypes = supportedImageMediaTypes,
       gwGenerateText = \_ _ -> pure (Right resp),
       gwStreamText = \_ _ onEvent -> mapM_ onEvent events >> pure (Right resp),
       gwGenerateObject = \_ _ _ -> pure (Right (object [], Nothing))

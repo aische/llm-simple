@@ -20,7 +20,8 @@ import Data.Text.Encoding (encodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
 import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, normalizeSchemaOpenAI, stripJsonFences)
 import LLM.Core.Types
-  ( ChatRequest
+  ( commonImageMediaTypes,
+    ChatRequest
       ( reqMaxTokens,
         reqModel,
         reqTemperature,
@@ -63,6 +64,7 @@ ollamaProviderWith :: Url scheme -> Option scheme -> LLMProvider
 ollamaProviderWith baseUrl baseOpts =
   LLMProvider
     { providerName = "ollama",
+      providerImageMediaTypes = commonImageMediaTypes,
       -- Ollama uses the same request format as OpenAI, but without stream_options
       -- (Ollama doesn't support include_usage in streaming).
       buildBody = ollamaBuildBody,

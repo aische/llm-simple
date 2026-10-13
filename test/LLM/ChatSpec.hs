@@ -25,7 +25,10 @@ import LLM.Core.Types
     textPart, toolCallPart, pattern UserTurn,
     Turn (..),
     cacheEphemeral,
+    commonImageMediaTypes,
+    imageBase64Part,
     imageUrlPart,
+    supportedImageMediaTypes,
     LLMError (..),
     LLMGateway (..),
     LLMHooks (..),
@@ -59,6 +62,7 @@ mockGateway :: ChatResponse -> LLMGateway
 mockGateway resp =
   LLMGateway
     { gwName = "mock",
+      gwImageMediaTypes = supportedImageMediaTypes,
       gwGenerateText = \_ _ -> pure (Right resp),
       gwStreamText = \_ _ _ -> pure (Right resp),
       gwGenerateObject = \_ _ _ -> pure (Right (object [], Nothing))
@@ -69,6 +73,7 @@ mockErrorGateway :: LLMError -> LLMGateway
 mockErrorGateway err =
   LLMGateway
     { gwName = "mock-error",
+      gwImageMediaTypes = supportedImageMediaTypes,
       gwGenerateText = \_ _ -> pure (Left err),
       gwStreamText = \_ _ _ -> pure (Left err),
       gwGenerateObject = \_ _ _ -> pure (Left err)
@@ -79,6 +84,7 @@ mockToolGateway :: LLMGateway
 mockToolGateway =
   LLMGateway
     { gwName = "mock-tool",
+      gwImageMediaTypes = supportedImageMediaTypes,
       gwGenerateText = \_ req ->
         if any isToolTurn req.reqConversation
           then pure $ Right (ChatResponse "The weather is sunny." [textPart "The weather is sunny."] (Just (mkUsage 80 15)) Nothing)
@@ -187,6 +193,7 @@ capturingToolGateway ref =
              in pure $ Right (ChatResponse "" [toolCallPart tc] (Just (mkUsage 50 10)) Nothing)
    in LLMGateway
         { gwName = "mock-tool-capture",
+          gwImageMediaTypes = supportedImageMediaTypes,
           gwGenerateText = \_ -> respond,
           gwStreamText = \_ req _onEvent -> respond req,
           gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
@@ -202,6 +209,7 @@ loggingGateway calls label respond =
   let call req = modifyIORef' calls (++ [label]) >> respond req
    in LLMGateway
         { gwName = label,
+          gwImageMediaTypes = supportedImageMediaTypes,
           gwGenerateText = \_ -> call,
           gwStreamText = \_ req _onEvent -> call req,
           gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
@@ -350,6 +358,7 @@ spec = describe "Chat" $ do
       let infiniteToolGateway =
             LLMGateway
               { gwName = "mock-infinite",
+                gwImageMediaTypes = supportedImageMediaTypes,
                 gwGenerateText = \_ _ ->
                   let tc = mkToolCall "call_1" "get_weather" (object [])
                    in pure $ Right (ChatResponse "" [toolCallPart tc] Nothing Nothing),
@@ -385,6 +394,7 @@ spec = describe "Chat" $ do
       let boomGw =
             LLMGateway
               { gwName = "should-not-run",
+                gwImageMediaTypes = supportedImageMediaTypes,
                 gwGenerateText = \_ _ -> pure (Left (HttpError 500 "should not be called")),
                 gwStreamText = \_ _ _ -> pure (Left (HttpError 500 "should not be called")),
                 gwGenerateObject = \_ _ _ -> pure (Left (HttpError 500 "should not be called"))
@@ -411,6 +421,39 @@ spec = describe "Chat" $ do
       case result of
         Left GenerateErrorResult {gerError = GErrLLM (UnsupportedCapability _)} -> pure ()
         other -> expectationFailure $ "Expected UnsupportedCapability, got: " <> show other
+
+    it "skips a model whose gateway does not accept the image media type" $ do
+      calls <- newIORef []
+      Right heic <- pure $ imageBase64Part "image/heic" "aGVsbG8="
+      let vision = defaultModelCapabilities {capVision = True}
+          claudeLike =
+            (mockModel ((loggingGateway calls "claude-like" toolThenText) {gwImageMediaTypes = commonImageMediaTypes}))
+              { mcCapabilities = vision
+              }
+          geminiLike =
+            (mockModel ((loggingGateway calls "gemini-like" toolThenText) {gwImageMediaTypes = supportedImageMediaTypes}))
+              { mcCapabilities = vision
+              }
+          msgs = [UserMessage [heic, textPart "what is this?"]]
+      result <- runGenerate defaultAgent (ModelWithFallbacks claudeLike [geminiLike]) toolMap Nothing msgs
+      case result of
+        Right r -> r.gtrText `shouldBe` "The weather is sunny."
+        Left err -> expectationFailure $ "Expected media-type fallback success, got: " <> show err
+      readIORef calls >>= (`shouldBe` ["gemini-like", "gemini-like"])
+
+    it "returns UnsupportedCapability when no model accepts the image media type" $ do
+      calls <- newIORef []
+      Right heic <- pure $ imageBase64Part "image/heic" "aGVsbG8="
+      let claudeLike name =
+            (mockModel ((loggingGateway calls name toolThenText) {gwImageMediaTypes = commonImageMediaTypes}))
+              { mcCapabilities = defaultModelCapabilities {capVision = True}
+              }
+          msgs = [UserMessage [heic, textPart "what is this?"]]
+      result <- runGenerate defaultAgent (ModelWithFallbacks (claudeLike "a") [claudeLike "b"]) toolMap Nothing msgs
+      case result of
+        Left GenerateErrorResult {gerError = GErrLLM (UnsupportedCapability _)} -> pure ()
+        other -> expectationFailure $ "Expected UnsupportedCapability, got: " <> show other
+      readIORef calls >>= (`shouldBe` [])
 
     it "returns error from last model when all fail" $ do
       let failGw1 = mockErrorGateway (HttpError 503 "service unavailable")
@@ -449,6 +492,7 @@ spec = describe "Chat" $ do
           twoCallGw =
             LLMGateway
               { gwName = "mock-two",
+                gwImageMediaTypes = supportedImageMediaTypes,
                 gwGenerateText = \_ _ ->
                   let tc1 = mkToolCall "c1" "slow" (object [])
                       tc2 = mkToolCall "c2" "slow" (object [])

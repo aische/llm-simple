@@ -35,7 +35,8 @@ import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
 import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, stripBoundsAndComments, stripJsonFences)
 import LLM.Core.SSE (SSEEvent (sseData), readSSEEvents)
 import LLM.Core.Types
-  ( ChatRequest
+  ( supportedImageMediaTypes,
+    ChatRequest
       ( reqConversation,
         reqMaxTokens,
         reqModel,
@@ -107,6 +108,7 @@ geminiProviderWith :: Url scheme -> Option scheme -> Text -> LLMProvider
 geminiProviderWith baseUrl baseOpts apiKey =
   LLMProvider
     { providerName = geminiProviderName,
+      providerImageMediaTypes = supportedImageMediaTypes,
       buildBody = const geminiBuildBody,
       sendRequest = sendRequest,
       openStream = \body k ->

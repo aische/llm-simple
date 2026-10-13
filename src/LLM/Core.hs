@@ -25,6 +25,7 @@ module LLM.Core
     cacheEphemeral,
     mkImageBase64,
     supportedImageMediaTypes,
+    commonImageMediaTypes,
     projectText,
     projectReasoning,
     turnToolCalls,

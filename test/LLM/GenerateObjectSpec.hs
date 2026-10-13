@@ -10,7 +10,7 @@ import Heptapod (generate)
 import LLM.Agent.GenerateObject (generateObject, generateObjectUntyped)
 import LLM.Agent.Types (Agent (..), RuntimeArgs (..))
 import LLM.Core.Abort (AbortSignal, abort, newAbortSignal)
-import LLM.Core.Types (ChatRequest (..), ChatResponse (..), LLMError (..), LLMGateway (..), LLMHooks (..), assistantTurn, pattern UserTurn)
+import LLM.Core.Types (ChatRequest (..), ChatResponse (..), LLMError (..), LLMGateway (..), LLMHooks (..), assistantTurn, supportedImageMediaTypes, pattern UserTurn)
 import LLM.Core.Usage (PricingInfo (..), Usage (..), defaultPricingInfo, mkUsage)
 import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig
@@ -114,6 +114,7 @@ objectGateway :: Value -> Usage -> LLMGateway
 objectGateway value usage =
   LLMGateway
     { gwName = "object-mock",
+      gwImageMediaTypes = supportedImageMediaTypes,
       gwGenerateText = \_ _ -> pure (Right (ChatResponse "" [] Nothing Nothing)),
       gwStreamText = \_ _ _ -> pure (Right (ChatResponse "" [] Nothing Nothing)),
       gwGenerateObject = \_ _ _ -> pure (Right (value, Just usage))
@@ -132,6 +133,7 @@ errorObjectGateway :: LLMError -> LLMGateway
 errorObjectGateway err =
   LLMGateway
     { gwName = "object-error",
+      gwImageMediaTypes = supportedImageMediaTypes,
       gwGenerateText = \_ _ -> pure (Left err),
       gwStreamText = \_ _ _ -> pure (Left err),
       gwGenerateObject = \_ _ _ -> pure (Left err)

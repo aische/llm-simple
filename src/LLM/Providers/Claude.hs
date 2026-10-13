@@ -41,7 +41,8 @@ import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
 import LLM.Core.ProviderUtils (decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, stripJsonFences)
 import LLM.Core.SSE (SSEEvent (sseData, sseEvent), readSSEEvents)
 import LLM.Core.Types
-  ( CacheHint (..),
+  ( commonImageMediaTypes,
+    CacheHint (..),
     ChatRequest
       ( reqConversation,
         reqMaxTokens,
@@ -129,6 +130,7 @@ claudeProviderWith :: Url scheme -> Option scheme -> Text -> LLMProvider
 claudeProviderWith baseUrl baseOpts apiKey =
   LLMProvider
     { providerName = claudeProviderName,
+      providerImageMediaTypes = commonImageMediaTypes,
       buildBody = claudeBuildBody,
       sendRequest = sendRequest,
       openStream = \body k ->

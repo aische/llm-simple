@@ -15,13 +15,17 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (when)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.List (nub)
 import LLM.Core.Types
   ( ChatRequest (..),
+    ContentPart (..),
+    ImageSource (..),
     LLMError (..),
-    LLMGateway (gwName),
+    LLMGateway (gwImageMediaTypes, gwName),
+    PartBody (..),
     LLMHooks (..),
     ThinkingMode (..),
-    Turn,
+    Turn (..),
     conversationHasImages,
   )
 import LLM.Core.Usage (Usage (..), estimateCost)
@@ -57,12 +61,15 @@ usageWithModelCost mc u = u {usageTotalCost = estimateCost mc.mcPricing u}
 
 -- | Check that a candidate model declares every capability the request needs.
 --
--- Unsupported vision is a candidate failure (do not drop images). Thinking
--- configuration requires a declared thinking capability. Cache hints are not
--- validated here; unsupported providers ignore them.
+-- Unsupported vision is a candidate failure (do not drop images), and so is
+-- an inline image whose media type the gateway does not accept
+-- ('gwImageMediaTypes'). URL images have no known type and are not checked.
+-- Thinking configuration requires a declared thinking capability. Cache
+-- hints are not validated here; unsupported providers ignore them.
 validateModelCapabilities :: ModelConfig -> [Turn] -> Either LLMError ()
 validateModelCapabilities mc turns = do
   whenNeedsVision
+  whenNeedsMediaTypes
   whenNeedsThinking
   where
     caps = mc.mcCapabilities
@@ -75,6 +82,18 @@ validateModelCapabilities mc turns = do
                 <> mc.mcModel
                 <> " does not support vision"
       | otherwise = Right ()
+    whenNeedsMediaTypes =
+      case filter (`notElem` mc.mcGateway.gwImageMediaTypes) (inlineImageMediaTypes turns) of
+        [] -> Right ()
+        unsupported ->
+          Left $
+            UnsupportedCapability $
+              "model "
+                <> mc.mcModel
+                <> " via "
+                <> mc.mcGateway.gwName
+                <> " does not accept image media type "
+                <> T.intercalate ", " unsupported
     whenNeedsThinking =
       case mc.mcThinking of
         Just ThinkingMode {tmEnabled = True}
@@ -85,6 +104,15 @@ validateModelCapabilities mc turns = do
                     <> mc.mcModel
                     <> " does not support thinking"
         _ -> Right ()
+
+-- | Distinct media types of the inline ('ImageBase64') images in a conversation.
+inlineImageMediaTypes :: [Turn] -> [Text]
+inlineImageMediaTypes turns =
+  nub [mt | parts <- map turnParts turns, ContentPart (ImagePart (ImageBase64 mt _)) _ <- parts]
+  where
+    turnParts (UserMessage parts) = parts
+    turnParts (AssistantMessage parts) = parts
+    turnParts (ToolTurn _) = []
 
 -- | Run one model call with the model's throttle delay and retry policy.
 -- @attempt@ is run once per try; any per-attempt timeout must be inside it.

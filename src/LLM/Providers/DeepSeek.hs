@@ -24,7 +24,8 @@ import Data.Text.Lazy.Encoding qualified as TLE
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
 import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, stripJsonFences)
 import LLM.Core.Types
-  ( ChatRequest
+  ( commonImageMediaTypes,
+    ChatRequest
       ( reqConversation,
         reqMaxTokens,
         reqModel,
@@ -79,6 +80,7 @@ deepSeekProviderWith :: Url scheme -> Option scheme -> Text -> LLMProvider
 deepSeekProviderWith baseUrl baseOpts apiKey =
   LLMProvider
     { providerName = "deepseek",
+      providerImageMediaTypes = commonImageMediaTypes,
       buildBody = deepSeekBuildBody,
       sendRequest = sendRequest,
       openStream = \body k ->

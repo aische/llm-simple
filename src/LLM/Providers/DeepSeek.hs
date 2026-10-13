@@ -34,6 +34,7 @@ import LLM.Core.Types
       ),
     LLMError (EmptyResponse),
     LLMGateway,
+    MessageEncodeOptions (..),
     ThinkingMode (..),
     deepSeekMessageEncodeOptions,
     pattern UserTurn,
@@ -125,13 +126,18 @@ deepSeekBuildBodyPairs :: Bool -> ChatRequest -> [Pair]
 deepSeekBuildBodyPairs stream r =
   [ "model" .= r.reqModel,
     "max_tokens" .= r.reqMaxTokens,
-    "messages" .= buildMessages deepSeekMessageEncodeOptions r
+    "messages" .= buildMessages encodeOpts r
   ]
     ++ thinkingPairs r
     ++ ["temperature" .= t | Just t <- [r.reqTemperature]]
     ++ ["tools" .= map encodeToolDef r.reqTools | not (null r.reqTools)]
     ++ ["stream" .= True | stream]
     ++ ["stream_options" .= object ["include_usage" .= True] | stream]
+  where
+    encodeOpts =
+      deepSeekMessageEncodeOptions
+        { meoRequireReasoning = maybe False (.tmEnabled) r.reqThinking
+        }
 
 thinkingPairs :: ChatRequest -> [Pair]
 thinkingPairs r =

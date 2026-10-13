@@ -85,6 +85,7 @@
                 },
                 {
                     "content": "I'll check the current weather in London for you.",
+                    "reasoning_content": "",
                     "role": "assistant",
                     "tool_calls": [
                         {
@@ -167,6 +168,7 @@
                 },
                 {
                     "content": "I'll check the current weather in London for you.",
+                    "reasoning_content": "",
                     "role": "assistant",
                     "tool_calls": [
                         {
@@ -186,6 +188,7 @@
                 },
                 {
                     "content": "Here's the current weather in London:\n\n- **Conditions:** Partly cloudy\n- **Temperature:** 18°C (about 64°F)\n- **Wind:** Light breeze from the west\n\nFairly mild and pleasant — a good day to be out and about, though you might want a light layer just in case. Let me know if you'd like the forecast for another city!",
+                    "reasoning_content": "",
                     "role": "assistant"
                 },
                 {
@@ -265,6 +268,7 @@
                 },
                 {
                     "content": "I'll check the current weather in London for you.",
+                    "reasoning_content": "",
                     "role": "assistant",
                     "tool_calls": [
                         {
@@ -284,6 +288,7 @@
                 },
                 {
                     "content": "Here's the current weather in London:\n\n- **Conditions:** Partly cloudy\n- **Temperature:** 18°C (about 64°F)\n- **Wind:** Light breeze from the west\n\nFairly mild and pleasant — a good day to be out and about, though you might want a light layer just in case. Let me know if you'd like the forecast for another city!",
+                    "reasoning_content": "",
                     "role": "assistant"
                 },
                 {

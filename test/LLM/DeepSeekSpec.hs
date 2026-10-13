@@ -19,6 +19,8 @@ import LLM.Core.Types
     defaultMessageEncodeOptions,
     mkToolCall,
     textPart,
+    toolCallPart,
+    pattern UserTurn,
   )
 import LLM.Core.Usage (Usage (..))
 import LLM.Providers.DeepSeek (deepSeekBuildBodyPairs)
@@ -71,6 +73,31 @@ spec = describe "DeepSeek thinking mode" $ do
               }
           body = object (deepSeekBuildBodyPairs False req)
       nestedText ["thinking", "type"] body `shouldBe` Just "disabled"
+
+  describe "reasoning_content on assistant turns without thinking" $ do
+    let foreignToolTurn = AssistantMessage [toolCallPart (mkToolCall "c1" "get_date" (object []))]
+        withThinking enabled conv =
+          sampleRequest
+            { reqConversation = conv,
+              reqThinking = Just ThinkingMode {tmEnabled = enabled, tmEffort = Nothing}
+            }
+        assistantMsgs r =
+          [m | m@(Object o) <- bodyMessages (object (deepSeekBuildBodyPairs False r)), KM.lookup "role" o == Just (String "assistant")]
+
+    it "sends an empty reasoning_content when thinking is enabled" $ do
+      let msgs = assistantMsgs (withThinking True [UserTurn "date?", foreignToolTurn])
+      map (lookupText "reasoning_content") msgs `shouldBe` [Just ""]
+
+    it "omits reasoning_content when thinking is disabled" $ do
+      let msgs = assistantMsgs (withThinking False [UserTurn "date?", foreignToolTurn])
+      map (lookupText "reasoning_content") msgs `shouldBe` [Nothing]
+      let msgsDefault = assistantMsgs sampleRequest {reqConversation = [UserTurn "date?", foreignToolTurn]}
+      map (lookupText "reasoning_content") msgsDefault `shouldBe` [Nothing]
+
+    it "sends an existing thinking text unchanged" $ do
+      let turn = assistantTurn "" (Just "CoT") [mkToolCall "c1" "get_date" (object [])]
+          msgs = assistantMsgs (withThinking True [UserTurn "date?", turn])
+      map (lookupText "reasoning_content") msgs `shouldBe` [Just "CoT"]
 
   describe "response parsing" $ do
     it "extracts reasoning_content from provider responses" $ do
@@ -134,6 +161,11 @@ sampleRequest =
       reqTools = [],
       reqThinking = Nothing
     }
+
+bodyMessages :: Value -> [Value]
+bodyMessages (Object o)
+  | Just (Array arr) <- KM.lookup "messages" o = V.toList arr
+bodyMessages _ = []
 
 lookupText :: Text -> Value -> Maybe Text
 lookupText key (Object o) =

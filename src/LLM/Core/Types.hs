@@ -115,16 +115,25 @@ data ThinkingMode = ThinkingMode
   deriving (Show, Eq)
 
 -- | Controls how conversation turns are encoded for provider APIs.
-newtype MessageEncodeOptions = MessageEncodeOptions
-  { meoIncludeReasoning :: Bool
+data MessageEncodeOptions = MessageEncodeOptions
+  { -- | Send assistant thinking text as @reasoning_content@.
+    meoIncludeReasoning :: Bool,
+    -- | Send @reasoning_content@ on every assistant message, @""@ when the
+    -- turn has no thinking text (DeepSeek thinking mode rejects assistant
+    -- messages without it). Only takes effect with 'meoIncludeReasoning'.
+    meoRequireReasoning :: Bool
   }
   deriving (Show, Eq)
 
 defaultMessageEncodeOptions :: MessageEncodeOptions
-defaultMessageEncodeOptions = MessageEncodeOptions {meoIncludeReasoning = False}
+defaultMessageEncodeOptions =
+  MessageEncodeOptions {meoIncludeReasoning = False, meoRequireReasoning = False}
 
+-- | DeepSeek encoding with thinking off. 'deepSeekBuildBodyPairs' sets
+-- 'meoRequireReasoning' when the request enables thinking.
 deepSeekMessageEncodeOptions :: MessageEncodeOptions
-deepSeekMessageEncodeOptions = MessageEncodeOptions {meoIncludeReasoning = True}
+deepSeekMessageEncodeOptions =
+  MessageEncodeOptions {meoIncludeReasoning = True, meoRequireReasoning = False}
 
 -- | Opaque, provider-owned payload that must round-trip for replay.
 --

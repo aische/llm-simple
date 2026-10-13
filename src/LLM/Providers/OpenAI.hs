@@ -221,12 +221,15 @@ encodeTurn opts (AssistantMessage parts) =
               not (T.null t)
           ]
       calls = [tc | ContentPart (ToolCallPart tc) _ <- cleaned]
+      requireReasoning
+        | opts.meoRequireReasoning = Just . fromMaybe ""
+        | otherwise = id
    in [ object $
           ["role" .= ("assistant" :: Text)]
             ++ ["content" .= text | not (T.null text)]
             ++ [ "reasoning_content" .= rc
                  | opts.meoIncludeReasoning,
-                   Just rc <- [mReasoning]
+                   Just rc <- [requireReasoning mReasoning]
                ]
             ++ ["tool_calls" .= map encodeToolCall calls | not (null calls)]
       ]

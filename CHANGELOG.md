@@ -84,6 +84,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `skipThoughtSignatureValidator`). Gemini 3 rejected such history with
   `400 "Function call is missing a thought_signature"`, so a fallback into
   Gemini 3, or between two Gemini models, failed partway through a tool loop.
+- DeepSeek with thinking enabled: every assistant message now carries
+  `reasoning_content`, `""` when the turn has no thinking text (turns from
+  OpenAI, Ollama, or Claude without thinking). DeepSeek rejected such history
+  with `400 "The reasoning_content in the thinking mode must be passed back"`.
+  Requests with thinking off are unchanged. **Breaking:**
+  `MessageEncodeOptions` is now a two-field record with the new
+  `meoRequireReasoning`; code that constructs it directly must set it. The
+  streamed DeepSeek fixture's requests gained the empty field.
 
 ## [0.2.0.0] - 2026-10-06
 

@@ -81,6 +81,7 @@ deepSeekProviderWith baseUrl baseOpts apiKey =
   LLMProvider
     { providerName = "deepseek",
       providerImageMediaTypes = commonImageMediaTypes,
+      providerImageUrlSupport = True,
       buildBody = deepSeekBuildBody,
       sendRequest = sendRequest,
       openStream = \body k ->

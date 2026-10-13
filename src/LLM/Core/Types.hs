@@ -86,6 +86,9 @@ data LLMGateway = LLMGateway
     -- | MIME types of inline ('ImageBase64') images the provider accepts.
     -- Models on this gateway are skipped for conversations with other types.
     gwImageMediaTypes :: [Text],
+    -- | Whether the provider accepts URL ('ImageUrl') images. Models on a
+    -- gateway without it are skipped for conversations with URL images.
+    gwImageUrlSupport :: Bool,
     -- | Non-streaming chat completion.
     gwGenerateText :: LLMHooks -> ChatRequest -> IO LLMTextResult,
     -- | Streaming chat; invoke the callback for each 'StreamEvent'.

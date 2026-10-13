@@ -65,6 +65,9 @@ ollamaProviderWith baseUrl baseOpts =
   LLMProvider
     { providerName = "ollama",
       providerImageMediaTypes = commonImageMediaTypes,
+      -- Ollama rejects image URLs ("not currently supported, please use
+      -- base64 encoded data instead"); only data URLs work.
+      providerImageUrlSupport = False,
       -- Ollama uses the same request format as OpenAI, but without stream_options
       -- (Ollama doesn't support include_usage in streaming).
       buildBody = ollamaBuildBody,

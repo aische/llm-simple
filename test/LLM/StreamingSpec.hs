@@ -191,6 +191,7 @@ streamGateway events resp =
   LLMGateway
     { gwName = "stream-mock",
       gwImageMediaTypes = supportedImageMediaTypes,
+      gwImageUrlSupport = True,
       gwGenerateText = \_ _ -> pure (Right resp),
       gwStreamText = \_ _ onEvent -> mapM_ onEvent events >> pure (Right resp),
       gwGenerateObject = \_ _ _ -> pure (Right (object [], Nothing))

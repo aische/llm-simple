@@ -123,6 +123,7 @@ openAIProviderWithName name baseUrl baseOpts apiKey =
   LLMProvider
     { providerName = name,
       providerImageMediaTypes = commonImageMediaTypes,
+      providerImageUrlSupport = True,
       buildBody = openAIBuildBody,
       sendRequest = sendRequest,
       openStream = \body k ->

@@ -109,6 +109,7 @@ geminiProviderWith baseUrl baseOpts apiKey =
   LLMProvider
     { providerName = geminiProviderName,
       providerImageMediaTypes = supportedImageMediaTypes,
+      providerImageUrlSupport = True,
       buildBody = const geminiBuildBody,
       sendRequest = sendRequest,
       openStream = \body k ->

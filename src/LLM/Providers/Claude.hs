@@ -131,6 +131,7 @@ claudeProviderWith baseUrl baseOpts apiKey =
   LLMProvider
     { providerName = claudeProviderName,
       providerImageMediaTypes = commonImageMediaTypes,
+      providerImageUrlSupport = True,
       buildBody = claudeBuildBody,
       sendRequest = sendRequest,
       openStream = \body k ->

@@ -28,6 +28,8 @@ data LLMProvider = LLMProvider
     providerName :: Text,
     -- | MIME types of inline images the provider accepts (see 'gwImageMediaTypes').
     providerImageMediaTypes :: [Text],
+    -- | Whether the provider accepts URL images (see 'gwImageUrlSupport').
+    providerImageUrlSupport :: Bool,
     -- | Build the JSON request body. Bool indicates whether streaming is requested.
     buildBody :: Bool -> ChatRequest -> Value,
     -- | Make a non-streaming HTTP call, returning (status code, response JSON).
@@ -111,6 +113,7 @@ toGateway p =
   LLMGateway
     { gwName = p.providerName,
       gwImageMediaTypes = p.providerImageMediaTypes,
+      gwImageUrlSupport = p.providerImageUrlSupport,
       gwGenerateText = genericGenerateText p,
       gwStreamText = genericStreamText p,
       gwGenerateObject = genericGenerateObject p

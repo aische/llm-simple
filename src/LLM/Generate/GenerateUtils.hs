@@ -21,7 +21,7 @@ import LLM.Core.Types
     ContentPart (..),
     ImageSource (..),
     LLMError (..),
-    LLMGateway (gwImageMediaTypes, gwName),
+    LLMGateway (gwImageMediaTypes, gwImageUrlSupport, gwName),
     PartBody (..),
     LLMHooks (..),
     ThinkingMode (..),
@@ -63,13 +63,16 @@ usageWithModelCost mc u = u {usageTotalCost = estimateCost mc.mcPricing u}
 --
 -- Unsupported vision is a candidate failure (do not drop images), and so is
 -- an inline image whose media type the gateway does not accept
--- ('gwImageMediaTypes'). URL images have no known type and are not checked.
+-- ('gwImageMediaTypes') or a URL image on a gateway without
+-- 'gwImageUrlSupport'. URL images have no known media type, so their type
+-- is not checked.
 -- Thinking configuration requires a declared thinking capability. Cache
 -- hints are not validated here; unsupported providers ignore them.
 validateModelCapabilities :: ModelConfig -> [Turn] -> Either LLMError ()
 validateModelCapabilities mc turns = do
   whenNeedsVision
   whenNeedsMediaTypes
+  whenNeedsImageUrls
   whenNeedsThinking
   where
     caps = mc.mcCapabilities
@@ -94,6 +97,17 @@ validateModelCapabilities mc turns = do
                 <> mc.mcGateway.gwName
                 <> " does not accept image media type "
                 <> T.intercalate ", " unsupported
+    whenNeedsImageUrls
+      | conversationHasImageUrls turns,
+        not mc.mcGateway.gwImageUrlSupport =
+          Left $
+            UnsupportedCapability $
+              "model "
+                <> mc.mcModel
+                <> " via "
+                <> mc.mcGateway.gwName
+                <> " does not accept image URLs"
+      | otherwise = Right ()
     whenNeedsThinking =
       case mc.mcThinking of
         Just ThinkingMode {tmEnabled = True}
@@ -108,7 +122,15 @@ validateModelCapabilities mc turns = do
 -- | Distinct media types of the inline ('ImageBase64') images in a conversation.
 inlineImageMediaTypes :: [Turn] -> [Text]
 inlineImageMediaTypes turns =
-  nub [mt | parts <- map turnParts turns, ContentPart (ImagePart (ImageBase64 mt _)) _ <- parts]
+  nub [mt | ImageBase64 mt _ <- imageSources turns]
+
+conversationHasImageUrls :: [Turn] -> Bool
+conversationHasImageUrls turns =
+  not (null [() | ImageUrl _ <- imageSources turns])
+
+imageSources :: [Turn] -> [ImageSource]
+imageSources turns =
+  [src | parts <- map turnParts turns, ContentPart (ImagePart src) _ <- parts]
   where
     turnParts (UserMessage parts) = parts
     turnParts (AssistantMessage parts) = parts

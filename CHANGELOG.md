@@ -108,6 +108,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `LLMGateway` gained `gwImageMediaTypes` and `LLMProvider` gained
   `providerImageMediaTypes` (copied by `toGateway`); code that constructs
   either directly must set it.
+- Ollama models are skipped for conversations with URL images. Ollama's
+  OpenAI-compatible endpoint answers an `image_url` with an https URL with
+  `400 "image URLs are not currently supported, please use base64 encoded
+  data instead"` (checked against Ollama with `moondream`; base64 data URLs
+  work). **Breaking:** `LLMGateway` gained `gwImageUrlSupport` and
+  `LLMProvider` gained `providerImageUrlSupport` (`False` only for Ollama);
+  code that constructs either directly must set it.
 
 ## [0.2.0.0] - 2026-10-06
 

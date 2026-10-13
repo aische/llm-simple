@@ -115,6 +115,7 @@ objectGateway value usage =
   LLMGateway
     { gwName = "object-mock",
       gwImageMediaTypes = supportedImageMediaTypes,
+      gwImageUrlSupport = True,
       gwGenerateText = \_ _ -> pure (Right (ChatResponse "" [] Nothing Nothing)),
       gwStreamText = \_ _ _ -> pure (Right (ChatResponse "" [] Nothing Nothing)),
       gwGenerateObject = \_ _ _ -> pure (Right (value, Just usage))
@@ -134,6 +135,7 @@ errorObjectGateway err =
   LLMGateway
     { gwName = "object-error",
       gwImageMediaTypes = supportedImageMediaTypes,
+      gwImageUrlSupport = True,
       gwGenerateText = \_ _ -> pure (Left err),
       gwStreamText = \_ _ _ -> pure (Left err),
       gwGenerateObject = \_ _ _ -> pure (Left err)

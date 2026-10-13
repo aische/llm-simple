@@ -63,6 +63,7 @@ mockGateway resp =
   LLMGateway
     { gwName = "mock",
       gwImageMediaTypes = supportedImageMediaTypes,
+      gwImageUrlSupport = True,
       gwGenerateText = \_ _ -> pure (Right resp),
       gwStreamText = \_ _ _ -> pure (Right resp),
       gwGenerateObject = \_ _ _ -> pure (Right (object [], Nothing))
@@ -74,6 +75,7 @@ mockErrorGateway err =
   LLMGateway
     { gwName = "mock-error",
       gwImageMediaTypes = supportedImageMediaTypes,
+      gwImageUrlSupport = True,
       gwGenerateText = \_ _ -> pure (Left err),
       gwStreamText = \_ _ _ -> pure (Left err),
       gwGenerateObject = \_ _ _ -> pure (Left err)
@@ -85,6 +87,7 @@ mockToolGateway =
   LLMGateway
     { gwName = "mock-tool",
       gwImageMediaTypes = supportedImageMediaTypes,
+      gwImageUrlSupport = True,
       gwGenerateText = \_ req ->
         if any isToolTurn req.reqConversation
           then pure $ Right (ChatResponse "The weather is sunny." [textPart "The weather is sunny."] (Just (mkUsage 80 15)) Nothing)
@@ -194,6 +197,7 @@ capturingToolGateway ref =
    in LLMGateway
         { gwName = "mock-tool-capture",
           gwImageMediaTypes = supportedImageMediaTypes,
+          gwImageUrlSupport = True,
           gwGenerateText = \_ -> respond,
           gwStreamText = \_ req _onEvent -> respond req,
           gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
@@ -210,6 +214,7 @@ loggingGateway calls label respond =
    in LLMGateway
         { gwName = label,
           gwImageMediaTypes = supportedImageMediaTypes,
+          gwImageUrlSupport = True,
           gwGenerateText = \_ -> call,
           gwStreamText = \_ req _onEvent -> call req,
           gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
@@ -359,6 +364,7 @@ spec = describe "Chat" $ do
             LLMGateway
               { gwName = "mock-infinite",
                 gwImageMediaTypes = supportedImageMediaTypes,
+                gwImageUrlSupport = True,
                 gwGenerateText = \_ _ ->
                   let tc = mkToolCall "call_1" "get_weather" (object [])
                    in pure $ Right (ChatResponse "" [toolCallPart tc] Nothing Nothing),
@@ -395,6 +401,7 @@ spec = describe "Chat" $ do
             LLMGateway
               { gwName = "should-not-run",
                 gwImageMediaTypes = supportedImageMediaTypes,
+                gwImageUrlSupport = True,
                 gwGenerateText = \_ _ -> pure (Left (HttpError 500 "should not be called")),
                 gwStreamText = \_ _ _ -> pure (Left (HttpError 500 "should not be called")),
                 gwGenerateObject = \_ _ _ -> pure (Left (HttpError 500 "should not be called"))
@@ -455,6 +462,34 @@ spec = describe "Chat" $ do
         other -> expectationFailure $ "Expected UnsupportedCapability, got: " <> show other
       readIORef calls >>= (`shouldBe` [])
 
+    it "skips a model whose gateway does not accept image URLs" $ do
+      calls <- newIORef []
+      let vision = defaultModelCapabilities {capVision = True}
+          ollamaLike =
+            (mockModel ((loggingGateway calls "ollama-like" toolThenText) {gwImageUrlSupport = False}))
+              { mcCapabilities = vision
+              }
+          urlOk = (mockModel (loggingGateway calls "url-ok" toolThenText)) {mcCapabilities = vision}
+          msgs = [UserMessage [imageUrlPart "https://example.com/cat.png", textPart "what is this?"]]
+      result <- runGenerate defaultAgent (ModelWithFallbacks ollamaLike [urlOk]) toolMap Nothing msgs
+      case result of
+        Right r -> r.gtrText `shouldBe` "The weather is sunny."
+        Left err -> expectationFailure $ "Expected URL-image fallback success, got: " <> show err
+      readIORef calls >>= (`shouldBe` ["url-ok", "url-ok"])
+
+    it "accepts base64 images on a gateway without image URL support" $ do
+      calls <- newIORef []
+      Right png <- pure $ imageBase64Part "image/png" "aGVsbG8="
+      let ollamaLike =
+            (mockModel ((loggingGateway calls "ollama-like" toolThenText) {gwImageUrlSupport = False}))
+              { mcCapabilities = defaultModelCapabilities {capVision = True}
+              }
+          msgs = [UserMessage [png, textPart "what is this?"]]
+      result <- runGenerate defaultAgent (ModelWithFallbacks ollamaLike []) toolMap Nothing msgs
+      case result of
+        Right r -> r.gtrText `shouldBe` "The weather is sunny."
+        Left err -> expectationFailure $ show err
+
     it "returns error from last model when all fail" $ do
       let failGw1 = mockErrorGateway (HttpError 503 "service unavailable")
           failGw2 = mockErrorGateway (HttpError 400 "bad request")
@@ -493,6 +528,7 @@ spec = describe "Chat" $ do
             LLMGateway
               { gwName = "mock-two",
                 gwImageMediaTypes = supportedImageMediaTypes,
+                gwImageUrlSupport = True,
                 gwGenerateText = \_ _ ->
                   let tc1 = mkToolCall "c1" "slow" (object [])
                       tc2 = mkToolCall "c2" "slow" (object [])

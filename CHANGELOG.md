@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Cross-provider history regression test (`test/LLM/CrossProviderSpec.hs`).
+  One mixed history (Claude → Gemini → OpenAI → Claude turns, a base64
+  image, a redacted-thinking-only turn) is encoded by every provider and
+  checked against rules the live APIs enforce: Gemini thought signatures on
+  every function call, DeepSeek `reasoning_content` in thinking mode, no empty
+  assistant messages on the OpenAI protocol, only Claude thinking blocks and
+  paired tool ids for Claude, and no provider's opaque payload in another
+  provider's request.
+
 ### Changed
 
 - **Breaking:** `LLMProvider.sendStreamRequest` is split into `openStream`

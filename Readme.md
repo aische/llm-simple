@@ -4,7 +4,7 @@ An experimental Haskell **LLM toolbox** for trying out providers, tool loops, an
 
 The API stays small on purpose: JSON model and provider catalogs, bundled filesystem tools, and a straight line from `loadModelOrThrow` to `generateText`. Under that surface you still get multi-provider gateways, fallbacks, streaming, structured output, and sandboxed workspace tools — enough to prototype and compare ideas without assembling the pieces yourself.
 
-**Status:** early 0.2.x release. APIs may change.
+**Status:** early 0.3.x release. APIs may change.
 
 ## Features
 

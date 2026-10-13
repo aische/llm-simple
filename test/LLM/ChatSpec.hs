@@ -195,6 +195,89 @@ capturingToolGateway ref =
     isToolTurn (ToolTurn _) = True
     isToolTurn _ = False
 
+-- | Gateway that appends its label to @calls@ on every request, then answers
+-- with @respond@ (given the request).
+loggingGateway :: IORef [Text] -> Text -> (ChatRequest -> IO (Either LLMError ChatResponse)) -> LLMGateway
+loggingGateway calls label respond =
+  let call req = modifyIORef' calls (++ [label]) >> respond req
+   in LLMGateway
+        { gwName = label,
+          gwGenerateText = \_ -> call,
+          gwStreamText = \_ req _onEvent -> call req,
+          gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
+        }
+
+-- | Tool call when the conversation has no tool turn yet, text afterwards
+-- (like 'mockToolGateway').
+toolThenText :: ChatRequest -> IO (Either LLMError ChatResponse)
+toolThenText req
+  | any isToolTurn req.reqConversation =
+      pure $ Right (ChatResponse "The weather is sunny." [textPart "The weather is sunny."] (Just (mkUsage 80 15)) Nothing)
+  | otherwise =
+      let tc = mkToolCall "call_1" "get_weather" (object ["location" .= ("London" :: Text)])
+       in pure $ Right (ChatResponse "" [toolCallPart tc] (Just (mkUsage 50 10)) Nothing)
+  where
+    isToolTurn (ToolTurn _) = True
+    isToolTurn _ = False
+
+-- | Fail while the conversation has no tool turn, then behave like 'toolThenText'.
+failFirstRound :: ChatRequest -> IO (Either LLMError ChatResponse)
+failFirstRound req
+  | any isToolTurn req.reqConversation = toolThenText req
+  | otherwise = pure $ Left (HttpError 503 "down")
+  where
+    isToolTurn (ToolTurn _) = True
+    isToolTurn _ = False
+
+-- | Tool call in the first round, failure afterwards.
+toolThenFail :: ChatRequest -> IO (Either LLMError ChatResponse)
+toolThenFail req
+  | any isToolTurn req.reqConversation = pure $ Left (HttpError 503 "down")
+  | otherwise = toolThenText req
+  where
+    isToolTurn (ToolTurn _) = True
+    isToolTurn _ = False
+
+alwaysFail :: ChatRequest -> IO (Either LLMError ChatResponse)
+alwaysFail _ = pure $ Left (HttpError 503 "down")
+
+-- | Shared sticky-fallback checks, run for both 'runGenerate' and 'runStreamGenerate'.
+stickyFallbackSpec ::
+  (Agent -> ModelWithFallbacks -> ToolMap Text -> Maybe AbortSignal -> [Turn] -> IO (Either GenerateErrorResult GenerateTextResult)) ->
+  ToolMap Text ->
+  Spec
+stickyFallbackSpec run toolMap = do
+  let agent = defaultAgent {agTools = ["get_weather"]}
+  it "keeps using the fallback that answered for the rest of the run" $ do
+    calls <- newIORef []
+    let primary = mockModel (loggingGateway calls "primary" alwaysFail)
+        fallback = mockModel (loggingGateway calls "fallback" toolThenText)
+    result <- run agent (ModelWithFallbacks primary [fallback]) toolMap Nothing [UserTurn "weather?"]
+    case result of
+      Right r -> r.gtrText `shouldBe` "The weather is sunny."
+      Left err -> expectationFailure $ show err
+    readIORef calls >>= (`shouldBe` ["primary", "fallback", "fallback"])
+
+  it "tries the remaining models, the earlier-failed one last, when the sticky model fails" $ do
+    calls <- newIORef []
+    let a = mockModel (loggingGateway calls "a" failFirstRound)
+        b = mockModel (loggingGateway calls "b" toolThenFail)
+        c = mockModel (loggingGateway calls "c" alwaysFail)
+    result <- run agent (ModelWithFallbacks a [b, c]) toolMap Nothing [UserTurn "weather?"]
+    case result of
+      Right r -> r.gtrText `shouldBe` "The weather is sunny."
+      Left err -> expectationFailure $ show err
+    readIORef calls >>= (`shouldBe` ["a", "b", "b", "c", "a"])
+
+  it "starts from the caller's chain again on the next call" $ do
+    calls <- newIORef []
+    let primary = mockModel (loggingGateway calls "primary" alwaysFail)
+        fallback = mockModel (loggingGateway calls "fallback" toolThenText)
+        models = ModelWithFallbacks primary [fallback]
+    _ <- run agent models toolMap Nothing [UserTurn "weather?"]
+    _ <- run agent models toolMap Nothing [UserTurn "weather again?"]
+    readIORef calls >>= (`shouldBe` ["primary", "fallback", "fallback", "primary", "fallback", "fallback"])
+
 hasCachedUserPrefix :: [Turn] -> Bool
 hasCachedUserPrefix =
   any
@@ -381,7 +464,11 @@ spec = describe "Chat" $ do
         Left GenerateErrorResult {gerError = GErrAborted} -> pure ()
         other -> expectationFailure $ "Expected GErrAborted during tools, got: " <> show other
 
+    describe "sticky fallback" $ stickyFallbackSpec runGenerate toolMap
+
   describe "streamText" $ do
+    describe "sticky fallback" $ stickyFallbackSpec runStreamGenerate toolMap
+
     it "preserves cache hints on user parts across streaming tool rounds" $ do
       ref <- newIORef []
       let agent = defaultAgent {agTools = ["get_weather"]}

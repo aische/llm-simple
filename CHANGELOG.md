@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   implement both. Streaming behaviour is unchanged; the split lets recorded
   conversation fixtures capture the raw SSE body and replay it through the
   real stream parsers.
+- Agent runs (`generateText` / `streamText`) stay on a fallback model once it
+  has answered. Each tool round used to start again at `mwfModel`, so while
+  the primary was down every round paid its full retry/backoff/timeout cost
+  and the history alternated between providers. Now each round uses the chain
+  rotated so the model that answered comes first; models that failed move to
+  the end and remain a last resort. This lasts for one `generateText` /
+  `streamText` call; the next call starts from the caller's chain again. A
+  switch is logged once at `Info` ("Continuing run on …"). New
+  `withModelFallbacksRotated` (`LLM.Generate.GenerateUtils`),
+  `generateTextWithFallbacksRotated` and `streamTextWithFallbacksRotated`
+  (`LLM.Generate.Generate`).
 
 ### Fixed
 

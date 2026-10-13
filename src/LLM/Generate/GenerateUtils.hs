@@ -5,12 +5,14 @@ module LLM.Generate.GenerateUtils
     callWithRetry,
     callWithRetryTimeout,
     withModelFallbacks,
+    withModelFallbacksRotated,
     validateModelCapabilities,
     llmHooks,
   )
 where
 
 import Control.Concurrent (threadDelay)
+import Control.Monad (when)
 import Data.Text (Text)
 import Data.Text qualified as T
 import LLM.Core.Types
@@ -115,15 +117,47 @@ withModelFallbacks ::
   (ModelConfig -> IO (Either LLMError a)) ->
   IO (GenerateResult a)
 withModelFallbacks gr models invokePerModel =
+  fmap (\(_, _, a) -> a) <$> runModelFallbacks gr models invokePerModel
+
+-- | Like 'withModelFallbacks', but also returns the chain rotated so that the
+-- model that answered comes first. The models before it (the ones that
+-- failed) move to the end, so they stay a last resort:
+-- @xs ++ [m] ++ ys@ becomes @ModelWithFallbacks m (ys ++ xs)@.
+--
+-- Used to keep an agent run on the model that answered. Logs at 'Info' when
+-- the chain changes.
+withModelFallbacksRotated ::
+  GenRequest ->
+  ModelWithFallbacks ->
+  (ModelConfig -> IO (Either LLMError a)) ->
+  IO (GenerateResult (ModelWithFallbacks, a))
+withModelFallbacksRotated gr models invokePerModel = do
+  r <- runModelFallbacks gr models invokePerModel
+  case r of
+    Left err -> pure $ Left err
+    Right (rotated, chain, a) -> do
+      when rotated $
+        gr.grHooks.onLog Info (formatContinuingOn chain.mwfModel)
+      pure $ Right (chain, a)
+
+-- | Shared loop of 'withModelFallbacks' and 'withModelFallbacksRotated'.
+-- On success, returns whether the chain was rotated, the rotated chain and
+-- the result.
+runModelFallbacks ::
+  GenRequest ->
+  ModelWithFallbacks ->
+  (ModelConfig -> IO (Either LLMError a)) ->
+  IO (GenerateResult (Bool, ModelWithFallbacks, a))
+runModelFallbacks gr models invokePerModel =
   case mfwToModelConfigs models of
     [] -> pure $ Left GErrAllModelsFailed
-    modelConfigs -> loop modelConfigs Nothing
+    modelConfigs -> loop [] modelConfigs Nothing
   where
-    loop [] mLast =
+    loop _ [] mLast =
       pure $
         Left $
           maybe GErrAllModelsFailed GErrLLM mLast
-    loop (mc : rest) _ = do
+    loop failed (mc : rest) _ = do
       gr.grHooks.onLog Info (formatTryingModel mc)
       case validateModelCapabilities mc gr.grMessages of
         Left err ->
@@ -131,7 +165,7 @@ withModelFallbacks gr models invokePerModel =
             [] -> pure $ Left (GErrLLM err)
             _ -> do
               gr.grHooks.onLog Warn (formatModelFallback mc err)
-              loop rest (Just err)
+              loop (failed ++ [mc]) rest (Just err)
         Right () -> do
           r <- invokePerModel mc
           case r of
@@ -141,12 +175,19 @@ withModelFallbacks gr models invokePerModel =
                 [] -> pure $ Left (GErrLLM err)
                 _ -> do
                   gr.grHooks.onLog Warn (formatModelFallback mc err)
-                  loop rest (Just err)
-            Right a -> pure $ Right a
+                  loop (failed ++ [mc]) rest (Just err)
+            Right a -> pure $ Right (not (null failed), ModelWithFallbacks mc (rest ++ failed), a)
 
 formatTryingModel :: ModelConfig -> Text
 formatTryingModel mc =
   "Trying model: "
+    <> mc.mcModel
+    <> " via "
+    <> mc.mcGateway.gwName
+
+formatContinuingOn :: ModelConfig -> Text
+formatContinuingOn mc =
+  "Continuing run on "
     <> mc.mcModel
     <> " via "
     <> mc.mcGateway.gwName

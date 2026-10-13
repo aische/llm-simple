@@ -4,6 +4,8 @@ module LLM.Generate.Generate
     streamTextLLM,
     generateTextWithFallbacks,
     streamTextWithFallbacks,
+    generateTextWithFallbacksRotated,
+    streamTextWithFallbacksRotated,
   )
 where
 
@@ -24,7 +26,7 @@ import LLM.Generate.GenerateUtils
     callWithRetryTimeout,
     mkRequest,
     usageWithModelCost,
-    withModelFallbacks,
+    withModelFallbacksRotated,
   )
 import LLM.Generate.ModelConfig
   ( ModelConfig (..),
@@ -46,7 +48,16 @@ generateTextWithFallbacks ::
   ModelWithFallbacks ->
   IO (GenerateResult ChatResponse)
 generateTextWithFallbacks gr models =
-  withModelFallbacks gr models $ \mc -> do
+  fmap snd <$> generateTextWithFallbacksRotated gr models
+
+-- | Like 'generateTextWithFallbacks', but also returns the chain rotated so
+-- the model that answered comes first (see 'withModelFallbacksRotated').
+generateTextWithFallbacksRotated ::
+  GenRequest ->
+  ModelWithFallbacks ->
+  IO (GenerateResult (ModelWithFallbacks, ChatResponse))
+generateTextWithFallbacksRotated gr models =
+  withModelFallbacksRotated gr models $ \mc -> do
     r <- generateTextLLM gr mc
     case r of
       Left err -> pure $ Left err
@@ -61,9 +72,19 @@ streamTextWithFallbacks ::
   GenRequest ->
   ModelWithFallbacks ->
   IO (GenerateResult ChatResponse)
-streamTextWithFallbacks onChunk gr models = do
+streamTextWithFallbacks onChunk gr models =
+  fmap snd <$> streamTextWithFallbacksRotated onChunk gr models
+
+-- | Like 'streamTextWithFallbacks', but also returns the rotated chain
+-- (see 'withModelFallbacksRotated').
+streamTextWithFallbacksRotated ::
+  (StreamChunk -> IO ()) ->
+  GenRequest ->
+  ModelWithFallbacks ->
+  IO (GenerateResult (ModelWithFallbacks, ChatResponse))
+streamTextWithFallbacksRotated onChunk gr models = do
   emittedRef <- newIORef False
-  withModelFallbacks gr models $ \mc -> do
+  withModelFallbacksRotated gr models $ \mc -> do
     r <- streamTextAttempts emittedRef onChunk gr mc
     case r of
       Left err -> pure $ Left err

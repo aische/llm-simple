@@ -28,8 +28,8 @@ import LLM.Core.Types
 import LLM.Core.Usage (Usage (..), emptyUsage)
 import LLM.Core.Utils (getToolCalls)
 import LLM.Generate.Generate
-  ( generateTextWithFallbacks,
-    streamTextWithFallbacks,
+  ( generateTextWithFallbacksRotated,
+    streamTextWithFallbacksRotated,
   )
 import LLM.Generate.ModelConfig
   ( ModelWithFallbacks (..),
@@ -57,7 +57,7 @@ generateText ::
   IO (Either GenerateErrorResult GenerateTextResult)
 generateText agent models toolMap rt initialTurns =
   agentLoop
-    (\a m r t -> generateTextWithFallbacks (createGenRequest id a toolMap r t) m)
+    (\a m r t -> generateTextWithFallbacksRotated (createGenRequest id a toolMap r t) m)
     agent
     models
     toolMap
@@ -79,15 +79,20 @@ streamText ::
   IO (Either GenerateErrorResult GenerateTextResult)
 streamText onChunk agent models toolMap rt initialTurns =
   agentLoop
-    (\a m r t -> streamTextWithFallbacks onChunk (createGenRequest id a toolMap r t) m)
+    (\a m r t -> streamTextWithFallbacksRotated onChunk (createGenRequest id a toolMap r t) m)
     agent
     models
     toolMap
     rt
     initialTurns
 
+-- | The tool loop. @call@ returns the model chain rotated so the model that
+-- answered comes first; the next round starts with that chain, so a run that
+-- fell back stays on the fallback instead of retrying a failing primary every
+-- round. The next 'generateText' / 'streamText' call starts from the caller's
+-- chain again.
 agentLoop ::
-  (Agent -> ModelWithFallbacks -> RuntimeArgs -> [Turn] -> IO (GenerateResult ChatResponse)) ->
+  (Agent -> ModelWithFallbacks -> RuntimeArgs -> [Turn] -> IO (GenerateResult (ModelWithFallbacks, ChatResponse))) ->
   Agent ->
   ModelWithFallbacks ->
   ToolMap Text ->
@@ -96,10 +101,10 @@ agentLoop ::
   IO (Either GenerateErrorResult GenerateTextResult)
 agentLoop call agent models toolMap rt initialTurns = do
   emitEvent rt GenerationStarted
-  go initialTurns [] emptyUsage 0
+  go models initialTurns [] emptyUsage 0
   where
-    go :: [Turn] -> [Turn] -> Usage -> Int -> IO (Either GenerateErrorResult GenerateTextResult)
-    go currentTurns newTurnsAcc currentUsage loopCount = do
+    go :: ModelWithFallbacks -> [Turn] -> [Turn] -> Usage -> Int -> IO (Either GenerateErrorResult GenerateTextResult)
+    go chain currentTurns newTurnsAcc currentUsage loopCount = do
       aborted <- isAbortedMaybe rt.rtAbortSignal
       if aborted
         then do
@@ -113,13 +118,13 @@ agentLoop call agent models toolMap rt initialTurns = do
               emitEvent rt (GenerationFailed GErrToolExceeded errResult)
               pure $ Left errResult
             else do
-              result <- call agent models rt currentTurns
+              result <- call agent chain rt currentTurns
               case result of
                 Left err -> do
                   let errResult = GenerateErrorResult err newTurnsAcc currentUsage
                   emitEvent rt (GenerationFailed err errResult)
                   pure $ Left errResult
-                Right resp -> do
+                Right (nextChain, resp) -> do
                   let txt = resp.respText
                       toolCalls = getToolCalls resp
                       roundUsage = fromMaybe emptyUsage resp.respUsage
@@ -152,4 +157,4 @@ agentLoop call agent models toolMap rt initialTurns = do
                           emitEvent rt (MessageCreated toolTurn)
                           emitEvent rt (ToolRoundFinished loopCount)
                           let turnsToAdd = [assistantMsg, toolTurn]
-                          go (currentTurns ++ turnsToAdd) (newTurnsAcc ++ turnsToAdd) newUsage (loopCount + 1)
+                          go nextChain (currentTurns ++ turnsToAdd) (newTurnsAcc ++ turnsToAdd) newUsage (loopCount + 1)

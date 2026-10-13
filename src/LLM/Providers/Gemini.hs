@@ -7,6 +7,7 @@ module LLM.Providers.Gemini
     parseGeminiUsage,
     encodeTurn,
     signatureForModel,
+    skipThoughtSignatureValidator,
   )
 where
 
@@ -330,6 +331,13 @@ encodeToolDef td =
       "parameters" .= stripBoundsAndComments td.toolParameters
     ]
 
+-- | Google's documented placeholder for a @functionCall@ part that has no
+-- thought signature of its own (a call from another provider or another
+-- Gemini model). Gemini 3 rejects history whose function calls have no
+-- signature.
+skipThoughtSignatureValidator :: Text
+skipThoughtSignatureValidator = "skip_thought_signature_validator"
+
 encodeFunctionCall :: Text -> ToolCall -> Value
 encodeFunctionCall currentModel tc =
   object $
@@ -339,7 +347,9 @@ encodeFunctionCall currentModel tc =
             "args" .= tc.tcArguments
           ]
     )
-      : ["thoughtSignature" .= s | Just s <- [signatureForModel currentModel tc.tcProviderMeta]]
+      : [ "thoughtSignature"
+            .= fromMaybe skipThoughtSignatureValidator (signatureForModel currentModel tc.tcProviderMeta)
+        ]
 
 encodeFunctionResponse :: ToolResult -> Value
 encodeFunctionResponse tr =

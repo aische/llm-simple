@@ -78,6 +78,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   call in a chunk, not just the first. Ollama often sends all calls complete in
   one chunk, sometimes without `index`; the array position is used then. Tool
   calls are emitted in index order.
+- Gemini: a `functionCall` part without a matching thought signature (a call
+  from another provider, or from a different Gemini model) now carries
+  Google's placeholder `"skip_thought_signature_validator"` (new
+  `skipThoughtSignatureValidator`). Gemini 3 rejected such history with
+  `400 "Function call is missing a thought_signature"`, so a fallback into
+  Gemini 3, or between two Gemini models, failed partway through a tool loop.
 
 ## [0.2.0.0] - 2026-10-06
 

@@ -28,7 +28,7 @@ import LLM.Core.Types
   )
 import LLM.Core.Usage (Usage (..), mkUsage)
 import LLM.Core.Utils (getToolCalls, hasToolCalls)
-import LLM.Providers.Gemini (encodeTurn, geminiProvider, parseGeminiResponse, parseGeminiUsage, signatureForModel)
+import LLM.Providers.Gemini (encodeTurn, geminiProvider, parseGeminiResponse, parseGeminiUsage, signatureForModel, skipThoughtSignatureValidator)
 import Test.Hspec
   ( Spec,
     describe,
@@ -165,7 +165,7 @@ spec = describe "Gemini" $ do
         Left err -> expectationFailure $ "Parse failed: " <> show err
 
   describe "thought signature round-trip" $ do
-    it "replays signature only for a matching model" $ do
+    it "replays signature only for a matching model, else sends the placeholder" $ do
       let tc =
             (mkToolCall "call_1" "get_weather" (object ["location" .= ("London" :: Text)]))
               { tcProviderMeta =
@@ -179,8 +179,8 @@ spec = describe "Gemini" $ do
           turn = AssistantMessage [toolCallPart tc]
           matching = head (encodeTurn "gemini-2.5-pro" turn)
           mismatch = head (encodeTurn "gemini-2.5-flash" turn)
-      hasThoughtSignature matching `shouldBe` True
-      hasThoughtSignature mismatch `shouldBe` False
+      thoughtSignatures matching `shouldBe` ["sig-xyz"]
+      thoughtSignatures mismatch `shouldBe` [skipThoughtSignatureValidator]
       signatureForModel "gemini-2.5-pro" tc.tcProviderMeta `shouldBe` Just "sig-xyz"
       signatureForModel "gemini-2.5-flash" tc.tcProviderMeta `shouldBe` Nothing
 
@@ -211,7 +211,17 @@ spec = describe "Gemini" $ do
       -- plus text and functionCall => at least text + functionCall.
       length parts `shouldBe` 3
       hasFunctionCall encoded `shouldBe` True
-      hasThoughtSignature encoded `shouldBe` False
+      -- The Claude signature must not leak; the call gets the placeholder.
+      thoughtSignatures encoded `shouldBe` [skipThoughtSignatureValidator]
+
+    it "sends the placeholder signature on every call without metadata" $ do
+      let turn =
+            AssistantMessage
+              [ toolCallPart (mkToolCall "c1" "get_weather" (object [])),
+                toolCallPart (mkToolCall "c2" "get_time" (object []))
+              ]
+          encoded = head (encodeTurn "gemini-3.1-flash-lite" turn)
+      thoughtSignatures encoded `shouldBe` [skipThoughtSignatureValidator, skipThoughtSignatureValidator]
 
   describe "image request encoding" $ do
     it "encodes URL fileData and base64 inlineData parts" $ do
@@ -286,18 +296,10 @@ spec = describe "Gemini" $ do
               usageTotalCost = 0
             }
 
-hasThoughtSignature :: Value -> Bool
-hasThoughtSignature (Object o) =
-  case KM.lookup "parts" o of
-    Just (Array arr) ->
-      any
-        ( \case
-            Object p -> KM.member "thoughtSignature" p
-            _ -> False
-        )
-        arr
-    _ -> False
-hasThoughtSignature _ = False
+-- | The @thoughtSignature@ values of an encoded turn's parts, in order.
+thoughtSignatures :: Value -> [Text]
+thoughtSignatures v =
+  [sig | Object p <- assistantParts v, Just (String sig) <- [KM.lookup "thoughtSignature" p]]
 
 hasFunctionCall :: Value -> Bool
 hasFunctionCall (Object o) =

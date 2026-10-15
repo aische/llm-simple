@@ -2,6 +2,7 @@
     {
         "prompt": "how's the weather in london?",
         "request": {
+            "max_tokens": 1024,
             "messages": [
                 {
                     "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
@@ -13,7 +14,6 @@
                 }
             ],
             "model": "llama3.2:latest",
-            "num_predict": 1024,
             "tools": [
                 {
                     "function": {
@@ -27,7 +27,9 @@
                                     "type": "string"
                                 }
                             },
-                            "required": ["location"],
+                            "required": [
+                                "location"
+                            ],
                             "type": "object"
                         }
                     },
@@ -49,7 +51,7 @@
                                     "arguments": "{\"location\":\"London\"}",
                                     "name": "get_weather"
                                 },
-                                "id": "call_2w0ddvhy",
+                                "id": "call_4ysdmo61",
                                 "index": 0,
                                 "type": "function"
                             }
@@ -57,20 +59,23 @@
                     }
                 }
             ],
-            "created": 1778438588,
-            "id": "chatcmpl-133",
+            "created": 1792089544,
+            "id": "chatcmpl-279",
             "model": "llama3.2:latest",
             "object": "chat.completion",
             "system_fingerprint": "fp_ollama",
             "usage": {
                 "completion_tokens": 17,
-                "prompt_tokens": 181,
-                "total_tokens": 198
+                "prompt_tokens": 188,
+                "total_tokens": 205
             }
-        }
+        },
+        "sse": null
     },
     {
+        "prompt": null,
         "request": {
+            "max_tokens": 1024,
             "messages": [
                 {
                     "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
@@ -88,7 +93,7 @@
                                 "arguments": "{\"location\":\"London\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_2w0ddvhy",
+                            "id": "call_4ysdmo61",
                             "type": "function"
                         }
                     ]
@@ -96,11 +101,10 @@
                 {
                     "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
                     "role": "tool",
-                    "tool_call_id": "call_2w0ddvhy"
+                    "tool_call_id": "call_4ysdmo61"
                 }
             ],
             "model": "llama3.2:latest",
-            "num_predict": 1024,
             "tools": [
                 {
                     "function": {
@@ -114,7 +118,9 @@
                                     "type": "string"
                                 }
                             },
-                            "required": ["location"],
+                            "required": [
+                                "location"
+                            ],
                             "type": "object"
                         }
                     },
@@ -128,26 +134,28 @@
                     "finish_reason": "stop",
                     "index": 0,
                     "message": {
-                        "content": "According to current weather conditions, London has a partly cloudy sky with a temperature of 18°C and a light breeze coming from the west. Would you like me to check the forecast for a specific date or get more detailed information?",
+                        "content": "The current weather conditions in London are mainly sunny with some cloudiness, and the temperature is around 18 degrees Celsius (64°F). There's a gentle breeze coming from the west at about 19 km/h (12 mph). Would you like to know more or check the forecast for a specific date?",
                         "role": "assistant"
                     }
                 }
             ],
-            "created": 1778438589,
-            "id": "chatcmpl-838",
+            "created": 1792089545,
+            "id": "chatcmpl-901",
             "model": "llama3.2:latest",
             "object": "chat.completion",
             "system_fingerprint": "fp_ollama",
             "usage": {
-                "completion_tokens": 47,
+                "completion_tokens": 62,
                 "prompt_tokens": 137,
-                "total_tokens": 184
+                "total_tokens": 199
             }
-        }
+        },
+        "sse": null
     },
     {
         "prompt": "and in paris?",
         "request": {
+            "max_tokens": 1024,
             "messages": [
                 {
                     "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
@@ -165,7 +173,7 @@
                                 "arguments": "{\"location\":\"London\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_2w0ddvhy",
+                            "id": "call_4ysdmo61",
                             "type": "function"
                         }
                     ]
@@ -173,10 +181,10 @@
                 {
                     "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
                     "role": "tool",
-                    "tool_call_id": "call_2w0ddvhy"
+                    "tool_call_id": "call_4ysdmo61"
                 },
                 {
-                    "content": "According to current weather conditions, London has a partly cloudy sky with a temperature of 18°C and a light breeze coming from the west. Would you like me to check the forecast for a specific date or get more detailed information?",
+                    "content": "The current weather conditions in London are mainly sunny with some cloudiness, and the temperature is around 18 degrees Celsius (64°F). There's a gentle breeze coming from the west at about 19 km/h (12 mph). Would you like to know more or check the forecast for a specific date?",
                     "role": "assistant"
                 },
                 {
@@ -185,7 +193,6 @@
                 }
             ],
             "model": "llama3.2:latest",
-            "num_predict": 1024,
             "tools": [
                 {
                     "function": {
@@ -199,7 +206,9 @@
                                     "type": "string"
                                 }
                             },
-                            "required": ["location"],
+                            "required": [
+                                "location"
+                            ],
                             "type": "object"
                         }
                     },
@@ -221,7 +230,7 @@
                                     "arguments": "{\"location\":\"Paris\"}",
                                     "name": "get_weather"
                                 },
-                                "id": "call_291p7a0i",
+                                "id": "call_sahmucf9",
                                 "index": 0,
                                 "type": "function"
                             }
@@ -229,20 +238,23 @@
                     }
                 }
             ],
-            "created": 1778438589,
-            "id": "chatcmpl-165",
+            "created": 1792089546,
+            "id": "chatcmpl-768",
             "model": "llama3.2:latest",
             "object": "chat.completion",
             "system_fingerprint": "fp_ollama",
             "usage": {
                 "completion_tokens": 17,
-                "prompt_tokens": 284,
-                "total_tokens": 301
+                "prompt_tokens": 306,
+                "total_tokens": 323
             }
-        }
+        },
+        "sse": null
     },
     {
+        "prompt": null,
         "request": {
+            "max_tokens": 1024,
             "messages": [
                 {
                     "content": "You are a helpful assistant who answers questions and executes tools for the user. Always use tools when asked to, but use only the tools that are available.",
@@ -260,7 +272,7 @@
                                 "arguments": "{\"location\":\"London\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_2w0ddvhy",
+                            "id": "call_4ysdmo61",
                             "type": "function"
                         }
                     ]
@@ -268,10 +280,10 @@
                 {
                     "content": "Weather in London is partly cloudy, 18°C, light breeze from the west.",
                     "role": "tool",
-                    "tool_call_id": "call_2w0ddvhy"
+                    "tool_call_id": "call_4ysdmo61"
                 },
                 {
-                    "content": "According to current weather conditions, London has a partly cloudy sky with a temperature of 18°C and a light breeze coming from the west. Would you like me to check the forecast for a specific date or get more detailed information?",
+                    "content": "The current weather conditions in London are mainly sunny with some cloudiness, and the temperature is around 18 degrees Celsius (64°F). There's a gentle breeze coming from the west at about 19 km/h (12 mph). Would you like to know more or check the forecast for a specific date?",
                     "role": "assistant"
                 },
                 {
@@ -286,7 +298,7 @@
                                 "arguments": "{\"location\":\"Paris\"}",
                                 "name": "get_weather"
                             },
-                            "id": "call_291p7a0i",
+                            "id": "call_sahmucf9",
                             "type": "function"
                         }
                     ]
@@ -294,11 +306,10 @@
                 {
                     "content": "Weather in Paris is sunny, 23°C, no wind.",
                     "role": "tool",
-                    "tool_call_id": "call_291p7a0i"
+                    "tool_call_id": "call_sahmucf9"
                 }
             ],
             "model": "llama3.2:latest",
-            "num_predict": 1024,
             "tools": [
                 {
                     "function": {
@@ -312,7 +323,9 @@
                                     "type": "string"
                                 }
                             },
-                            "required": ["location"],
+                            "required": [
+                                "location"
+                            ],
                             "type": "object"
                         }
                     },
@@ -326,21 +339,22 @@
                     "finish_reason": "stop",
                     "index": 0,
                     "message": {
-                        "content": "According to current weather conditions, Paris has a sunny sky with a temperature of 23°C and wind speed at 0 meters per second. It's a beautiful day to explore the City of Light! Would you like me to check the forecast for another city or get more detailed information about the current weather?",
+                        "content": "The current weather conditions in Paris are perfect for a warm day outdoors! It's a beautiful, sunny day with a high temperature of 23 degrees Celsius (73°F) and not a single cloud in the sky. There's no wind to speak of, making it an ideal day to enjoy the city's famous landmarks, cafes, or simply stroll along the Seine River.",
                         "role": "assistant"
                     }
                 }
             ],
-            "created": 1778438591,
-            "id": "chatcmpl-823",
+            "created": 1792089548,
+            "id": "chatcmpl-34",
             "model": "llama3.2:latest",
             "object": "chat.completion",
             "system_fingerprint": "fp_ollama",
             "usage": {
-                "completion_tokens": 62,
-                "prompt_tokens": 236,
-                "total_tokens": 298
+                "completion_tokens": 76,
+                "prompt_tokens": 251,
+                "total_tokens": 327
             }
-        }
+        },
+        "sse": null
     }
 ]

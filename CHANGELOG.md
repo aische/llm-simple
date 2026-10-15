@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSON (`EmptyResponse`). The parser now joins the text of all parts not
   marked `"thought": true`, and object requests no longer ask for thought
   summaries (`includeThoughts`).
+- Ollama honours the max-token limit. Chat requests sent `num_predict` and
+  object requests `max_completion_tokens`; Ollama's OpenAI-compatible endpoint
+  ignores both, so `mcMaxTokens` had no effect. Both now send `max_tokens`.
+  Streamed Ollama responses now request usage (`stream_options.include_usage`)
+  as OpenAI's do. The recorded Ollama conversation fixtures were re-recorded.
 
 ## [0.3.0.0] - 2026-10-13
 

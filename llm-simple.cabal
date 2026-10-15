@@ -217,6 +217,7 @@ test-suite llm-simple-test
                         LLM.GeminiSpec
                         LLM.GenericConversationTest
                         LLM.RecordedConversationSpec
+                        LLM.OllamaSpec
                         LLM.OpenAISpec
                         LLM.TypesSpec
                         LLM.ChatSpec

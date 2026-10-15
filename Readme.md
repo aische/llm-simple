@@ -34,7 +34,12 @@ GEMINI_API_KEY=...
 DEEPSEEK_API_KEY=...
 ```
 
-Ollama needs no API key. The library reads keys from the **process environment**.
+Ollama needs no API key. It is used through its OpenAI-compatible endpoint
+(`/v1/chat/completions`); tested with Ollama 0.32.4. Streamed responses
+request usage via `stream_options.include_usage`; an Ollama version that does
+not support it streams without usage.
+
+The library reads keys from the **process environment**.
 Load `.env` yourself in `main` (the example executable does this), or call
 `loadGatewaysWithDotenv` when building gateways manually.
 

@@ -14,7 +14,7 @@ import Data.Aeson
     withObject,
     (.:),
   )
-import Data.Aeson.Types (Parser, parseMaybe)
+import Data.Aeson.Types (Pair, Parser, parseMaybe)
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
@@ -31,7 +31,7 @@ import LLM.Core.Types
     LLMGateway,
     defaultMessageEncodeOptions,
   )
-import LLM.Providers.OpenAI (buildMessages, encodeToolDef, openAIBuildBodyPairs, parseOpenAIResponse, parseOpenAIStream, parseOpenAIUsage)
+import LLM.Providers.OpenAI (buildMessages, encodeToolDef, parseOpenAIResponse, parseOpenAIStream, parseOpenAIUsage)
 import Network.HTTP.Req
   ( Option,
     POST (POST),
@@ -68,9 +68,7 @@ ollamaProviderWith baseUrl baseOpts =
       -- Ollama rejects image URLs ("not currently supported, please use
       -- base64 encoded data instead"); only data URLs work.
       providerImageUrlSupport = False,
-      -- Ollama uses the same request format as OpenAI, but without stream_options
-      -- (Ollama doesn't support include_usage in streaming).
-      buildBody = ollamaBuildBody,
+      buildBody = \stream r -> object (ollamaBuildBodyPairs stream r),
       sendRequest = sendRequest,
       openStream = \body k ->
         runReq lenientConfig $ do
@@ -81,7 +79,7 @@ ollamaProviderWith baseUrl baseOpts =
       parseResponse = pure . parseOpenAIResponse,
       buildObjectBody = \r schema ->
         object $
-          openAIBuildBodyPairs False r
+          ollamaBuildBodyPairs False r
             <> [ "response_format"
                    .= object
                      [ "type" .= ("json_schema" :: Text),
@@ -111,15 +109,16 @@ ollamaProviderWith baseUrl baseOpts =
       (choice : _) <- o .: "choices" :: Parser [Value]
       withObject "choice" (\co -> co .: "message" >>= withObject "message" (.: "content")) choice
 
--- | Build request body — same as OpenAI but without stream_options
--- since Ollama doesn't support include_usage.
-ollamaBuildBody :: Bool -> ChatRequest -> Value
-ollamaBuildBody stream r =
-  object $
-    [ "model" .= r.reqModel,
-      "messages" .= buildMessages defaultMessageEncodeOptions r
-    ]
-      ++ ["num_predict" .= r.reqMaxTokens]
-      ++ ["temperature" .= t | Just t <- [r.reqTemperature]]
-      ++ ["tools" .= map encodeToolDef r.reqTools | not (null r.reqTools)]
-      ++ ["stream" .= True | stream]
+-- | Request body for Ollama's OpenAI-compatible endpoint. Like OpenAI's, but
+-- the token limit is @max_tokens@: Ollama ignores @max_completion_tokens@
+-- (and @num_predict@ belongs to its native API).
+ollamaBuildBodyPairs :: Bool -> ChatRequest -> [Pair]
+ollamaBuildBodyPairs stream r =
+  [ "model" .= r.reqModel,
+    "max_tokens" .= r.reqMaxTokens,
+    "messages" .= buildMessages defaultMessageEncodeOptions r
+  ]
+    ++ ["temperature" .= t | Just t <- [r.reqTemperature]]
+    ++ ["tools" .= map encodeToolDef r.reqTools | not (null r.reqTools)]
+    ++ ["stream" .= True | stream]
+    ++ ["stream_options" .= object ["include_usage" .= True] | stream]

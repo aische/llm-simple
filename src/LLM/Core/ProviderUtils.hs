@@ -1,5 +1,6 @@
 module LLM.Core.ProviderUtils
   ( lenientConfig,
+    mkLenientConfig,
     readAll,
     handleStreamResponse,
     normalizeSchemaOpenAI,
@@ -10,6 +11,7 @@ module LLM.Core.ProviderUtils
   )
 where
 
+import Control.Retry (limitRetries)
 import Data.Aeson (ToJSON (toJSON), Value (..), decodeStrict', object)
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString qualified as BS
@@ -18,15 +20,38 @@ import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import LLM.Core.Types (LLMError (HttpError, ParseError), LLMTextResult)
 import Network.HTTP.Client qualified as HC
-import Network.HTTP.Req (HttpConfig, defaultHttpConfig, httpConfigCheckResponse)
+import Network.HTTP.Client.TLS (tlsManagerSettings)
+import Network.HTTP.Req (HttpConfig, defaultHttpConfig, httpConfigAltManager, httpConfigCheckResponse, httpConfigRetryPolicy)
 import Network.HTTP.Types.Status (statusCode)
+import System.IO.Unsafe (unsafePerformIO)
 
--- | Don't let req throw on non-2xx; we handle errors ourselves
+-- | The HTTP config every provider uses: 'mkLenientConfig' with one shared
+-- TLS manager that has no response timeout.
 lenientConfig :: HttpConfig
-lenientConfig =
+lenientConfig = mkLenientConfig sharedManager
+
+-- | HTTP config for provider requests using the given manager:
+--
+-- * req does not throw on non-2xx; we handle errors ourselves.
+-- * req never retries. A retry resends a paid POST, and retrying is the job
+--   of 'LLM.Core.Utils.withRetry'.
+mkLenientConfig :: HC.Manager -> HttpConfig
+mkLenientConfig mgr =
   defaultHttpConfig
-    { httpConfigCheckResponse = \_ _ _ -> Nothing
+    { httpConfigCheckResponse = \_ _ _ -> Nothing,
+      httpConfigRetryPolicy = limitRetries 0,
+      httpConfigAltManager = Just mgr
     }
+
+-- | Manager shared by all provider requests. A non-streaming call receives
+-- its response headers only after generation finishes, so http-client's
+-- default 30 s response timeout would cut off long calls. The only response
+-- deadline is the one the application configures ('mcRequestTimeout').
+sharedManager :: HC.Manager
+sharedManager =
+  unsafePerformIO $
+    HC.newManager tlsManagerSettings {HC.managerResponseTimeout = HC.responseTimeoutNone}
+{-# NOINLINE sharedManager #-}
 
 -- | Accumulate all chunks from a BodyReader for error messages
 readAll :: HC.BodyReader -> IO [BS.ByteString]

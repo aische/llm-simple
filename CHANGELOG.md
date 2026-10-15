@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Provider requests are no longer resent by req. req's default config
+  retried timeouts and 408/504 responses up to 5 times, resending (and
+  billing) the POST, before `withRetry` retried again. Its default 30 s
+  response timeout also failed any non-streaming call that took longer than
+  30 s to generate. All providers now share one TLS manager without a
+  response timeout and a config that never retries; `mcRequestTimeout` is the
+  only response deadline. New `mkLenientConfig` (`LLM.Core.ProviderUtils`)
+  builds that config for a given manager.
+
 ## [0.3.0.0] - 2026-10-13
 
 ### Added

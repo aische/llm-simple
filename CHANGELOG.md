@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   response timeout and a config that never retries; `mcRequestTimeout` is the
   only response deadline. New `mkLenientConfig` (`LLM.Core.ProviderUtils`)
   builds that config for a given manager.
+- One missing API key no longer breaks loading of every model.
+  `loadModelOrThrow` / `loadModelsOrThrow` used to build every catalog entry
+  and fail on the first one whose provider had no key, with a misleading
+  "Provider not found". Now only the requested models must be available; for
+  one that is not, the error names the reason, e.g. "Model haiku_4_5 needs
+  provider claude, but env var CLAUDE_API_KEY is not set" (or the invalid
+  base URL). The returned `ModelConfigMap` / `GatewayMap` hold all currently
+  available models and gateways. "Model not found" errors now name the model.
+  New `resolveGateway`, `resolveGateways` and `ProviderUnavailable`
+  (`LLM.Load.LoadGateways`).
 
 ## [0.3.0.0] - 2026-10-13
 

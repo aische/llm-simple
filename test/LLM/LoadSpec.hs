@@ -92,6 +92,38 @@ spec = describe "Load" $ do
       Map.member "llama_3_2" catalog `shouldBe` True
       Map.member "mistral" catalog `shouldBe` True
 
+  describe "providers that are unavailable" $ do
+    it "loads a model when another model's provider has no API key" $
+      withCatalogs mixedCatalog mixedProviders $ \path -> do
+        cfg <- loadModelOrThrow path "llama_3_2"
+        cfg.mcModel `shouldBe` "llama3.2:latest"
+
+    it "names the missing env var when the requested model's provider has no API key" $
+      withCatalogs mixedCatalog mixedProviders $ \path -> do
+        result <- try @LoadConfigError (loadModelOrThrow path "haiku")
+        case result of
+          Left (LoadModelConfigError msg) -> do
+            T.unpack msg `shouldContain` "haiku"
+            T.unpack msg `shouldContain` "claude"
+            T.unpack msg `shouldContain` "LLM_SIMPLE_TEST_UNSET_KEY"
+          Left other -> expectationFailure $ "expected LoadModelConfigError, got: " <> show other
+          Right _ -> expectationFailure "expected failure"
+
+    it "ignores an invalid baseUrl of a provider no requested model uses" $
+      withCatalogs mixedCatalog mixedProviders $ \path -> do
+        (_, catalog, _) <- loadModelOrThrow_ path "llama_3_2"
+        Map.keys catalog `shouldBe` ["llama_3_2"]
+
+    it "reports the invalid baseUrl when the requested model's provider has one" $
+      withCatalogs mixedCatalog mixedProviders $ \path -> do
+        result <- try @LoadConfigError (loadModelOrThrow path "broken_model")
+        case result of
+          Left (LoadModelConfigError msg) -> do
+            T.unpack msg `shouldContain` "broken"
+            T.unpack msg `shouldContain` "baseUrl"
+          Left other -> expectationFailure $ "expected LoadModelConfigError, got: " <> show other
+          Right _ -> expectationFailure "expected failure"
+
   describe "loadGateways" $ do
     it "always includes ollama" $ do
       gateways <- loadGateways
@@ -199,6 +231,35 @@ withTempCatalog contents act =
     let path = root </> "catalog.json"
     writeFile path contents
     act path `catch` \(_ :: IOException) -> act path
+
+-- | Write a model catalog and a @providers.json@ next to it.
+withCatalogs :: String -> String -> (FilePath -> IO a) -> IO a
+withCatalogs models providers act =
+  withSystemTempDirectory "llm-simple-catalogs" $ \root -> do
+    let catalogPath = root </> "model-catalog.json"
+    writeFile catalogPath models
+    writeFile (root </> "providers.json") providers
+    act catalogPath
+
+-- | One model each for Ollama (no key), Claude (key env var unset) and a
+-- provider with an invalid base URL.
+mixedCatalog :: String
+mixedCatalog =
+  "[" <> catalogEntry "llama_3_2" "ollama" "llama3.2:latest"
+    <> "," <> catalogEntry "haiku" "claude" "claude-haiku-4-5"
+    <> "," <> catalogEntry "broken_model" "broken" "some-model"
+    <> "]"
+  where
+    catalogEntry name provider model =
+      "{\"modelConfigName\":\"" <> name <> "\",\"providerName\":\"" <> provider
+        <> "\",\"modelName\":\"" <> model
+        <> "\",\"pricing\":{\"pricePerMillionInput\":0,\"pricePerMillionOutput\":0}"
+        <> ",\"maxTokens\":1024,\"retryCount\":0,\"jitterBackoff\":0}"
+
+mixedProviders :: String
+mixedProviders =
+  "[{\"providerName\":\"claude\",\"protocol\":\"claude\",\"baseUrl\":\"https://api.anthropic.com\",\"apiKeyEnv\":\"LLM_SIMPLE_TEST_UNSET_KEY\"}"
+    <> ",{\"providerName\":\"broken\",\"protocol\":\"openai\",\"baseUrl\":\"not a url\"}]"
 
 withProviderCatalogDir :: FilePath -> (FilePath -> IO a) -> IO a
 withProviderCatalogDir providersFixture act =

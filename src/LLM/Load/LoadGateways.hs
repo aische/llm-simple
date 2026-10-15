@@ -7,18 +7,17 @@ module LLM.Load.LoadGateways
     loadGatewaysFromCatalog,
     loadGatewaysFromCatalogOrThrow,
     parseProviderBaseUrl,
+    ProviderUnavailable (..),
+    describeProviderUnavailable,
+    resolveGateway,
+    resolveGateways,
   )
 where
 
 import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Exception (SomeException, catch, throwIO)
-import Control.Monad (forM)
-import Control.Monad.Except (ExceptT (..), MonadError (throwError), runExceptT)
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Functor ((<&>))
 import Data.Map qualified as Map
 import Data.ByteString.Char8 qualified as B
-import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import Data.Text qualified as T
 import LLM.Core.Types (LLMGateway)
@@ -115,65 +114,51 @@ resolveBaseUrl item =
       mbOverride <- lookupEnv (T.unpack envVar)
       pure $ maybe item.baseUrl T.pack mbOverride
 
-tryBuildGateway :: ProviderCatalogItem -> IO (Maybe (Text, LLMGateway))
-tryBuildGateway item =
-  case item.apiKeyEnv of
-    Nothing -> buildWithKey ""
-    Just envVar ->
-      lookupEnv (T.unpack envVar) >>= (\case
-        Nothing -> pure Nothing
-        Just apiKey -> buildWithKey apiKey) . fmap T.pack
-  where
-    buildWithKey apiKey = do
-      baseUrlText <- resolveBaseUrl item
-      case parseProviderBaseUrl baseUrlText of
-        Left _ -> pure Nothing
-        Right baseUrl ->
-          pure $
-            Just
-              ( item.providerName,
-                buildGateway item baseUrl apiKey
-              )
+-- | Why a provider in the catalog has no gateway.
+data ProviderUnavailable
+  = -- | The provider's API key environment variable is not set.
+    MissingApiKey Text
+  | -- | The provider's base URL cannot be parsed (the parse error).
+    InvalidBaseUrl Text
+  deriving (Eq, Show)
 
-tryBuildGatewayOrThrow :: ProviderCatalogItem -> ExceptT LoadConfigError IO (Maybe (Text, LLMGateway))
-tryBuildGatewayOrThrow item =
-  case item.apiKeyEnv of
-    Nothing -> buildWithKey ""
-    Just envVar ->
-      liftIO (lookupEnv (T.unpack envVar) <&> fmap T.pack) >>= \case
-        Nothing -> pure Nothing
-        Just apiKey -> buildWithKey apiKey
-  where
-    buildWithKey apiKey = do
-      baseUrlText <- liftIO $ resolveBaseUrl item
-      baseUrl <- case parseProviderBaseUrl baseUrlText of
-        Left err ->
-          throwError $
-            LoadModelConfigError $
-              "Invalid baseUrl for provider "
-                <> item.providerName
-                <> ": "
-                <> err
-        Right parsed -> pure parsed
-      pure $
-        Just
-          ( item.providerName,
-            buildGateway item baseUrl apiKey
-          )
+-- | Describe why a provider is unavailable, e.g. "env var X is not set".
+describeProviderUnavailable :: ProviderUnavailable -> Text
+describeProviderUnavailable = \case
+  MissingApiKey envVar -> "env var " <> envVar <> " is not set"
+  InvalidBaseUrl err -> "it has an " <> err
 
+-- | Build the gateway for a provider, or say why it is unavailable. Never
+-- throws.
+resolveGateway :: ProviderCatalogItem -> IO (Either ProviderUnavailable LLMGateway)
+resolveGateway item = do
+  apiKey <- case item.apiKeyEnv of
+    Nothing -> pure (Right "")
+    Just envVar -> maybe (Left (MissingApiKey envVar)) (Right . T.pack) <$> lookupEnv (T.unpack envVar)
+  baseUrlText <- resolveBaseUrl item
+  pure $ do
+    key <- apiKey
+    baseUrl <- either (Left . InvalidBaseUrl) Right (parseProviderBaseUrl baseUrlText)
+    pure (buildGateway item baseUrl key)
+
+-- | Resolve every provider in the catalog. See 'resolveGateway'.
+resolveGateways :: ProviderCatalogMap -> IO (Map.Map Text (Either ProviderUnavailable LLMGateway))
+resolveGateways = traverse resolveGateway
+
+-- | Gateways of all providers that are available. Providers without an API
+-- key or with an invalid base URL are left out.
 loadGatewaysFromCatalog :: ProviderCatalogMap -> IO GatewayMap
-loadGatewaysFromCatalog catalog = do
-  pairs <- forM (Map.elems catalog) tryBuildGateway
-  pure $ Map.fromList $ catMaybes pairs
+loadGatewaysFromCatalog catalog = Map.mapMaybe (either (const Nothing) Just) <$> resolveGateways catalog
 
+-- | Like 'loadGatewaysFromCatalog', but throws a 'LoadModelConfigError' if
+-- any provider has an invalid base URL.
 loadGatewaysFromCatalogOrThrow :: ProviderCatalogMap -> IO GatewayMap
 loadGatewaysFromCatalogOrThrow catalog = do
-  result <- runExceptT $ do
-    pairs <- forM (Map.elems catalog) tryBuildGatewayOrThrow
-    pure $ Map.fromList $ catMaybes pairs
-  case result of
-    Left err -> throwIO err
-    Right gatewayMap -> pure gatewayMap
+  resolved <- resolveGateways catalog
+  case [(name, err) | (name, Left (InvalidBaseUrl err)) <- Map.toList resolved] of
+    (name, err) : _ ->
+      throwIO $ LoadModelConfigError $ "Invalid baseUrl for provider " <> name <> ": " <> err
+    [] -> pure $ Map.mapMaybe (either (const Nothing) Just) resolved
 
 -- | Build a gateway map from the bundled default provider catalog and the
 -- current process environment. Does not read a @.env@ file; set variables

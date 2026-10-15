@@ -12,6 +12,7 @@ module LLM.Providers.Gemini
 where
 
 import Control.Applicative ((<|>))
+import Control.Monad (forM)
 import Data.Aeson
   ( KeyValue ((.=)),
     Object,
@@ -26,7 +27,7 @@ import Data.Aeson
 import Data.Aeson.KeyMap qualified as KM
 import Data.Aeson.Types (Pair, Parser, parseMaybe)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
@@ -136,7 +137,9 @@ geminiProviderWith baseUrl baseOpts apiKey =
                     "responseSchema" .= stripBoundsAndComments schema
                   ]
                     ++ ["temperature" .= t | Just t <- [r.reqTemperature]]
-                    ++ thinkingConfigPairs r
+                    -- The object API returns no reasoning, so don't ask
+                    -- for thought summaries.
+                    ++ thinkingConfigPairs False r
                 )
           ]
             ++ [ "system_instruction" .= object ["parts" .= [object ["text" .= sys]]]
@@ -380,15 +383,16 @@ genConfig r =
   object $
     ("maxOutputTokens" .= r.reqMaxTokens)
       : ["temperature" .= t | Just t <- [r.reqTemperature]]
-      ++ thinkingConfigPairs r
+      ++ thinkingConfigPairs True r
 
 -- | Map 'ThinkingMode' to Gemini @thinkingConfig@.
 --
 -- Level strings (@low@/@medium@/@high@/@minimal@) become @thinkingLevel@
 -- (Gemini 3). Numeric effort becomes @thinkingBudget@ (Gemini 2.5). Enabled
--- without effort requests dynamic budget (@-1@).
-thinkingConfigPairs :: ChatRequest -> [Pair]
-thinkingConfigPairs r =
+-- without effort requests dynamic budget (@-1@). With @includeThoughts@,
+-- the response carries thought summaries as parts marked @"thought": true@.
+thinkingConfigPairs :: Bool -> ChatRequest -> [Pair]
+thinkingConfigPairs includeThoughts r =
   case r.reqThinking of
     Nothing -> []
     Just tm
@@ -396,27 +400,15 @@ thinkingConfigPairs r =
           ["thinkingConfig" .= object ["thinkingBudget" .= (0 :: Int)]]
       | Just e <- tm.tmEffort,
         e `elem` ["minimal", "low", "medium", "high"] ->
-          [ "thinkingConfig"
-              .= object
-                [ "thinkingLevel" .= e,
-                  "includeThoughts" .= True
-                ]
-          ]
+          thinkingConfig ["thinkingLevel" .= e]
       | Just e <- tm.tmEffort,
         Just n <- readMaybeInt e ->
-          [ "thinkingConfig"
-              .= object
-                [ "thinkingBudget" .= n,
-                  "includeThoughts" .= True
-                ]
-          ]
+          thinkingConfig ["thinkingBudget" .= n]
       | otherwise ->
-          [ "thinkingConfig"
-              .= object
-                [ "thinkingBudget" .= (-1 :: Int),
-                  "includeThoughts" .= True
-                ]
-          ]
+          thinkingConfig ["thinkingBudget" .= (-1 :: Int)]
+  where
+    thinkingConfig pairs =
+      ["thinkingConfig" .= object (pairs ++ ["includeThoughts" .= True | includeThoughts])]
 
 readMaybeInt :: Text -> Maybe Int
 readMaybeInt t =
@@ -547,7 +539,15 @@ parseGeminiObjectResponse v = case parseMaybe go v of
     Nothing -> pure $ Left EmptyResponse
     Just obj -> pure $ Right (obj, parseGeminiUsage v)
   where
+    -- The JSON is the text of all parts that are not thought summaries
+    -- (@"thought": true@), which come first when thinking is enabled.
     go :: Value -> Parser Text
     go = withObject "GeminiObjectResponse" $ \o -> do
       (cand : _) <- o .: "candidates" :: Parser [Value]
-      withObject "candidate" (\co -> co .: "content" >>= withObject "content" (\cco -> cco .: "parts" >>= \case (p : _) -> withObject "part" (.: "text") p; _ -> fail "No parts")) cand
+      parts <- withObject "candidate" (\co -> co .: "content" >>= withObject "content" (.: "parts")) cand
+      texts <- forM parts $ withObject "part" $ \p -> do
+        thought <- p .:? "thought" .!= False
+        if thought then pure Nothing else p .:? "text"
+      case catMaybes texts of
+        [] -> fail "No text parts"
+        ts -> pure (T.concat ts)

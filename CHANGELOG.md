@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Breaking:** `executeToolsWithAbort` returns the new `ToolRoundOutcome`
   (`ToolRoundCompleted` / `ToolRoundAborted`) instead of
   `GenerateResult [ToolResult]`.
+- Gemini structured output works with thinking enabled. The response's first
+  part was the thought summary, which the object parser tried to decode as
+  JSON (`EmptyResponse`). The parser now joins the text of all parts not
+  marked `"thought": true`, and object requests no longer ask for thought
+  summaries (`includeThoughts`).
 
 ## [0.3.0.0] - 2026-10-13
 

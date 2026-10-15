@@ -16,6 +16,7 @@ import LLM.Core.Types
     ToolDef (..),
     ProviderOpaque (..),
     ThinkingContent (..),
+    ThinkingMode (..),
     ToolCall (..),
     Turn (..),
     mkToolCall,
@@ -143,6 +144,42 @@ spec = describe "Gemini" $ do
           body = (geminiProvider "").buildObjectBody req schema
       lookupPath ["generationConfig", "responseSchema"] body
         `shouldBe` Just (object ["type" .= ("integer" :: Text)])
+
+  describe "structured output with thinking" $ do
+    it "decodes the object when a thought summary part comes first" $ do
+      let resp =
+            object
+              [ "candidates"
+                  .= [ object
+                         [ "content"
+                             .= object
+                               [ "role" .= ("model" :: Text),
+                                 "parts"
+                                   .= [ object ["text" .= ("Let me think about the answer." :: Text), "thought" .= True],
+                                        object ["text" .= ("{\"answer\": " :: Text)],
+                                        object ["text" .= ("42}" :: Text)]
+                                      ]
+                               ]
+                         ]
+                     ]
+              ]
+      result <- (geminiProvider "").parseObjectResponse resp
+      fmap fst result `shouldBe` Right (object ["answer" .= (42 :: Int)])
+
+    it "does not request thought summaries for object requests" $ do
+      let req =
+            ChatRequest
+              { reqModel = "gemini-2.5-flash",
+                reqConversation = [],
+                reqSystem = Nothing,
+                reqMaxTokens = 100,
+                reqTemperature = Nothing,
+                reqTools = [],
+                reqThinking = Just ThinkingMode {tmEnabled = True, tmEffort = Just "1024"}
+              }
+          body = (geminiProvider "").buildObjectBody req (object ["type" .= ("object" :: Text)])
+      lookupPath ["generationConfig", "thinkingConfig"] body
+        `shouldBe` Just (object ["thinkingBudget" .= (1024 :: Int)])
 
   describe "parseGeminiResponse" $ do
     it "parses a text response" $ do

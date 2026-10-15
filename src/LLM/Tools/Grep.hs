@@ -11,11 +11,10 @@ import Data.ByteString qualified as BS
 import Data.List (sort)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath)
-import LLM.Tools.FsLimits (binarySniffBytes, expensiveWalkDepth)
+import LLM.Tools.FsLimits (binarySniffBytes, expensiveWalkDepth, readTextFileLenient)
 import System.Directory
   ( doesDirectoryExist,
     doesFileExist,
@@ -207,7 +206,7 @@ searchFiles root files pat ci cap = go files [] 0 False
             then go rest acc (scanned + 1) truncated
             else do
               r <-
-                try (TIO.readFile f) ::
+                try (readTextFileLenient f) ::
                   IO (Either IOException Text)
               case r of
                 Left _ -> go rest acc (scanned + 1) truncated

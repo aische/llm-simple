@@ -3,6 +3,7 @@ module LLM.LoadSpec (spec) where
 import Control.Exception (IOException, SomeException, catch, displayException, fromException, try)
 import Control.Monad.Except (runExceptT)
 import Data.Aeson (Value (Array), eitherDecodeFileStrict')
+import Data.ByteString qualified as BS
 import Data.List (find)
 import Data.Map qualified as Map
 import Data.Maybe (isJust)
@@ -21,6 +22,7 @@ import LLM.Load.ProviderCatalog
     loadProviderCatalogForModelCatalog,
   )
 import LLM.Load.Types (LoadConfigError (..))
+import LLM.Load.Utils (getSystemPrompt)
 import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
@@ -224,6 +226,19 @@ spec = describe "Load" $ do
         Left (LoadModelCatalogError _) -> pure ()
         Left other -> expectationFailure $ "expected LoadModelCatalogError, got: " <> show other
         Right _ -> expectationFailure "expected failure"
+
+  describe "getSystemPrompt" $ do
+    it "reports a file that is not valid UTF-8" $
+      withSystemTempDirectory "llm-simple-prompt" $ \root -> do
+        let path = root </> "prompt.txt"
+        BS.writeFile path (BS.pack [0x63, 0x61, 0x66, 0xE9])
+        result <- runExceptT $ getSystemPrompt (Just (T.pack ("file:" <> path)))
+        case result of
+          Left (LoadSystemPromptError msg) -> do
+            T.unpack msg `shouldContain` path
+            T.unpack msg `shouldContain` "UTF-8"
+          Left other -> expectationFailure $ "expected LoadSystemPromptError, got: " <> show other
+          Right p -> expectationFailure $ "expected failure, got: " <> show p
 
 withTempCatalog :: String -> (FilePath -> IO a) -> IO a
 withTempCatalog contents act =

@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   available models and gateways. "Model not found" errors now name the model.
   New `resolveGateway`, `resolveGateways` and `ProviderUnavailable`
   (`LLM.Load.LoadGateways`).
+- File tools no longer corrupt non-UTF-8 files or depend on the locale.
+  `replace_in_file` and `multi_replace_in_file` decoded leniently and wrote
+  the whole file back, replacing every invalid byte with U+FFFD; they now
+  refuse files that are not valid UTF-8 and leave them unchanged. Writes
+  (`writefile` and both replace tools) always produce UTF-8; under `LANG=C`
+  they used to fail or mangle non-ASCII text. `grep` and `file_info` read
+  bytes and decode leniently, so `grep` no longer skips files it cannot
+  decode. `getSystemPrompt` reports a `file:` prompt that is not valid UTF-8
+  as a `LoadSystemPromptError` naming the file.
 
 ## [0.3.0.0] - 2026-10-13
 

@@ -4,10 +4,10 @@ import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxWritePath)
+import LLM.Tools.FsLimits (writeUtf8File)
 
 data WritefileToolArgs = WritefileToolArgs
   { _wfPath :: Text,
@@ -41,5 +41,5 @@ writefileExecTyped cfg args = do
   let p = args._wfPath
       c = args._wfContent
   resolved <- sandboxWritePath cfg (T.unpack p)
-  TIO.writeFile resolved c
+  writeUtf8File resolved c
   pure $ "Successfully wrote " <> T.pack (show (T.length c)) <> " characters to " <> p

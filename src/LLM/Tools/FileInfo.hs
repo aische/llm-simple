@@ -10,11 +10,11 @@ import Data.Aeson (FromJSON)
 import Data.ByteString qualified as BS
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.IO qualified as TIO
 import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath)
+import LLM.Tools.FsLimits (readTextFileLenient)
 import System.Directory
   ( Permissions (..),
     doesDirectoryExist,
@@ -219,7 +219,7 @@ safeListDirectory p = do
 
 safeLineCount :: FilePath -> IO (Maybe Int)
 safeLineCount p = do
-  r <- try (TIO.readFile p) :: IO (Either IOException Text)
+  r <- try (readTextFileLenient p) :: IO (Either IOException Text)
   pure $ case r of
     Right content -> Just (length (T.lines content))
     Left _ -> Nothing

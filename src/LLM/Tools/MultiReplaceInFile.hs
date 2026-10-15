@@ -4,11 +4,10 @@ import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath)
-import LLM.Tools.FsLimits (maxReadBytes, readBoundedTextFile)
+import LLM.Tools.FsLimits (maxReadBytes, readBoundedUtf8File, writeUtf8File)
 
 data Replacement = Replacement
   { _repOld :: Text,
@@ -59,13 +58,13 @@ replaceExecTyped :: FsConfig -> MultiReplaceInFileToolArgs -> IO Text
 replaceExecTyped cfg args = do
   let MultiReplaceInFileToolArgs {_mrifPath, _mrifReplacements} = args
   resolved <- sandboxPath cfg (T.unpack _mrifPath)
-  contentE <- readBoundedTextFile resolved _mrifPath maxReadBytes
+  contentE <- readBoundedUtf8File resolved _mrifPath maxReadBytes
   case contentE of
     Left err -> pure $ "Error: " <> err
     Right content -> case applyReplacements _mrifReplacements content of
       Left err -> pure err
       Right result -> do
-        TIO.writeFile resolved result
+        writeUtf8File resolved result
         pure $
           "Successfully applied "
             <> T.pack (show (length _mrifReplacements))

@@ -4,11 +4,10 @@ import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.IO qualified as TIO
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath)
-import LLM.Tools.FsLimits (maxReadBytes, readBoundedTextFile)
+import LLM.Tools.FsLimits (maxReadBytes, readBoundedUtf8File, writeUtf8File)
 
 data ReplaceInFileToolArgs = ReplaceInFileToolArgs
   { _rifPath :: Text,
@@ -47,14 +46,14 @@ replaceExecTyped cfg args = do
   let ReplaceInFileToolArgs {_rifPath, _rifOld, _rifNew} = args
       p = _rifPath
   resolved <- sandboxPath cfg (T.unpack p)
-  contentE <- readBoundedTextFile resolved p maxReadBytes
+  contentE <- readBoundedUtf8File resolved p maxReadBytes
   case contentE of
     Left err -> pure $ "Error: " <> err
     Right content -> case countOccurrences _rifOld content of
       0 -> pure "Error: the 'old' string was not found in the file"
       1 -> do
         let replaced = replaceFirst _rifOld _rifNew content
-        TIO.writeFile resolved replaced
+        writeUtf8File resolved replaced
         pure $ "Successfully replaced text in " <> p
       n ->
         pure $

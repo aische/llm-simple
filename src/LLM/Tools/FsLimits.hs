@@ -24,6 +24,9 @@ module LLM.Tools.FsLimits
     binarySniffBytes,
     detectBinary,
     readBoundedTextFile,
+    readBoundedUtf8File,
+    readTextFileLenient,
+    writeUtf8File,
   )
 where
 
@@ -31,7 +34,7 @@ import Control.Exception (IOException, try)
 import Data.ByteString qualified as BS
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Encoding (decodeUtf8With)
+import Data.Text.Encoding (decodeUtf8', decodeUtf8With, encodeUtf8)
 import Data.Text.Encoding.Error (lenientDecode)
 import System.IO (IOMode (ReadMode), hFileSize, withBinaryFile)
 
@@ -81,10 +84,36 @@ detectBinary path = do
     Right bs -> pure (BS.elem 0 bs)
     Left _ -> pure True
 
--- | Read a text file up to @cap@ bytes. Refuses binary files, checks size
--- before reading, and performs a bounded read to mitigate TOCTOU growth.
+-- | Read a text file up to @cap@ bytes for display. Invalid UTF-8 bytes
+-- become U+FFFD, so never write the result back; edit tools use
+-- 'readBoundedUtf8File'.
 readBoundedTextFile :: FilePath -> Text -> Int -> IO (Either Text Text)
-readBoundedTextFile path display cap = do
+readBoundedTextFile path display cap =
+  fmap (decodeUtf8With lenientDecode) <$> readBoundedBytes path display cap
+
+-- | Read a text file up to @cap@ bytes for editing. Refuses files that are
+-- not valid UTF-8, since writing them back would destroy their bytes.
+readBoundedUtf8File :: FilePath -> Text -> Int -> IO (Either Text Text)
+readBoundedUtf8File path display cap = do
+  r <- readBoundedBytes path display cap
+  pure $
+    r >>= \bs -> case decodeUtf8' bs of
+      Right t -> Right t
+      Left _ -> Left $ display <> " is not valid UTF-8; refusing to edit it."
+
+-- | Read a whole file as UTF-8, replacing invalid bytes with U+FFFD.
+-- Independent of the locale. For read-only use.
+readTextFileLenient :: FilePath -> IO Text
+readTextFileLenient path = decodeUtf8With lenientDecode <$> BS.readFile path
+
+-- | Write text as UTF-8, independent of the locale.
+writeUtf8File :: FilePath -> Text -> IO ()
+writeUtf8File path = BS.writeFile path . encodeUtf8
+
+-- | Read a file up to @cap@ bytes. Refuses binary files, checks size
+-- before reading, and performs a bounded read to mitigate TOCTOU growth.
+readBoundedBytes :: FilePath -> Text -> Int -> IO (Either Text BS.ByteString)
+readBoundedBytes path display cap = do
   isBinary <- detectBinary path
   if isBinary
     then
@@ -135,4 +164,4 @@ readBoundedTextFile path display cap = do
                             <> T.pack (show cap)
                             <> "-byte cap during the read."
                   | otherwise ->
-                      pure (Right (decodeUtf8With lenientDecode bs))
+                      pure (Right bs)

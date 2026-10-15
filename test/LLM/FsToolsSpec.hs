@@ -1,9 +1,13 @@
 module LLM.FsToolsSpec (spec) where
 
+import Control.Exception (bracket_)
 import Data.Aeson (Value, object, (.=))
+import Data.ByteString qualified as BS
 import Data.Map qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding (encodeUtf8)
+import GHC.IO.Encoding (getLocaleEncoding, setLocaleEncoding)
 import Heptapod (generate)
 import LLM.Agent.Types (RuntimeArgs (..), Tool (..), ToolContext (..))
 import LLM.Generate.GenerateUtils (llmHooks)
@@ -15,6 +19,7 @@ import System.Directory
     doesFileExist,
   )
 import System.FilePath ((</>))
+import System.IO (TextEncoding, char8)
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
   ( Spec,
@@ -164,6 +169,50 @@ spec = describe "FsTools" $ do
       runTool_ tm "remove_directory" (object ["path" .= ("tmp" :: Text)])
       doesDirectoryExist (sb </> "tmp") `shouldReturn` False
 
+  describe "text encoding" $ do
+    -- "café foo\n" in Latin-1: 0xE9 is not valid UTF-8.
+    let latin1 = BS.pack [0x63, 0x61, 0x66, 0xE9, 0x20, 0x66, 0x6F, 0x6F, 0x0A]
+    it "replace_in_file refuses a non-UTF-8 file and leaves its bytes unchanged" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "latin1.txt") latin1
+      result <- runTool tm "replace_in_file" (object ["path" .= ("latin1.txt" :: Text), "old" .= ("foo" :: Text), "new" .= ("bar" :: Text)])
+      T.unpack result `shouldContain` "UTF-8"
+      BS.readFile (sb </> "latin1.txt") `shouldReturn` latin1
+
+    it "multi_replace_in_file refuses a non-UTF-8 file and leaves its bytes unchanged" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "latin1.txt") latin1
+      result <-
+        runTool
+          tm
+          "multi_replace_in_file"
+          ( object
+              [ "path" .= ("latin1.txt" :: Text),
+                "replacements" .= [object ["old" .= ("foo" :: Text), "new" .= ("bar" :: Text)]]
+              ]
+          )
+      T.unpack result `shouldContain` "UTF-8"
+      BS.readFile (sb </> "latin1.txt") `shouldReturn` latin1
+
+    it "writefile writes UTF-8 regardless of the locale" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      withLocaleEncoding char8 $
+        runTool_ tm "writefile" (object ["path" .= ("u.txt" :: Text), "content" .= ("äöü" :: Text)])
+      BS.readFile (sb </> "u.txt") `shouldReturn` encodeUtf8 "äöü"
+
+    it "replace_in_file writes UTF-8 regardless of the locale" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "u.txt") (encodeUtf8 "x = 1\n")
+      withLocaleEncoding char8 $
+        runTool_ tm "replace_in_file" (object ["path" .= ("u.txt" :: Text), "old" .= ("1" :: Text), "new" .= ("äöü" :: Text)])
+      BS.readFile (sb </> "u.txt") `shouldReturn` encodeUtf8 "x = äöü\n"
+
+    it "grep finds matches in a non-UTF-8 file" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "latin1.txt") latin1
+      result <- runTool tm "grep" (object ["pattern" .= ("foo" :: Text), "path" .= ("." :: Text)])
+      T.unpack result `shouldContain` "latin1.txt"
+
   describe "workspace root guard" $ do
     let rootPaths = [".", "", "./", "sub/.."] :: [Text]
     it "remove_directory refuses the workspace root" $ withSandbox $ \sb -> do
@@ -208,6 +257,11 @@ spec = describe "FsTools" $ do
       result <- runTool tm "remove_file" (object ["path" .= ("sub" :: Text)])
       T.unpack result `shouldContain` "is a directory"
       doesDirectoryExist (sb </> "sub") `shouldReturn` True
+
+withLocaleEncoding :: TextEncoding -> IO a -> IO a
+withLocaleEncoding enc act = do
+  old <- getLocaleEncoding
+  bracket_ (setLocaleEncoding enc) (setLocaleEncoding old) act
 
 withSandbox :: (FilePath -> IO a) -> IO a
 withSandbox act = withSystemTempDirectory "llm-simple-fstools" $ \root -> do

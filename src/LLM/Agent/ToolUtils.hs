@@ -2,6 +2,7 @@ module LLM.Agent.ToolUtils
   ( executeTool,
     executeTools,
     executeToolsWithAbort,
+    ToolRoundOutcome (..),
     createToolContext,
     getSchema,
     toTool,
@@ -41,11 +42,7 @@ import LLM.Core.Types
 import LLM.Core.Usage (Usage)
 import LLM.Core.Utils (toolResult, trySync)
 import LLM.Generate.Logger (Hooks (..))
-import LLM.Generate.Types
-  ( GenRequest (..),
-    GenerateError (..),
-    GenerateResult,
-  )
+import LLM.Generate.Types (GenRequest (..))
 import LLM.Tools.FsConfig (SandboxViolation, formatSandboxViolation)
 
 -- | Execute a single tool call by looking it up in the tool list
@@ -76,17 +73,25 @@ executeTool hooks ctx tools tc = case lookup tc.tcName toolMap of
 executeTools :: Hooks -> ToolContext -> [Tool Text] -> [ToolCall] -> IO [ToolResult]
 executeTools hooks ctx tools = mapM (executeTool hooks ctx tools)
 
--- | Execute tool calls one at a time, checking the abort signal between each.
--- Returns @Left Aborted@ if the signal fires before all calls finish.
-executeToolsWithAbort :: Maybe AbortSignal -> Hooks -> ToolContext -> [Tool Text] -> [ToolCall] -> IO (GenerateResult [ToolResult])
-executeToolsWithAbort Nothing hooks ctx tools tcs = Right <$> executeTools hooks ctx tools tcs
+-- | Outcome of a tool round run by 'executeToolsWithAbort'.
+data ToolRoundOutcome
+  = -- | Every call ran.
+    ToolRoundCompleted [ToolResult]
+  | -- | The abort signal fired: results of the calls that ran, and the calls
+    -- that did not.
+    ToolRoundAborted [ToolResult] [ToolCall]
+  deriving (Show, Eq)
+
+-- | Execute tool calls one at a time, checking the abort signal before each.
+executeToolsWithAbort :: Maybe AbortSignal -> Hooks -> ToolContext -> [Tool Text] -> [ToolCall] -> IO ToolRoundOutcome
+executeToolsWithAbort Nothing hooks ctx tools tcs = ToolRoundCompleted <$> executeTools hooks ctx tools tcs
 executeToolsWithAbort (Just sig) hooks ctx tools tcs = go [] tcs
   where
-    go acc [] = pure (Right (reverse acc))
-    go acc (tc : rest) = do
+    go acc [] = pure (ToolRoundCompleted (reverse acc))
+    go acc remaining@(tc : rest) = do
       aborted <- isAborted sig
       if aborted
-        then pure (Left GErrAborted)
+        then pure (ToolRoundAborted (reverse acc) remaining)
         else do
           r <- executeTool hooks ctx tools tc
           go (r : acc) rest

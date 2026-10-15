@@ -33,6 +33,7 @@ import LLM.Core.Types
     LLMGateway (..),
     LLMHooks (..),
     ToolDef (ToolDef, toolDescription, toolName, toolParameters, toolReadonly),
+    ToolResult (..),
     mkToolCall,
   )
 import LLM.Core.Usage (PricingInfo (..), defaultPricingInfo, mkUsage)
@@ -541,7 +542,14 @@ spec = describe "Chat" $ do
           models = ModelWithFallbacks (mockModel twoCallGw) []
       result <- runGenerate agent models tm (Just sig) [UserTurn "go"]
       case result of
-        Left GenerateErrorResult {gerError = GErrAborted} -> pure ()
+        Left GenerateErrorResult {gerError = GErrAborted, gerPartialNewMessages} ->
+          -- Every tool call in the history must have a result, or the next
+          -- request is rejected. c1 ran; c2 never did.
+          case reverse gerPartialNewMessages of
+            ToolTurn results : _ ->
+              [(r.trCallId, r.trContent) | r <- results]
+                `shouldBe` [("c1", "done"), ("c2", "Aborted before execution")]
+            _ -> expectationFailure $ "Expected history to end with a ToolTurn, got: " <> show gerPartialNewMessages
         other -> expectationFailure $ "Expected GErrAborted during tools, got: " <> show other
 
     describe "sticky fallback" $ stickyFallbackSpec runGenerate toolMap

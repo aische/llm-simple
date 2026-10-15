@@ -12,6 +12,7 @@ import LLM.Agent.ToolUtils
   ( createGenRequest,
     createToolContext,
     executeToolsWithAbort,
+    ToolRoundOutcome (..),
     getResolvedTools,
   )
 import LLM.Agent.Types
@@ -26,7 +27,7 @@ import LLM.Core.Types
     Turn (..),
   )
 import LLM.Core.Usage (Usage (..), emptyUsage)
-import LLM.Core.Utils (getToolCalls)
+import LLM.Core.Utils (getToolCalls, toolResult)
 import LLM.Generate.Generate
   ( generateTextWithFallbacksRotated,
     streamTextWithFallbacksRotated,
@@ -148,11 +149,17 @@ agentLoop call agent models toolMap rt initialTurns = do
                       toolResultsE <- executeToolsWithAbort rt.rtAbortSignal rt.rtHooks toolContext tools toolCalls
 
                       case toolResultsE of
-                        Left err -> do
-                          let errResult = GenerateErrorResult err (newTurnsAcc ++ [assistantMsg]) newUsage
-                          emitEvent rt (GenerationFailed err errResult)
+                        ToolRoundAborted done notRun -> do
+                          -- Answer every tool call so the history stays valid
+                          -- for the next request: real results for the calls
+                          -- that ran (they may have had side effects), a
+                          -- placeholder for the rest.
+                          let toolTurn = ToolTurn (done ++ map (`toolResult` "Aborted before execution") notRun)
+                              errResult = GenerateErrorResult GErrAborted (newTurnsAcc ++ [assistantMsg, toolTurn]) newUsage
+                          emitEvent rt (MessageCreated toolTurn)
+                          emitEvent rt (GenerationFailed GErrAborted errResult)
                           pure $ Left errResult
-                        Right toolResults -> do
+                        ToolRoundCompleted toolResults -> do
                           let toolTurn = ToolTurn toolResults
                           emitEvent rt (MessageCreated toolTurn)
                           emitEvent rt (ToolRoundFinished loopCount)

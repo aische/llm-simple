@@ -62,7 +62,9 @@ data GenerateTextResult = GenerateTextResult
 -- | Failure result preserving partial progress from the current run.
 data GenerateErrorResult = GenerateErrorResult
   { gerError :: GenerateError,
-    -- | Turns produced before the failure (may include an in-progress tool round).
+    -- | Turns produced before the failure. Safe to append to the history:
+    -- every tool call has a result. On an abort during a tool round, calls
+    -- that did not run get the result "Aborted before execution".
     gerPartialNewMessages :: [Turn],
     gerUsage :: Usage
   }

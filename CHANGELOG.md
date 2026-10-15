@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bytes and decode leniently, so `grep` no longer skips files it cannot
   decode. `getSystemPrompt` reports a `file:` prompt that is not valid UTF-8
   as a `LoadSystemPromptError` naming the file.
+- An abort during a tool round no longer leaves an unanswered tool call in
+  `gerPartialNewMessages`. The partial history used to end with the
+  assistant's tool calls and no `ToolTurn`, which Claude and OpenAI reject on
+  the next request. It now ends with a `ToolTurn` holding the real results of
+  the calls that ran and "Aborted before execution" for the rest.
+  **Breaking:** `executeToolsWithAbort` returns the new `ToolRoundOutcome`
+  (`ToolRoundCompleted` / `ToolRoundAborted`) instead of
+  `GenerateResult [ToolResult]`.
 
 ## [0.3.0.0] - 2026-10-13
 

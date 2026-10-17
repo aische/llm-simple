@@ -16,7 +16,7 @@ where
 import Control.Applicative ((<|>))
 import Data.Aeson
   ( KeyValue ((.=)),
-    Value (Object, String),
+    Value (Array, Object, String),
     decodeStrict',
     encode,
     object,
@@ -245,19 +245,29 @@ thinkingPairs r =
           ["thinking" .= object ["type" .= ("disabled" :: Text)]]
     _ -> []
 
+-- | Encode a turn for Claude. A user or assistant turn whose content encodes
+-- to nothing (e.g. an assistant turn holding only foreign thinking) is
+-- dropped: Claude rejects @"content": []@, and merges the consecutive
+-- same-role turns this can leave.
 encodeTurn :: Text -> Turn -> [Value]
 encodeTurn _ (UserMessage parts) =
-  [ object
-      [ "role" .= ("user" :: Text),
-        "content" .= encodeUserContent parts
+  case encodeUserContent parts of
+    Array a | null a -> []
+    content ->
+      [ object
+          [ "role" .= ("user" :: Text),
+            "content" .= content
+          ]
       ]
-  ]
 encodeTurn currentModel (AssistantMessage parts) =
-  [ object
-      [ "role" .= ("assistant" :: Text),
-        "content" .= mapMaybe (encodeAssistantPart currentModel . stripForeignOpaque claudeProviderName) parts
+  case mapMaybe (encodeAssistantPart currentModel . stripForeignOpaque claudeProviderName) parts of
+    [] -> []
+    content ->
+      [ object
+          [ "role" .= ("assistant" :: Text),
+            "content" .= content
+          ]
       ]
-  ]
 encodeTurn _ (ToolTurn results) =
   [ object
       [ "role" .= ("user" :: Text),

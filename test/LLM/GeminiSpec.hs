@@ -260,6 +260,27 @@ spec = describe "Gemini" $ do
           encoded = head (encodeTurn "gemini-3.1-flash-lite" turn)
       thoughtSignatures encoded `shouldBe` [skipThoughtSignatureValidator, skipThoughtSignatureValidator]
 
+    it "drops an assistant turn whose content encodes to nothing" $ do
+      -- A Claude turn holding only redacted thinking: the foreign opaque is
+      -- stripped and there is no text, so "parts": [] would be a 400.
+      let redacted =
+            ThinkingContent
+              { thinkingText = Nothing,
+                thinkingOpaque =
+                  Just
+                    ProviderOpaque
+                      { poProvider = "claude",
+                        poModel = Just "claude-haiku-4-5",
+                        poPayload = object ["type" .= ("redacted_thinking" :: Text), "data" .= ("xyz" :: Text)]
+                      }
+              }
+          turn = AssistantMessage [thinkingPart redacted, textPart ""]
+      encodeTurn "gemini-3.1-flash-lite" turn `shouldBe` []
+
+    it "drops a user turn whose content encodes to nothing" $ do
+      let turn = UserMessage [thinkingPart (ThinkingContent (Just "stray") Nothing)]
+      encodeTurn "gemini-3.1-flash-lite" turn `shouldBe` []
+
   describe "image request encoding" $ do
     it "encodes URL fileData and base64 inlineData parts" $ do
       Right b64 <- pure $ imageBase64Part "image/jpeg" "aGVsbG8="

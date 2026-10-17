@@ -62,6 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and leave its target unchanged (also for links pointing outside the
   workspace); `move_file` and `copy_file` refuse a link source. New
   `sandboxSymlink` (`LLM.Tools.FsConfig`).
+- Claude and Gemini no longer send turns with empty content. After a
+  fallback, an assistant turn holding only foreign thinking (e.g. a DeepSeek
+  turn cut off during reasoning, or a Claude turn with only redacted
+  thinking) encoded to `"content": []` / `"parts": []`, which the API
+  rejects with a 400. Such turns, and user turns whose parts all encode to
+  nothing, are now left out; both APIs accept the consecutive same-role
+  turns this can leave. The OpenAI protocol was fixed in 0.3.0.0.
 
 ## [0.3.0.0] - 2026-10-13
 

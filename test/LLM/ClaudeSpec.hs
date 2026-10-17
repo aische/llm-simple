@@ -251,6 +251,20 @@ spec = describe "Claude" $ do
           KM.lookup "thoughtSignature" toolO `shouldBe` Nothing
         _ -> expectationFailure "expected text + tool_use only"
 
+    it "drops an assistant turn whose content encodes to nothing" $ do
+      -- A DeepSeek turn cut off during reasoning: foreign thinking without a
+      -- Claude signature, and empty text. "content": [] is a 400.
+      let turn =
+            AssistantMessage
+              [ thinkingPart (ThinkingContent (Just "deepseek reasoning") Nothing),
+                textPart ""
+              ]
+      encodeTurn "claude-haiku-4-5-20251001" turn `shouldBe` []
+
+    it "drops a user turn whose content encodes to nothing" $ do
+      let turn = UserMessage [thinkingPart (ThinkingContent (Just "stray") Nothing)]
+      encodeTurn "claude-haiku-4-5-20251001" turn `shouldBe` []
+
   describe "thinking request mapping" $ do
     it "maps effort to budget_tokens and omits temperature when thinking is on" $ do
       let req =

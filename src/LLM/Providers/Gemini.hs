@@ -247,24 +247,19 @@ geminiBuildBodyPairs r =
 
 -- | Encode a turn for Gemini. Foreign opaque thinking / tool metadata is omitted
 -- at encode time so fallbacks never replay Claude (or other) state.
+-- A user or model turn whose parts encode to nothing (e.g. a Claude turn
+-- holding only redacted thinking) is dropped, since Gemini rejects
+-- @"parts": []@.
 encodeTurn :: Text -> Turn -> [Value]
 encodeTurn _ (UserMessage parts) =
-  [ object
-      [ "role" .= ("user" :: Text),
-        "parts" .= mapMaybe encodeUserPart parts
-      ]
-  ]
+  nonEmptyTurn "user" (mapMaybe encodeUserPart parts)
   where
     -- Cache hints are ignored on the Gemini wire; content is unchanged.
     encodeUserPart (ContentPart (TextPart t) _) = Just $ object ["text" .= t]
     encodeUserPart (ContentPart (ImagePart src) _) = Just $ encodeImagePart src
     encodeUserPart _ = Nothing
 encodeTurn currentModel (AssistantMessage parts) =
-  [ object
-      [ "role" .= ("model" :: Text),
-        "parts" .= mapMaybe (encodeAssistantPart currentModel) cleaned
-      ]
-  ]
+  nonEmptyTurn "model" (mapMaybe (encodeAssistantPart currentModel) cleaned)
   where
     cleaned = map (stripForeignOpaque geminiProviderName) parts
 encodeTurn _ (ToolTurn results) =
@@ -273,6 +268,10 @@ encodeTurn _ (ToolTurn results) =
         "parts" .= map encodeFunctionResponse results
       ]
   ]
+
+nonEmptyTurn :: Text -> [Value] -> [Value]
+nonEmptyTurn _ [] = []
+nonEmptyTurn role ps = [object ["role" .= role, "parts" .= ps]]
 
 encodeImagePart :: ImageSource -> Value
 encodeImagePart (ImageUrl url) =

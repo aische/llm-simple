@@ -69,6 +69,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rejects with a 400. Such turns, and user turns whose parts all encode to
   nothing, are now left out; both APIs accept the consecutive same-role
   turns this can leave. The OpenAI protocol was fixed in 0.3.0.0.
+- Gemini thought signatures are only replayed to the model that produced
+  them. Model names were compared by prefix, so `gemini-2.5-flash` and
+  `gemini-2.5-flash-lite` counted as the same model and received each
+  other's signatures. Names now must be equal apart from a `models/` prefix
+  and a stable version suffix (`-001`); other calls get the documented
+  placeholder signature.
 
 ## [0.3.0.0] - 2026-10-13
 

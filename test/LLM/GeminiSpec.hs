@@ -221,6 +221,20 @@ spec = describe "Gemini" $ do
       signatureForModel "gemini-2.5-pro" tc.tcProviderMeta `shouldBe` Just "sig-xyz"
       signatureForModel "gemini-2.5-flash" tc.tcProviderMeta `shouldBe` Nothing
 
+    it "treats models that share a name prefix as different models" $ do
+      let meta m =
+            Just
+              ProviderOpaque
+                { poProvider = "gemini",
+                  poModel = Just m,
+                  poPayload = object ["thoughtSignature" .= ("sig" :: Text)]
+                }
+      signatureForModel "gemini-2.5-flash-lite" (meta "gemini-2.5-flash") `shouldBe` Nothing
+      signatureForModel "gemini-2.5-flash" (meta "gemini-2.5-flash-lite") `shouldBe` Nothing
+      signatureForModel "gemini-2.5-flash" (meta "gemini-2.5-flash-preview-09-2025") `shouldBe` Nothing
+      signatureForModel "models/gemini-2.5-flash" (meta "gemini-2.5-flash") `shouldBe` Just "sig"
+      signatureForModel "gemini-2.5-flash" (meta "gemini-2.5-flash") `shouldBe` Just "sig"
+
     it "omits foreign Claude thinking opaque while keeping text and tool calls" $ do
       let turn =
             AssistantMessage

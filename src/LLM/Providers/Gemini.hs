@@ -28,6 +28,7 @@ import Data.Aeson.KeyMap qualified as KM
 import Data.Aeson.Types (Pair, Parser, parseMaybe)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import Data.Char (isDigit)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
@@ -508,8 +509,21 @@ signatureForModel currentModel (Just o)
         _ -> Nothing
 signatureForModel _ _ = Nothing
 
+-- | Whether a recorded model (the response's @modelVersion@) is the model
+-- being called. Ignores only a @models/@ prefix and a stable version
+-- suffix (@gemini-2.5-pro-001@ = @gemini-2.5-pro@); anything else must be
+-- equal, so @gemini-2.5-flash@ and @gemini-2.5-flash-lite@ differ. A false
+-- mismatch only costs a placeholder signature; a false match is a 400.
 modelsMatch :: Text -> Text -> Bool
-modelsMatch a b = a == b || T.isPrefixOf a b || T.isPrefixOf b a
+modelsMatch a b = canonical a == canonical b
+  where
+    canonical = dropStableVersion . dropModelsPrefix
+    dropModelsPrefix t = fromMaybe t (T.stripPrefix "models/" t)
+    dropStableVersion t =
+      let (stem, suffix) = T.breakOnEnd "-" t
+       in if T.length suffix == 3 && T.all isDigit suffix && T.length stem > 1
+            then T.dropEnd 1 stem
+            else t
 
 parseGeminiUsage :: Value -> Maybe Usage
 parseGeminiUsage = parseMaybe $ withObject "GeminiResponse" $ \o -> do

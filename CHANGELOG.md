@@ -54,6 +54,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ignores both, so `mcMaxTokens` had no effect. Both now send `max_tokens`.
   Streamed Ollama responses now request usage (`stream_options.include_usage`)
   as OpenAI's do. The recorded Ollama conversation fixtures were re-recorded.
+- File tools handle symbolic links as documented. `sandboxPath` resolves
+  links, so the tools' `isSymlink` checks on its result never fired:
+  `remove_file` and `remove_directory` on a link deleted the link's target
+  inside the workspace, and `move_file` / `copy_file` moved or copied the
+  target. `remove_file` and `remove_directory` now remove the link itself
+  and leave its target unchanged (also for links pointing outside the
+  workspace); `move_file` and `copy_file` refuse a link source. New
+  `sandboxSymlink` (`LLM.Tools.FsConfig`).
 
 ## [0.3.0.0] - 2026-10-13
 

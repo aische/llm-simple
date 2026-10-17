@@ -5,6 +5,7 @@ module LLM.Tools.FsConfig
     mkFsConfig,
     sandboxPath,
     sandboxWritePath,
+    sandboxSymlink,
     isSandboxRoot,
     isFileHidden,
     isSymlink,
@@ -83,6 +84,27 @@ sandboxPath cfg relPath = do
       -- 'directory' package.
       verifyNoSymlinksInChain base (joinPath baseComps) tailComps
       pure canonical
+
+-- | If @relPath@ names a symbolic link, return the link's own path
+-- (not its target); otherwise 'Nothing'.
+--
+-- 'sandboxPath' resolves links, so a tool that checks 'isSymlink' on its
+-- result never sees one. Destructive tools call this first instead. Only
+-- the directory containing the link is resolved and checked against the
+-- sandbox (throwing 'SandboxViolation' on escape); the link's target may
+-- lie anywhere, since acting on the link itself never touches it.
+sandboxSymlink :: FsConfig -> FilePath -> IO (Maybe FilePath)
+sandboxSymlink cfg relPath = do
+  let candidate = collapseDots (normalise (cfg.fsBasePath </> relPath))
+      (parentRaw, name) = splitFileName candidate
+  isLink <- if null name then pure False else isSymlink candidate
+  if not isLink
+    then pure Nothing
+    else do
+      parent <- sandboxPath cfg (dropTrailingPathSeparator parentRaw)
+      let link = parent </> name
+      stillLink <- isSymlink link
+      pure (if stillLink then Just link else Nothing)
 
 -- | True when a path already resolved by 'sandboxPath' is the workspace
 -- root itself (e.g. the model passed @\".\"@, @\"\"@ or @\"sub\/..\"@).

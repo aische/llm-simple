@@ -2,11 +2,12 @@ module LLM.Tools.MoveFile (moveFileToolTyped, MoveFileToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, isSymlink, sandboxPath, sandboxWritePath)
+import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, sandboxPath, sandboxSymlink, sandboxWritePath)
 import System.Directory (doesDirectoryExist, doesFileExist, doesPathExist, renameFile)
 
 data MoveFileToolArgs = MoveFileToolArgs
@@ -38,15 +39,16 @@ moveFileExecTyped :: FsConfig -> MoveFileToolArgs -> IO Text
 moveFileExecTyped cfg args = do
   let src = args._mfSrc
       dst = args._mfDst
-  srcResolved <- sandboxPath cfg (T.unpack src)
   -- Refuse to operate on symbolic-link sources: this would either move
   -- the link itself (surprising) or, after `sandboxPath` resolution,
-  -- potentially target a file outside the sandbox.
-  srcIsLink <- isSymlink srcResolved
+  -- move the link's target. Checked before resolving, since
+  -- `sandboxPath` follows the link.
+  srcLink <- sandboxSymlink cfg (T.unpack src)
+  srcResolved <- sandboxPath cfg (T.unpack src)
   if isSandboxRoot cfg srcResolved
     then pure $ "Error: refusing to move the workspace root: " <> src
     else
-      if srcIsLink
+      if isJust srcLink
         then pure $ "Error: refusing to move symbolic link source: " <> src
         else do
           srcExists <- doesPathExist srcResolved

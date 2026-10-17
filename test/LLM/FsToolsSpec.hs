@@ -15,10 +15,14 @@ import LLM.Generate.Logger (noHooks)
 import LLM.Load.FsTools (fsTools)
 import System.Directory
   ( createDirectory,
+    createDirectoryLink,
+    createFileLink,
     doesDirectoryExist,
     doesFileExist,
+    doesPathExist,
+    pathIsSymbolicLink,
   )
-import System.FilePath ((</>))
+import System.FilePath (takeDirectory, (</>))
 import System.IO (TextEncoding, char8)
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
@@ -168,6 +172,53 @@ spec = describe "FsTools" $ do
       doesFileExist (sb </> "tmp" </> "x.txt") `shouldReturn` False
       runTool_ tm "remove_directory" (object ["path" .= ("tmp" :: Text)])
       doesDirectoryExist (sb </> "tmp") `shouldReturn` False
+
+  describe "symbolic links" $ do
+    it "remove_file removes the link and leaves its target intact" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      writeFile (sb </> "real.txt") "keep"
+      createFileLink "real.txt" (sb </> "link")
+      result <- runTool tm "remove_file" (object ["path" .= ("link" :: Text)])
+      T.unpack result `shouldContain` "symbolic link"
+      doesPathExist (sb </> "link") `shouldReturn` False
+      readFile (sb </> "real.txt") `shouldReturn` "keep"
+
+    it "remove_file removes a link that points outside the workspace" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      let outside = takeDirectory sb </> "outside.txt"
+      writeFile outside "keep"
+      createFileLink outside (sb </> "link")
+      runTool_ tm "remove_file" (object ["path" .= ("link" :: Text)])
+      doesPathExist (sb </> "link") `shouldReturn` False
+      readFile outside `shouldReturn` "keep"
+
+    it "remove_directory removes the link and leaves the linked directory intact" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      createDirectory (sb </> "real")
+      writeFile (sb </> "real" </> "x.txt") "keep"
+      createDirectoryLink "real" (sb </> "link")
+      result <- runTool tm "remove_directory" (object ["path" .= ("link" :: Text)])
+      T.unpack result `shouldContain` "symbolic link"
+      doesPathExist (sb </> "link") `shouldReturn` False
+      readFile (sb </> "real" </> "x.txt") `shouldReturn` "keep"
+
+    it "move_file refuses a link source" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      writeFile (sb </> "real.txt") "keep"
+      createFileLink "real.txt" (sb </> "link")
+      result <- runTool tm "move_file" (object ["source" .= ("link" :: Text), "destination" .= ("moved.txt" :: Text)])
+      T.unpack result `shouldContain` "symbolic link"
+      pathIsSymbolicLink (sb </> "link") `shouldReturn` True
+      readFile (sb </> "real.txt") `shouldReturn` "keep"
+      doesPathExist (sb </> "moved.txt") `shouldReturn` False
+
+    it "copy_file refuses a link source" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      writeFile (sb </> "real.txt") "keep"
+      createFileLink "real.txt" (sb </> "link")
+      result <- runTool tm "copy_file" (object ["source" .= ("link" :: Text), "destination" .= ("copy.txt" :: Text)])
+      T.unpack result `shouldContain` "symbolic link"
+      doesPathExist (sb </> "copy.txt") `shouldReturn` False
 
   describe "text encoding" $ do
     -- "café foo\n" in Latin-1: 0xE9 is not valid UTF-8.

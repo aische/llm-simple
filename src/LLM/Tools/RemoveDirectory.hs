@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, isSymlink, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, isSymlink, sandboxPath, sandboxSymlink)
 import System.Directory
   ( doesDirectoryExist,
     listDirectory,
@@ -34,7 +34,8 @@ removeDirectoryToolTyped cfg =
     { ttoolName = "remove_directory",
       ttoolDescription =
         "Recursively delete a directory and all its contents at the given path (relative to the workspace). "
-          <> "Use with caution — this operation is irreversible.",
+          <> "Use with caution — this operation is irreversible. "
+          <> "A symbolic link is removed itself; its target is left unchanged.",
       ttoolReadonly = False,
       ttoolExecute = const (removeDirectoryExecTyped cfg)
     }
@@ -42,12 +43,18 @@ removeDirectoryToolTyped cfg =
 removeDirectoryExecTyped :: FsConfig -> RemoveDirectoryToolArgs -> IO Text
 removeDirectoryExecTyped cfg args = do
   let p = args._rdPath
-  resolved <- sandboxPath cfg (T.unpack p)
-  if isSandboxRoot cfg resolved
-    then pure $ "Error: refusing to remove the workspace root: " <> p
-    else do
-      safeRemoveDirectoryRecursive resolved
-      pure $ "Successfully removed directory " <> p
+  link <- sandboxSymlink cfg (T.unpack p)
+  case link of
+    Just l -> do
+      removeFile l
+      pure $ "Successfully removed symbolic link " <> p <> " (its target was left unchanged)"
+    Nothing -> do
+      resolved <- sandboxPath cfg (T.unpack p)
+      if isSandboxRoot cfg resolved
+        then pure $ "Error: refusing to remove the workspace root: " <> p
+        else do
+          safeRemoveDirectoryRecursive resolved
+          pure $ "Successfully removed directory " <> p
 
 -- | Like 'System.Directory.removeDirectoryRecursive', but refuses to
 -- follow directory symlinks. A symbolic link encountered during the
@@ -55,10 +62,10 @@ removeDirectoryExecTyped cfg args = do
 -- the sandbox pointing at an external directory cannot be used to
 -- delete files outside the sandbox.
 --
--- Note: the top-level argument has already been resolved through
--- 'sandboxPath', so it is guaranteed to be a real directory inside
--- the sandbox at the moment of the call. We still re-check it
--- defensively in case of an unusual TOCTOU race.
+-- Note: a top-level link is handled by the caller via 'sandboxSymlink',
+-- and the argument has been resolved through 'sandboxPath', so it is a
+-- real directory inside the sandbox at the moment of the call. We still
+-- re-check it defensively in case of an unusual TOCTOU race.
 safeRemoveDirectoryRecursive :: FilePath -> IO ()
 safeRemoveDirectoryRecursive dir = do
   topIsLink <- isSymlink dir

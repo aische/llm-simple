@@ -2,11 +2,12 @@ module LLM.Tools.CopyFile (copyFileToolTyped, CopyFileToolArgs (..)) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isSymlink, sandboxPath, sandboxWritePath)
+import LLM.Tools.FsConfig (FsConfig, sandboxPath, sandboxSymlink, sandboxWritePath)
 import System.Directory (copyFile, doesDirectoryExist, doesFileExist, doesPathExist)
 
 data CopyFileToolArgs = CopyFileToolArgs
@@ -39,14 +40,15 @@ copyFileExecTyped :: FsConfig -> CopyFileToolArgs -> IO Text
 copyFileExecTyped cfg args = do
   let src = args._cfSrc
       dst = args._cfDst
-  srcResolved <- sandboxPath cfg (T.unpack src)
   -- Refuse symbolic-link sources: copying would either dereference the
   -- link (potentially pulling content from outside the sandbox) or be
   -- ambiguous about whether the link itself should be reproduced.
-  srcIsLink <- isSymlink srcResolved
-  if srcIsLink
+  -- Checked before resolving, since `sandboxPath` follows the link.
+  srcLink <- sandboxSymlink cfg (T.unpack src)
+  if isJust srcLink
     then pure $ "Error: refusing to copy symbolic link source: " <> src
     else do
+      srcResolved <- sandboxPath cfg (T.unpack src)
       srcExists <- doesPathExist srcResolved
       if not srcExists
         then pure $ "Error: source does not exist: " <> src

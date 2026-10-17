@@ -75,6 +75,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other's signatures. Names now must be equal apart from a `models/` prefix
   and a stable version suffix (`-001`); other calls get the documented
   placeholder signature.
+- Claude non-streaming responses with unknown content blocks (e.g.
+  `server_tool_use`, `web_search_tool_result`) no longer fail as
+  `EmptyResponse`. Unknown blocks are skipped, as streaming already did.
 
 ## [0.3.0.0] - 2026-10-13
 

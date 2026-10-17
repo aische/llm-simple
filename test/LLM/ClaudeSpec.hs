@@ -74,6 +74,32 @@ spec = describe "Claude" $ do
           hasToolCalls resp `shouldBe` False
         Left err -> expectationFailure $ "Parse failed: " <> show err
 
+    it "skips unknown content block types" $ do
+      let val =
+            object
+              [ "model" .= ("claude-haiku-4-5-20251001" :: Text),
+                "stop_reason" .= ("end_turn" :: Text),
+                "content"
+                  .= [ object
+                         [ "type" .= ("server_tool_use" :: Text),
+                           "id" .= ("srvtoolu_1" :: Text),
+                           "name" .= ("web_search" :: Text),
+                           "input" .= object ["query" .= ("weather" :: Text)]
+                         ],
+                       object
+                         [ "type" .= ("web_search_tool_result" :: Text),
+                           "tool_use_id" .= ("srvtoolu_1" :: Text),
+                           "content" .= ([] :: [Value])
+                         ],
+                       object ["type" .= ("text" :: Text), "text" .= ("Sunny." :: Text)]
+                     ]
+              ]
+      case parseClaudeResponse val of
+        Right resp -> do
+          resp.respText `shouldBe` "Sunny."
+          hasToolCalls resp `shouldBe` False
+        Left err -> expectationFailure $ "Parse failed: " <> show err
+
     it "parses a tool_use response" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/claude-tool-use.json"
       case parseClaudeResponse val of

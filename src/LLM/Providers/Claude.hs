@@ -31,7 +31,7 @@ import Data.Aeson.Types (Object, Pair, Parser, parseMaybe)
 import Data.ByteString qualified as BS
 import Data.Foldable (for_)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
@@ -379,13 +379,15 @@ parseClaudeResponse v = case parseMaybe (go modelVer) v of
     go :: Maybe Text -> Value -> Parser [ContentPart]
     go mv = withObject "ClaudeResponse" $ \o -> do
       content <- o .: "content" :: Parser [Value]
-      mapM (parseBlock mv) content
+      catMaybes <$> mapM (parseBlock mv) content
 
-parseBlock :: Maybe Text -> Value -> Parser ContentPart
+-- | Parse one content block. Unknown block types (e.g. @server_tool_use@,
+-- @web_search_tool_result@) give 'Nothing' and are skipped, as in streaming.
+parseBlock :: Maybe Text -> Value -> Parser (Maybe ContentPart)
 parseBlock mv = withObject "content_block" $ \o -> do
   typ <- o .: "type" :: Parser Text
   case typ of
-    "text" -> textPart <$> o .: "text"
+    "text" -> Just . textPart <$> o .: "text"
     "thinking" -> do
       thinkingTxt <- o .:? "thinking" :: Parser (Maybe Text)
       signature <- o .:? "signature" :: Parser (Maybe Text)
@@ -403,7 +405,7 @@ parseBlock mv = withObject "content_block" $ \o -> do
           mText = case thinkingTxt of
             Just t | not (T.null t) -> Just t
             _ -> Nothing
-      pure $ thinkingPart (ThinkingContent mText (Just opaque))
+      pure $ Just $ thinkingPart (ThinkingContent mText (Just opaque))
     "redacted_thinking" -> do
       data_ <- o .: "data" :: Parser Text
       let payload =
@@ -417,13 +419,13 @@ parseBlock mv = withObject "content_block" $ \o -> do
                 poModel = mv,
                 poPayload = payload
               }
-      pure $ thinkingPart (ThinkingContent Nothing (Just opaque))
+      pure $ Just $ thinkingPart (ThinkingContent Nothing (Just opaque))
     "tool_use" -> do
       cid <- o .: "id"
       name <- o .: "name"
       args <- o .: "input"
-      pure $ toolCallPart (mkToolCall cid name args)
-    _ -> fail $ "Unknown content block type: " <> T.unpack typ
+      pure $ Just $ toolCallPart (mkToolCall cid name args)
+    _ -> pure Nothing
 
 parseClaudeUsage :: Value -> Maybe Usage
 parseClaudeUsage = parseMaybe $ withObject "ClaudeResponse" $ \o -> do

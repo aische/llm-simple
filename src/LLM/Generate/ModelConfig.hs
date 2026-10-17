@@ -8,7 +8,7 @@ module LLM.Generate.ModelConfig
   )
 where
 
-import Control.Retry (RetryPolicyM, fullJitterBackoff, limitRetries)
+import Control.Retry (RetryPolicyM, capDelay, fullJitterBackoff, limitRetries)
 import Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.!=), (.:?), (.=))
 import Data.Text (Text)
 import GHC.Generics (Generic)
@@ -92,5 +92,9 @@ data ModelWithFallbacks = ModelWithFallbacks
 mfwToModelConfigs :: ModelWithFallbacks -> [ModelConfig]
 mfwToModelConfigs mwf = mwf.mwfModel : mwf.mwfFallbacks
 
+-- | 'mcRetryCount' retries with full-jitter exponential backoff from
+-- 'mcJitterBackoff', each delay capped at 30 s.
 modelRetryPolicy :: ModelConfig -> RetryPolicyM IO
-modelRetryPolicy mc = limitRetries mc.mcRetryCount <> fullJitterBackoff (mc.mcJitterBackoff * 1000)
+modelRetryPolicy mc =
+  capDelay 30_000_000 $
+    limitRetries mc.mcRetryCount <> fullJitterBackoff (mc.mcJitterBackoff * 1000)

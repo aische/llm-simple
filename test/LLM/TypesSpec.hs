@@ -216,6 +216,8 @@ spec = describe "Types" $ do
       isRetryable (HttpError 429 "rate limited") `shouldBe` True
     it "retries on 503" $ do
       isRetryable (HttpError 503 "overloaded") `shouldBe` True
+    it "retries on transient server errors (500, 502, 504)" $ do
+      map (\s -> isRetryable (HttpError s "")) [500, 502, 504] `shouldBe` [True, True, True]
     it "retries on network errors" $ do
       isRetryable (NetworkError "connection refused") `shouldBe` True
     it "retries on timeouts" $ do

@@ -88,6 +88,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decoded leniently instead of throwing. **Breaking:** `sendRequest` and
   `sendObjectRequest` in `LLMProvider` return the raw body
   (`IO (Int, ByteString)`) instead of a decoded `Value`.
+- HTTP 500, 502 and 504 are retried, like 429/503/529. They are usually
+  transient, and a Claude mid-stream `api_error` (mapped to 500) was never
+  retried. Each retry delay is now capped at 30 s; `fullJitterBackoff` grew
+  without bound for large `retryCount`s. `Retry-After` is still ignored.
 
 ## [0.3.0.0] - 2026-10-13
 

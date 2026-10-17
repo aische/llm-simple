@@ -4,6 +4,7 @@ module LLM.StreamingSpec (spec) where
 
 import Control.Concurrent (threadDelay)
 import Control.Monad (when)
+import Control.Retry (RetryPolicyM (getRetryPolicyM), RetryStatus (rsIterNumber), defaultRetryStatus)
 import Data.Aeson (object, (.=))
 import Data.IORef (atomicModifyIORef', modifyIORef', newIORef, readIORef)
 import Data.Text (Text)
@@ -24,7 +25,7 @@ import LLM.Core.Usage (PricingInfo (..), defaultPricingInfo, mkUsage)
 import LLM.Generate.Generate (generateTextLLM, streamTextLLM, streamTextWithFallbacks)
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
-import LLM.Generate.ModelConfig (ModelConfig (..), ModelWithFallbacks (..), defaultModelCapabilities)
+import LLM.Generate.ModelConfig (ModelConfig (..), ModelWithFallbacks (..), defaultModelCapabilities, modelRetryPolicy)
 import LLM.Generate.Types
   ( GenRequest (..),
     RoundTextRole (..),
@@ -123,6 +124,19 @@ spec = describe "Streaming" $ do
           mc = (testModelConfig gw) {mcRequestTimeout = Just 100}
       r <- streamTextLLM (\_ -> pure ()) (testGenRequest []) mc
       fmap (.respText) r `shouldBe` Left TimeoutError
+
+  describe "modelRetryPolicy" $ do
+    it "caps the backoff delay at 30 s" $ do
+      let mc =
+            (testModelConfig (streamGateway [] (ChatResponse "" [] Nothing Nothing)))
+              { mcRetryCount = 20,
+                mcJitterBackoff = 1000
+              }
+      delays <-
+        mapM
+          (\n -> getRetryPolicyM (modelRetryPolicy mc) defaultRetryStatus {rsIterNumber = n})
+          [10 .. 19]
+      all (maybe False (<= 30_000_000)) delays `shouldBe` True
 
   describe "stream reset between attempts" $ do
     it "emits StreamAttemptReset before a retry when the failed attempt streamed" $ do

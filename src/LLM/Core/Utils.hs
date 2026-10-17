@@ -70,7 +70,7 @@ getToolCalls r = turnToolCalls r.respContent
 
 -- | Whether an error is worth retrying
 isRetryable :: LLMError -> Bool
-isRetryable (HttpError status _) = status `elem` [429, 503, 529]
+isRetryable (HttpError status _) = status `elem` [429, 500, 502, 503, 504, 529]
 isRetryable (NetworkError _) = True
 isRetryable TimeoutError = True
 isRetryable _ = False

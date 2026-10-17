@@ -229,6 +229,7 @@ test-suite llm-simple-test
                         LLM.StreamingSpec
                         LLM.HistoryToolSpec
                         LLM.HttpConfigSpec
+                        LLM.LLMProviderSpec
                         LLM.GenerateObjectSpec
                         LLM.ToolUtilsSpec
                         LLM.CrossProviderSpec

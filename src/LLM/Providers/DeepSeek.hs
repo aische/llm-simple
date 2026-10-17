@@ -54,7 +54,7 @@ import Network.HTTP.Req
     ReqBodyJson (ReqBodyJson),
     Url,
     https,
-    jsonResponse,
+    bsResponse,
     req,
     reqBr,
     responseBody,
@@ -114,7 +114,7 @@ deepSeekProviderWith baseUrl baseOpts apiKey =
       runReq lenientConfig $ do
         let url = baseUrl /: "v1" /: "chat" /: "completions"
             opts = baseOpts <> authHeader apiKey
-        resp <- req POST url (ReqBodyJson body) jsonResponse opts
+        resp <- req POST url (ReqBodyJson body) bsResponse opts
         pure (responseStatusCode resp, responseBody resp)
     parseObject :: Value -> Parser Text
     parseObject = withObject "OpenAIObjectResponse" $ \o -> do

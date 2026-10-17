@@ -38,7 +38,7 @@ import Network.HTTP.Req
     ReqBodyJson (ReqBodyJson),
     Url,
     http,
-    jsonResponse,
+    bsResponse,
     port,
     req,
     reqBr,
@@ -102,7 +102,7 @@ ollamaProviderWith baseUrl baseOpts =
     sendRequest body =
       runReq lenientConfig $ do
         let url = baseUrl /: "v1" /: "chat" /: "completions"
-        resp <- req POST url (ReqBodyJson body) jsonResponse baseOpts
+        resp <- req POST url (ReqBodyJson body) bsResponse baseOpts
         pure (responseStatusCode resp, responseBody resp)
     parseObject :: Value -> Parser Text
     parseObject = withObject "OpenAIObjectResponse" $ \o -> do

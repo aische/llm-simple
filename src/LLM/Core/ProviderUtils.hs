@@ -17,7 +17,8 @@ import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString qualified as BS
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
+import Data.Text.Encoding.Error (lenientDecode)
 import LLM.Core.Types (LLMError (HttpError, ParseError), LLMTextResult)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Client.TLS (tlsManagerSettings)
@@ -87,7 +88,9 @@ handleStreamResponse resp handler = do
   if status /= 200
     then do
       chunks <- readAll (HC.responseBody resp)
-      pure $ Left $ HttpError status (decodeUtf8 (BS.concat chunks))
+      -- Lenient: an error page need not be UTF-8, and a decode exception
+      -- here would escape the caller's 'HttpException' handler.
+      pure $ Left $ HttpError status (decodeUtf8With lenientDecode (BS.concat chunks))
     else handler (HC.responseBody resp)
 
 -- | Recursively enforce OpenAI structured output constraints:

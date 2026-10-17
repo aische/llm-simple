@@ -84,7 +84,7 @@ import Network.HTTP.Req
     Url,
     header,
     https,
-    jsonResponse,
+    bsResponse,
     req,
     reqBr,
     responseBody,
@@ -157,7 +157,7 @@ claudeProviderWith baseUrl baseOpts apiKey =
       runReq lenientConfig $ do
         let url = baseUrl /: "v1" /: "messages"
             opts = baseOpts <> claudeAuthOpts apiKey
-        resp <- req POST url (ReqBodyJson body) jsonResponse opts
+        resp <- req POST url (ReqBodyJson body) bsResponse opts
         pure (responseStatusCode resp, responseBody resp)
 
 claudeAuthOpts :: Text -> Option scheme

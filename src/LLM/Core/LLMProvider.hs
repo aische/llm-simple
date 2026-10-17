@@ -7,16 +7,19 @@ module LLM.Core.LLMProvider
 where
 
 import Control.Exception (try)
-import Data.Aeson (Value)
+import Data.Aeson (Value, eitherDecodeStrict')
 import Data.ByteString (ByteString)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding (decodeUtf8With)
+import Data.Text.Encoding.Error (lenientDecode)
 import LLM.Core.Types
   ( ChatRequest (reqTools),
-    LLMError (HttpError, NetworkError),
+    LLMError (HttpError, NetworkError, ParseError),
     LLMGateway (..),
     LLMHooks (..),
     LLMObjectResult,
+    LLMResult,
     LLMTextResult,
     StreamEvent,
   )
@@ -32,8 +35,9 @@ data LLMProvider = LLMProvider
     providerImageUrlSupport :: Bool,
     -- | Build the JSON request body. Bool indicates whether streaming is requested.
     buildBody :: Bool -> ChatRequest -> Value,
-    -- | Make a non-streaming HTTP call, returning (status code, response JSON).
-    sendRequest :: Value -> IO (Int, Value),
+    -- | Make a non-streaming HTTP call, returning (status code, raw response
+    -- body). Must not throw on a non-2xx status.
+    sendRequest :: Value -> IO (Int, ByteString),
     -- | Make a streaming HTTP call. On a 200 response the continuation receives
     -- a reader over the raw body (empty chunk = EOF); other statuses become an
     -- 'HttpError' without calling it.
@@ -45,8 +49,9 @@ data LLMProvider = LLMProvider
     parseResponse :: Value -> IO LLMTextResult,
     -- | Build the JSON request body for object generation.
     buildObjectBody :: ChatRequest -> Value -> Value,
-    -- | Make a non-streaming HTTP call for object generation, returning (status code, response JSON).
-    sendObjectRequest :: Value -> IO (Int, Value),
+    -- | Make a non-streaming HTTP call for object generation, returning
+    -- (status code, raw response body).
+    sendObjectRequest :: Value -> IO (Int, ByteString),
     -- | Parse a complete JSON response body for object generation.
     parseObjectResponse :: Value -> IO LLMObjectResult
   }
@@ -80,13 +85,7 @@ genericGenerateText p hooks r = do
     Left e -> do
       hooks.onLLMResponseError p.providerName (T.pack (show (e :: HttpException)))
       pure $ Left $ NetworkError (T.pack (show (e :: HttpException)))
-    Right (status, respBody) -> do
-      hooks.onLLMResponse p.providerName respBody
-      if status == 200
-        then p.parseResponse respBody
-        else do
-          hooks.onLLMResponseError p.providerName ("HTTP error: " <> T.pack (show status) <> " " <> T.pack (show respBody))
-          pure $ Left $ HttpError status (T.pack $ show respBody)
+    Right resp -> handleResponse p hooks p.parseResponse resp
 
 -- | Generic object generation via the LLMProvider.
 genericGenerateObject :: LLMProvider -> LLMHooks -> Value -> ChatRequest -> IO LLMObjectResult
@@ -98,13 +97,27 @@ genericGenerateObject p hooks schema r = do
     Left e -> do
       hooks.onLLMResponseError p.providerName (T.pack (show (e :: HttpException)))
       pure $ Left $ NetworkError (T.pack (show (e :: HttpException)))
-    Right (status, respBody) -> do
-      hooks.onLLMResponse p.providerName respBody
-      if status == 200
-        then p.parseObjectResponse respBody
-        else do
-          hooks.onLLMResponseError p.providerName ("HTTP error: " <> T.pack (show status) <> " " <> T.pack (show respBody))
-          pure $ Left $ HttpError status (T.pack $ show respBody)
+    Right resp -> handleResponse p hooks p.parseObjectResponse resp
+
+-- | Turn a non-streaming (status, raw body) into a result. A non-200 status
+-- is an 'HttpError' carrying the body as text, whether or not it is JSON
+-- (an HTML 502 from a proxy keeps its status). A 200 body that is not JSON
+-- is a 'ParseError'. 'onLLMResponse' sees every body that decodes as JSON.
+handleResponse :: LLMProvider -> LLMHooks -> (Value -> IO (LLMResult a)) -> (Int, ByteString) -> IO (LLMResult a)
+handleResponse p hooks parse (status, raw) = do
+  let decoded = eitherDecodeStrict' raw
+  either (const (pure ())) (hooks.onLLMResponse p.providerName) decoded
+  if status /= 200
+    then do
+      let bodyText = decodeUtf8With lenientDecode raw
+      hooks.onLLMResponseError p.providerName ("HTTP error: " <> T.pack (show status) <> " " <> bodyText)
+      pure $ Left $ HttpError status bodyText
+    else case decoded of
+      Left err -> do
+        let msg = "response is not valid JSON: " <> T.pack err
+        hooks.onLLMResponseError p.providerName msg
+        pure $ Left $ ParseError msg
+      Right v -> parse v
 
 -- | Convert any LLMProvider instance into a LLMGateway.
 -- LLMHooks are not baked in — they are passed at call time.

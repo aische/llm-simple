@@ -78,7 +78,7 @@ import Network.HTTP.Req
     Url,
     header,
     https,
-    jsonResponse,
+    bsResponse,
     req,
     reqBr,
     responseBody,
@@ -162,7 +162,7 @@ geminiProviderWith baseUrl baseOpts apiKey =
                 /: "models"
                 /: (model <> ":generateContent")
             opts = baseOpts <> geminiAuthOpts apiKey
-        resp <- req POST url (ReqBodyJson (stripModel body)) jsonResponse opts
+        resp <- req POST url (ReqBodyJson (stripModel body)) bsResponse opts
         pure (responseStatusCode resp, responseBody resp)
 
 geminiAuthOpts :: Text -> Option scheme

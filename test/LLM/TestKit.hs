@@ -16,7 +16,7 @@ module LLM.TestKit
   )
 where
 
-import Data.Aeson (FromJSON, ToJSON, Value (Array, Object, String), decodeFileStrict)
+import Data.Aeson (FromJSON, ToJSON, Value (Array, Object, String), decodeFileStrict, encode)
 import Data.Aeson.KeyMap qualified as KM
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.ByteString qualified as BS
@@ -109,7 +109,7 @@ mockProvider mp adapter =
         case M.lookup val mp of
           Nothing ->
             error (show val <> "\n" <> show (fst $ head $ M.toList mp))
-          Just rr -> pure (200, rr.response),
+          Just rr -> pure (200, BSL.toStrict (encode rr.response)),
       openStream = \body k -> do
         case M.lookup body mp of
           Nothing -> error ("value not found for:" <> show body)

@@ -78,6 +78,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Claude non-streaming responses with unknown content blocks (e.g.
   `server_tool_use`, `web_search_tool_result`) no longer fail as
   `EmptyResponse`. Unknown blocks are skipped, as streaming already did.
+- Non-streaming HTTP errors keep their status and raw body. `HttpError`
+  bodies (and the `onLLMResponseError` text) were Haskell `show` output
+  (`Object (fromList [...])`); they are now the body as sent, as for
+  streaming. A non-JSON error response (e.g. an HTML 401/502 from a proxy)
+  made req throw, which became a retryable `NetworkError` without its
+  status; it is now `HttpError status body`. A 200 body that is not JSON is
+  a `ParseError`. Streaming error bodies that are not valid UTF-8 are
+  decoded leniently instead of throwing. **Breaking:** `sendRequest` and
+  `sendObjectRequest` in `LLMProvider` return the raw body
+  (`IO (Int, ByteString)`) instead of a decoded `Value`.
 
 ## [0.3.0.0] - 2026-10-13
 

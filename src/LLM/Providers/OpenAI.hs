@@ -87,7 +87,7 @@ import Network.HTTP.Req
     Url,
     header,
     https,
-    jsonResponse,
+    bsResponse,
     req,
     reqBr,
     responseBody,
@@ -165,7 +165,7 @@ openAIProviderWithName name baseUrl baseOpts apiKey =
       runReq lenientConfig $ do
         let url = baseUrl /: "v1" /: "chat" /: "completions"
             opts = baseOpts <> authHeader apiKey
-        resp <- req POST url (ReqBodyJson body) jsonResponse opts
+        resp <- req POST url (ReqBodyJson body) bsResponse opts
         pure (responseStatusCode resp, responseBody resp)
 
 authHeader :: Text -> Option scheme

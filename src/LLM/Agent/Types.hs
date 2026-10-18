@@ -34,6 +34,9 @@ data Agent = Agent
     -- Only these names are exposed; the map may contain additional tools.
     agTools :: [Text],
     -- | Maximum number of model→tool rounds before returning 'GErrToolExceeded'.
+    -- The tools of the last round run, and their results are in
+    -- 'gerPartialNewMessages', but no further model call is made, so the
+    -- model never sees them.
     agMaxToolRounds :: Int,
     -- | When 'Just', only the last @n@ user messages (and their follow-on
     -- turns) are sent to the provider. Older turns remain in 'ToolContext' and

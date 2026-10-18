@@ -108,6 +108,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already in flight is not interrupted. **Breaking:** removed the unused
   `LLMError` constructor `ToolLoopExceeded` (the agent loop reports
   `GErrToolExceeded`).
+- Documented what happens at `agMaxToolRounds`: the last round's tools run
+  and their results are in `gerPartialNewMessages`, but the model is not
+  called again, so it never sees them.
 
 ## [0.3.0.0] - 2026-10-13
 

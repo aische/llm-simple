@@ -376,7 +376,11 @@ spec = describe "Chat" $ do
           models = ModelWithFallbacks (mockModel infiniteToolGateway) []
       result <- runGenerate agent models toolMap Nothing [UserTurn "test"]
       case result of
-        Left GenerateErrorResult {gerError = GErrToolExceeded} -> pure ()
+        Left GenerateErrorResult {gerError = GErrToolExceeded, gerPartialNewMessages = msgs} ->
+          -- The last round's results are returned, though the model never saw them.
+          case reverse msgs of
+            ToolTurn [_] : AssistantMessage _ : _ -> length msgs `shouldBe` 4
+            _ -> expectationFailure $ "Expected the last round's ToolTurn last, got: " <> show msgs
         other -> expectationFailure $ "Expected GErrToolExceeded, got: " <> show other
 
     it "falls back to next model on retryable error" $ do

@@ -35,7 +35,10 @@ data GenRequest = GenRequest
     grMessages :: [Turn],
     -- | Tool definitions included in the provider request.
     grTools :: [ToolDef],
-    -- | Cooperative cancellation checked before and during the call.
+    -- | Cooperative cancellation. Checked before each model in the fallback
+    -- chain and before each attempt (also after throttle and backoff
+    -- sleeps); a stream is cut off at its next event. A non-streaming HTTP
+    -- call already in flight is not interrupted. Yields 'GErrAborted'.
     grAbortSignal :: Maybe AbortSignal,
     -- | Provider wire hooks for raw request/response JSON.
     grLLMHooks :: LLMHooks,

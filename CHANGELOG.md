@@ -99,6 +99,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   thinking text. `mkChatResponse` merges adjacent thinking parts that carry
   no opaque payload; signed parts (e.g. Claude thinking blocks) stay one per
   block.
+- The generate layer honours `grAbortSignal`, as its docs promised.
+  `generateTextWithFallbacks` / `streamTextWithFallbacks` (and the
+  `Rotated` variants) never read it, so the `Aborted` path was dead. The
+  signal is now checked before each model in the fallback chain and before
+  each attempt (also after throttle and backoff sleeps), and a stream is cut
+  off at its next event; all yield `GErrAborted`. A non-streaming HTTP call
+  already in flight is not interrupted. **Breaking:** removed the unused
+  `LLMError` constructor `ToolLoopExceeded` (the agent loop reports
+  `GErrToolExceeded`).
 
 ## [0.3.0.0] - 2026-10-13
 

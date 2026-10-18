@@ -9,11 +9,14 @@ module LLM.Generate.Generate
   )
 where
 
+import Control.Exception (Exception, handle, throwIO)
 import Control.Monad (unless, when)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Maybe (fromMaybe)
+import LLM.Core.Abort (isAbortedMaybe)
 import LLM.Core.Types
   ( ChatResponse (..),
+    LLMError (Aborted),
     LLMGateway (..),
     LLMTextResult,
     StreamEvent (..),
@@ -127,14 +130,26 @@ streamTextAttempts emittedRef onChunk gr mc =
             writeIORef emittedRef False
           ProviderStreamCallback {pscOnEvent, pscFinalize} <-
             mkProviderStreamCallback gr onChunk'
+          -- Cut the stream off at the first event after the abort signal
+          -- fired: the callback throws out of the provider's stream reader.
+          let onEvent e = do
+                aborted <- isAbortedMaybe gr.grAbortSignal
+                if aborted then throwIO StreamAborted else pscOnEvent e
           result <-
-            withFirstEventTimeout
-              mc.mcRequestTimeout
-              (mc.mcGateway.gwStreamText gr.grLLMHooks request)
-              pscOnEvent
+            handle (\StreamAborted -> pure (Left Aborted)) $
+              withFirstEventTimeout
+                mc.mcRequestTimeout
+                (mc.mcGateway.gwStreamText gr.grLLMHooks request)
+                onEvent
           case result of
             Right _ -> pscFinalize >> pure result
             Left err -> pure (Left err)
+
+-- | Thrown from the stream callback once the abort signal has fired.
+data StreamAborted = StreamAborted
+  deriving (Show)
+
+instance Exception StreamAborted
 
 data RoundPhase = Unclassified | Preamble | Answer
   deriving (Eq)

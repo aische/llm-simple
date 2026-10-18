@@ -16,6 +16,7 @@ import Control.Monad (when)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.List (nub)
+import LLM.Core.Abort (isAbortedMaybe)
 import LLM.Core.Types
   ( ChatRequest (..),
     ContentPart (..),
@@ -145,7 +146,15 @@ callWithRetry ::
   IO (Either LLMError a)
 callWithRetry gr mc attempt =
   maybeThrottle mc.mcThrottleDelay $
-    withRetry (modelRetryPolicy mc) (gr.grHooks.onLog Warn) attempt
+    withRetry (modelRetryPolicy mc) (gr.grHooks.onLog Warn) (unlessAborted gr attempt)
+
+-- | Run @act@ unless 'grAbortSignal' has fired, else return 'Aborted'
+-- (which is not retried). Checked before every attempt, so also after
+-- throttle and backoff sleeps.
+unlessAborted :: GenRequest -> IO (Either LLMError a) -> IO (Either LLMError a)
+unlessAborted gr act = do
+  aborted <- isAbortedMaybe gr.grAbortSignal
+  if aborted then pure (Left Aborted) else act
 
 -- | 'callWithRetry' where each attempt is limited by 'mcRequestTimeout'.
 --
@@ -207,7 +216,10 @@ runModelFallbacks gr models invokePerModel =
       pure $
         Left $
           maybe GErrAllModelsFailed GErrLLM mLast
-    loop failed (mc : rest) _ = do
+    loop failed (mc : rest) mLast = do
+      aborted <- isAbortedMaybe gr.grAbortSignal
+      if aborted then pure (Left GErrAborted) else tryModel failed mc rest mLast
+    tryModel failed mc rest _ = do
       gr.grHooks.onLog Info (formatTryingModel mc)
       case validateModelCapabilities mc gr.grMessages of
         Left err ->

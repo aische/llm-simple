@@ -6,12 +6,14 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (when)
 import Control.Retry (RetryPolicyM (getRetryPolicyM), RetryStatus (rsIterNumber), defaultRetryStatus)
 import Data.Aeson (object, (.=))
-import Data.IORef (atomicModifyIORef', modifyIORef', newIORef, readIORef)
+import Data.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef)
 import Data.Text (Text)
+import LLM.Core.Abort (abort, newAbortSignal)
 import LLM.Core.Types
   ( ChatResponse (..),
     LLMError (..),
     LLMGateway (..),
+    LLMTextResult,
     supportedImageMediaTypes,
     StreamEvent (..),
     Turn (..),
@@ -22,16 +24,17 @@ import LLM.Core.Types
     toolCallPart,
   )
 import LLM.Core.Usage (PricingInfo (..), defaultPricingInfo, mkUsage)
-import LLM.Generate.Generate (generateTextLLM, streamTextLLM, streamTextWithFallbacks)
+import LLM.Generate.Generate (generateTextLLM, generateTextWithFallbacks, streamTextLLM, streamTextWithFallbacks)
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
 import LLM.Generate.ModelConfig (ModelConfig (..), ModelWithFallbacks (..), defaultModelCapabilities, modelRetryPolicy)
 import LLM.Generate.Types
   ( GenRequest (..),
+    GenerateError (..),
     RoundTextRole (..),
     StreamChunk (..),
   )
-import Test.Hspec (Spec, describe, it, shouldBe)
+import Test.Hspec (Spec, describe, it, shouldBe, shouldReturn)
 
 spec :: Spec
 spec = describe "Streaming" $ do
@@ -125,6 +128,51 @@ spec = describe "Streaming" $ do
       r <- streamTextLLM (\_ -> pure ()) (testGenRequest []) mc
       fmap (.respText) r `shouldBe` Left TimeoutError
 
+  describe "abort signal" $ do
+    it "does not call the model when the signal fired before the call" $ do
+      (gw, calls) <- countingGateway (Right (ChatResponse "hi" [textPart "hi"] Nothing Nothing))
+      sig <- newAbortSignal
+      abort sig
+      r <- generateTextWithFallbacks (testGenRequest []) {grAbortSignal = Just sig} (ModelWithFallbacks (testModelConfig gw) [])
+      fmap (.respText) r `shouldBe` Left GErrAborted
+      readIORef calls `shouldReturn` 0
+
+    it "stops retrying once the signal fired" $ do
+      sig <- newAbortSignal
+      (gw, calls) <- countingGateway (Left (HttpError 503 "overloaded"))
+      let gw' = gw {gwGenerateText = \h req -> abort sig >> gw.gwGenerateText h req}
+          mc = (testModelConfig gw') {mcRetryCount = 3}
+      r <- generateTextWithFallbacks (testGenRequest []) {grAbortSignal = Just sig} (ModelWithFallbacks mc [])
+      fmap (.respText) r `shouldBe` Left GErrAborted
+      readIORef calls `shouldReturn` 1
+
+    it "does not fall back to the next model once the signal fired" $ do
+      sig <- newAbortSignal
+      (failing, _) <- countingGateway (Left (HttpError 400 "bad"))
+      (ok, okCalls) <- countingGateway (Right (ChatResponse "hi" [textPart "hi"] Nothing Nothing))
+      let failing' = failing {gwGenerateText = \h req -> abort sig >> failing.gwGenerateText h req}
+          models = ModelWithFallbacks (testModelConfig failing') [testModelConfig ok]
+      r <- generateTextWithFallbacks (testGenRequest []) {grAbortSignal = Just sig} models
+      fmap (.respText) r `shouldBe` Left GErrAborted
+      readIORef okCalls `shouldReturn` 0
+
+    it "cuts off a stream once the signal fired" $ do
+      sig <- newAbortSignal
+      let resp = ChatResponse "abc" [textPart "abc"] Nothing Nothing
+          gw =
+            (streamGateway [] resp)
+              { gwStreamText = \_ _ onEvent -> do
+                  onEvent (StreamDelta "a")
+                  abort sig
+                  onEvent (StreamDelta "b")
+                  onEvent (StreamDelta "c")
+                  pure (Right resp)
+              }
+      ref <- newIORef []
+      r <- streamTextWithFallbacks (\c -> modifyIORef' ref (c :)) (testGenRequest []) {grAbortSignal = Just sig} (ModelWithFallbacks (testModelConfig gw) [])
+      fmap (.respText) r `shouldBe` Left GErrAborted
+      reverse <$> readIORef ref `shouldReturn` [TextDelta "a"]
+
   describe "modelRetryPolicy" $ do
     it "caps the backoff delay at 30 s" $ do
       let mc =
@@ -199,6 +247,17 @@ flakyGateway first second = do
               onEvent (StreamDelta second)
               pure (Right resp)
       }
+
+-- | A gateway whose non-streaming call always returns @result@, with a
+-- counter of how often it was called.
+countingGateway :: LLMTextResult -> IO (LLMGateway, IORef Int)
+countingGateway result = do
+  calls <- newIORef 0
+  let gw =
+        (streamGateway [] (ChatResponse "" [] Nothing Nothing))
+          { gwGenerateText = \_ _ -> modifyIORef' calls (+ 1) >> pure result
+          }
+  pure (gw, calls)
 
 streamGateway :: [StreamEvent] -> ChatResponse -> LLMGateway
 streamGateway events resp =

@@ -588,8 +588,7 @@ data LLMError
   | TimeoutError -- request timed out
   | ParseError Text -- JSON we couldn't make sense of
   | EmptyResponse -- valid JSON, but no content in it
-  | ToolLoopExceeded Int -- hit the max tool rounds limit
-  | Aborted -- user cancelled the request
+  | Aborted -- the request's abort signal fired
   | -- | Model lacks a required catalog capability (e.g. vision) for this request.
     UnsupportedCapability Text
   deriving (Show, Eq, Generic, ToJSON, FromJSON)

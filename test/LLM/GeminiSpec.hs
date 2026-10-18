@@ -5,6 +5,8 @@ module LLM.GeminiSpec (spec) where
 import Data.Aeson (Value (Array, Object, String), eitherDecodeFileStrict', object, (.=))
 import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
+import Data.ByteString qualified as BS
+import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector qualified as V
@@ -12,7 +14,7 @@ import LLM.Core.LLMProvider (LLMProvider (..))
 import LLM.Core.ProviderUtils (normalizeSchemaOpenAI, stripBoundsAndComments)
 import LLM.Core.Types
   ( ChatRequest (..),
-    ChatResponse (respText),
+    ChatResponse (respContent, respReasoning, respText),
     ToolDef (..),
     ProviderOpaque (..),
     ThinkingContent (..),
@@ -200,6 +202,24 @@ spec = describe "Gemini" $ do
           let [tc] = getToolCalls r
           tc.tcName `shouldBe` "get_weather"
         Left err -> expectationFailure $ "Parse failed: " <> show err
+
+  describe "streamed reasoning" $ do
+    it "keeps every thought chunk, not just the first" $ do
+      let chunk t thought =
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\""
+              <> t
+              <> "\""
+              <> (if thought then ",\"thought\":true" else "")
+              <> "}]}}],\"modelVersion\":\"gemini-2.5-flash\"}\n\n"
+          sse = chunk "Let me " True <> chunk "think about " True <> chunk "this." True <> chunk "Answer." False
+      reader <- mkBodyReader sse
+      result <- (geminiProvider "key").parseStream (object []) reader (\_ -> pure ())
+      case result of
+        Right resp -> do
+          resp.respReasoning `shouldBe` Just "Let me think about this."
+          resp.respText `shouldBe` "Answer."
+          length resp.respContent `shouldBe` 2
+        Left err -> expectationFailure ("unexpected error: " <> show err)
 
   describe "thought signature round-trip" $ do
     it "replays signature only for a matching model, else sends the placeholder" $ do
@@ -392,6 +412,18 @@ assistantParts (Object o) =
     Just (Array arr) -> V.toList arr
     _ -> []
 assistantParts _ = []
+
+-- | Yield the whole payload once, then EOF.
+mkBodyReader :: BS.ByteString -> IO (IO BS.ByteString)
+mkBodyReader bs = do
+  ref <- newIORef (Just bs)
+  pure $ do
+    m <- readIORef ref
+    case m of
+      Just chunk -> do
+        writeIORef ref Nothing
+        pure chunk
+      Nothing -> pure BS.empty
 
 -- | Follow object keys / array indices (as decimal strings).
 lookupPath :: [Text] -> Value -> Maybe Value

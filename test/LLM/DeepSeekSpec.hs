@@ -39,6 +39,16 @@ spec = describe "DeepSeek thinking mode" $ do
           msg = head (encodeTurn deepSeekMessageEncodeOptions turn)
       lookupText "reasoning_content" msg `shouldBe` Just "I should call the weather tool."
 
+    it "replays the reasoning of every thinking part, not just the first" $ do
+      let turn =
+            AssistantMessage
+              [ ContentPart (ThinkingPart (ThinkingContent (Just "first, ") Nothing)) Nothing,
+                ContentPart (ThinkingPart (ThinkingContent (Just "second") Nothing)) Nothing,
+                textPart "Done."
+              ]
+          msg = head (encodeTurn deepSeekMessageEncodeOptions turn)
+      lookupText "reasoning_content" msg `shouldBe` Just "first, second"
+
     it "omits reasoning_content for OpenAI-compatible default encoding" $ do
       let turn = assistantTurn "Hello" (Just "thinking") []
           msg = head (encodeTurn defaultMessageEncodeOptions turn)

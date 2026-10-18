@@ -100,6 +100,24 @@ spec = describe "Claude" $ do
           hasToolCalls resp `shouldBe` False
         Left err -> expectationFailure $ "Parse failed: " <> show err
 
+    it "keeps signed thinking blocks separate and projects all their reasoning" $ do
+      let block t s = object ["type" .= ("thinking" :: Text), "thinking" .= (t :: Text), "signature" .= (s :: Text)]
+          val =
+            object
+              [ "model" .= ("claude-haiku-4-5-20251001" :: Text),
+                "stop_reason" .= ("end_turn" :: Text),
+                "content"
+                  .= [ block "First thought. " "sig1",
+                       block "Second thought." "sig2",
+                       object ["type" .= ("text" :: Text), "text" .= ("Done." :: Text)]
+                     ]
+              ]
+      case parseClaudeResponse val of
+        Right resp -> do
+          resp.respReasoning `shouldBe` Just "First thought. Second thought."
+          length [() | ContentPart (ThinkingPart _) _ <- resp.respContent] `shouldBe` 2
+        Left err -> expectationFailure $ "Parse failed: " <> show err
+
     it "parses a tool_use response" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/claude-tool-use.json"
       case parseClaudeResponse val of

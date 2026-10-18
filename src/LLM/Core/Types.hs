@@ -408,16 +408,13 @@ projectText = T.concat . mapMaybe go
     go (ContentPart (TextPart t) _) = Just t
     go _ = Nothing
 
--- | First non-empty thinking text, if any.
+-- | All non-empty thinking text concatenated in order (without separator,
+-- as it was streamed), or 'Nothing' if there is none.
 projectReasoning :: [ContentPart] -> Maybe Text
-projectReasoning = go
-  where
-    go [] = Nothing
-    go (ContentPart (ThinkingPart tc) _ : rest) =
-      case tc.thinkingText of
-        Just t | not (T.null t) -> Just t
-        _ -> go rest
-    go (_ : rest) = go rest
+projectReasoning parts =
+  case [t | ContentPart (ThinkingPart tc) _ <- parts, Just t <- [tc.thinkingText], not (T.null t)] of
+    [] -> Nothing
+    ts -> Just (T.concat ts)
 
 -- | Tool calls in part order.
 turnToolCalls :: [ContentPart] -> [ToolCall]
@@ -437,6 +434,22 @@ coalesceAdjacentTextParts = go
     go (ContentPart (TextPart t1) h1 : ContentPart (TextPart t2) h2 : rest)
       | h1 == h2 =
           go (ContentPart (TextPart (t1 <> t2)) h1 : rest)
+    go (p : rest) = p : go rest
+
+-- | Merge runs of adjacent thinking parts (e.g. streamed Gemini thought
+-- chunks). Only parts without an opaque payload and with the same cache hint
+-- are merged; opaque parts (e.g. Claude signed blocks) stay one per block.
+coalesceAdjacentThinkingParts :: [ContentPart] -> [ContentPart]
+coalesceAdjacentThinkingParts = go
+  where
+    go [] = []
+    go
+      ( ContentPart (ThinkingPart (ThinkingContent t1 Nothing)) h1
+          : ContentPart (ThinkingPart (ThinkingContent t2 Nothing)) h2
+          : rest
+        )
+        | h1 == h2 =
+            go (ContentPart (ThinkingPart (ThinkingContent (t1 <> t2) Nothing)) h1 : rest)
     go (p : rest) = p : go rest
 
 -- | Whether any turn in the conversation contains an image part.
@@ -607,10 +620,11 @@ data ChatResponse = ChatResponse
 
 -- | Build a 'ChatResponse' with text/reasoning projections derived from parts.
 --
--- Adjacent text parts are coalesced so streamed deltas become one part.
+-- Adjacent text parts, and adjacent thinking parts without an opaque
+-- payload, are coalesced so streamed deltas become one part.
 mkChatResponse :: [ContentPart] -> Maybe Usage -> ChatResponse
 mkChatResponse parts usage =
-  let coalesced = coalesceAdjacentTextParts parts
+  let coalesced = coalesceAdjacentThinkingParts (coalesceAdjacentTextParts parts)
    in ChatResponse
         { respText = projectText coalesced,
           respContent = coalesced,

@@ -92,6 +92,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transient, and a Claude mid-stream `api_error` (mapped to 500) was never
   retried. Each retry delay is now capped at 30 s; `fullJitterBackoff` grew
   without bound for large `retryCount`s. `Retry-After` is still ignored.
+- Reasoning is no longer cut to its first chunk. `respReasoning` (and
+  `projectReasoning`) returned only the first thinking part, so a streamed
+  Gemini response kept only its first thought chunk, and the OpenAI/DeepSeek
+  encoder replayed a truncated `reasoning_content`. Both now concatenate all
+  thinking text. `mkChatResponse` merges adjacent thinking parts that carry
+  no opaque payload; signed parts (e.g. Claude thinking blocks) stay one per
+  block.
 
 ## [0.3.0.0] - 2026-10-13
 

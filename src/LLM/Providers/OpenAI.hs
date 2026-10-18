@@ -37,7 +37,7 @@ import Data.Either (lefts, rights)
 import Data.Foldable (foldl', for_, forM_)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Control.Applicative ((<|>))
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -47,6 +47,7 @@ import LLM.Core.ProviderUtils (decodeToolArguments, handleStreamResponse, invali
 import LLM.Core.SSE (SSEEvent (sseData), readSSEEvents)
 import LLM.Core.Types
   ( commonImageMediaTypes,
+    projectReasoning,
     ChatRequest
       ( reqConversation,
         reqMaxTokens,
@@ -216,13 +217,7 @@ encodeTurn opts (AssistantMessage parts) =
   let cleaned = map (stripForeignOpaque openAIProviderName) parts
       -- Cache hints are ignored on the OpenAI wire; content is unchanged.
       text = T.concat [t | ContentPart (TextPart t) _ <- cleaned]
-      mReasoning =
-        listToMaybe
-          [ t
-            | ContentPart (ThinkingPart tc) _ <- cleaned,
-              Just t <- [tc.thinkingText],
-              not (T.null t)
-          ]
+      mReasoning = projectReasoning cleaned
       calls = [tc | ContentPart (ToolCallPart tc) _ <- cleaned]
       requireReasoning
         | opts.meoRequireReasoning = Just . fromMaybe ""

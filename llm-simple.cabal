@@ -16,7 +16,7 @@ description:
     loops, structured output via Autodocodec, JSON model- and provider-catalog
     loading, and workspace-scoped filesystem tools.
     .
-    Status: early 0.2.x release — APIs may change.
+    Status: pre-1.0 — APIs may change between major versions.
 
 license:            BSD-3-Clause
 

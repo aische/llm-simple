@@ -67,14 +67,14 @@ spec = describe "Load" $ do
       result <- eitherDecodeFileStrict' "./model-catalog.json"
       case result of
         Right (items :: [ModelCatalogItem]) -> do
-          let Just haiku = find (\i -> i.modelConfigName == "haiku_4_5") items
-          haiku.capabilities
+          fmap (.capabilities) (find (\i -> i.modelConfigName == "haiku_4_5") items)
             `shouldBe` Just
-              ( ModelCapabilities
-                  { capThinking = True,
-                    capVision = True,
-                    capPromptCaching = True
-                  }
+              ( Just
+                  ModelCapabilities
+                    { capThinking = True,
+                      capVision = True,
+                      capPromptCaching = True
+                    }
               )
         Left err -> expectationFailure err
 

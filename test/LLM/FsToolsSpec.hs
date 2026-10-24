@@ -1,6 +1,6 @@
 module LLM.FsToolsSpec (spec) where
 
-import Control.Exception (bracket_)
+import Control.Exception (bracket_, evaluate)
 import Data.Aeson (Value, object, (.=))
 import Data.ByteString qualified as BS
 import Data.Map qualified as Map
@@ -24,6 +24,7 @@ import System.Directory
   )
 import System.FilePath (takeDirectory, (</>))
 import System.IO (TextEncoding, char8)
+import GHC.Clock (getMonotonicTime)
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
   ( Spec,
@@ -33,6 +34,7 @@ import Test.Hspec
     shouldContain,
     shouldNotContain,
     shouldReturn,
+    shouldSatisfy,
   )
 
 spec :: Spec
@@ -263,6 +265,41 @@ spec = describe "FsTools" $ do
       BS.writeFile (sb </> "latin1.txt") latin1
       result <- runTool tm "grep" (object ["pattern" .= ("foo" :: Text), "path" .= ("." :: Text)])
       T.unpack result `shouldContain` "latin1.txt"
+
+    it "read_file_paginated reads a non-UTF-8 file leniently" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "latin1.txt") latin1
+      result <- runTool tm "read_file_paginated" (object ["path" .= ("latin1.txt" :: Text)])
+      T.unpack result `shouldContain` "caf\xFFFD foo"
+
+  describe "file tool limits" $ do
+    it "grep refuses an explicit file over the size cap" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "big.txt") (BS.replicate (1024 * 1024) 0x61 <> "needle\n")
+      result <- runTool tm "grep" (object ["pattern" .= ("needle" :: Text), "path" .= ("big.txt" :: Text)])
+      T.unpack result `shouldContain` "Error"
+      T.unpack result `shouldContain` "exceeds"
+
+    it "find_files matches '*' and '?' within a segment" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      mapM_ (\f -> BS.writeFile (sb </> f) "x") ["abc.hs", "a.hs", "abxc.hs", "ab.hs", "b.hs"]
+      result <- runTool tm "find_files" (object ["pattern" .= ("a*b?c.hs" :: Text)])
+      T.lines result `shouldContain` ["abxc.hs"]
+      T.unpack result `shouldNotContain` "abc.hs"
+      result2 <- runTool tm "find_files" (object ["pattern" .= ("*a*.hs" :: Text)])
+      filter (not . T.isPrefixOf "===") (T.lines result2) `shouldBe` ["a.hs", "ab.hs", "abc.hs", "abxc.hs"]
+
+    it "find_files does not backtrack exponentially" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      -- The old backtracking matcher took ~5 s on this; its loop does not
+      -- allocate, so 'timeout' could not interrupt it. Measure instead.
+      BS.writeFile (sb </> replicate 40 'a') "x"
+      t0 <- getMonotonicTime
+      result <- runTool tm "find_files" (object ["pattern" .= ("*a*a*a*a*a*a*a*a*b" :: Text)])
+      _ <- evaluate (T.length result)
+      t1 <- getMonotonicTime
+      T.unpack result `shouldContain` "0 match(es)"
+      (t1 - t0) `shouldSatisfy` (< 1)
 
   describe "workspace root guard" $ do
     let rootPaths = [".", "", "./", "sub/.."] :: [Text]

@@ -6,22 +6,19 @@ where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)
+import Data.ByteString qualified as BS
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.IO qualified as TIO
+import Data.Text.Encoding (decodeUtf8With)
+import Data.Text.Encoding.Error (lenientDecode)
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath)
 import LLM.Tools.FsLimits (detectBinary, maxPaginatedFileBytes)
 import System.IO
-  ( Handle,
-    IOMode (ReadMode),
+  ( IOMode (ReadMode),
     hFileSize,
-    hIsEOF,
-    hSetEncoding,
-    utf8,
     withBinaryFile,
-    withFile,
   )
 
 -- | Default number of lines returned per page when the caller omits 'limit'.
@@ -104,38 +101,15 @@ execute cfg args = do
           (lns, hasMore) <- readPage resolved offset limit
           pure $ renderPage args._rfpPath size offset lns hasMore
 
--- | Skip @offset - 1@ lines, take up to @limit@ lines, then probe one
--- past the last returned line to determine whether more content remains.
--- Reads strictly within 'withFile' so the handle is released eagerly.
+-- | Take up to @limit@ lines starting at line @offset@, and report whether
+-- more lines follow. Reads at most 'maxPaginatedFileBytes' (the file may
+-- have grown since the size check) and decodes leniently, so invalid UTF-8
+-- bytes show as U+FFFD instead of failing the read.
 readPage :: FilePath -> Int -> Int -> IO ([Text], Bool)
-readPage path offset limit = withFile path ReadMode $ \h -> do
-  hSetEncoding h utf8
-  skipLines h (offset - 1)
-  collected <- takeLines h limit
-  more <- not <$> hIsEOF h
-  pure (collected, more)
-
-skipLines :: Handle -> Int -> IO ()
-skipLines _ 0 = pure ()
-skipLines h n = do
-  eof <- hIsEOF h
-  if eof
-    then pure ()
-    else do
-      _ <- TIO.hGetLine h
-      skipLines h (n - 1)
-
-takeLines :: Handle -> Int -> IO [Text]
-takeLines h n0 = go n0 id
-  where
-    go 0 acc = pure (acc [])
-    go k acc = do
-      eof <- hIsEOF h
-      if eof
-        then pure (acc [])
-        else do
-          line <- TIO.hGetLine h
-          go (k - 1) (acc . (line :))
+readPage path offset limit = do
+  bytes <- withBinaryFile path ReadMode (`BS.hGet` fromIntegral maxPaginatedFileBytes)
+  let rest = drop (offset - 1) (T.lines (decodeUtf8With lenientDecode bytes))
+  pure (take limit rest, not (null (drop limit rest)))
 
 renderPage :: Text -> Integer -> Int -> [Text] -> Bool -> Text
 renderPage path size offset lns hasMore =

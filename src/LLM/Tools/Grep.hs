@@ -116,15 +116,26 @@ execute cfg args = do
       resolved <- sandboxPath cfg rel
       isDir <- doesDirectoryExist resolved
       isFile <- doesFileExist resolved
+      -- An explicit file gets the same size cap as files found by the walk.
+      sizeOk <- if isFile then isSizeOk resolved else pure True
       if not (isDir || isFile)
         then pure $ "Error: path does not exist: " <> args._grepPath
-        else do
-          files <-
-            if isFile
-              then pure [resolved]
-              else collectFiles resolved 0 exts
-          (matches, scanned, truncated) <- searchFiles resolved files pat ci cap
-          pure $ renderResults args._grepPath pat matches scanned truncated
+        else
+          if not sizeOk
+            then
+              pure $
+                "Error: "
+                  <> args._grepPath
+                  <> " exceeds the "
+                  <> T.pack (show maxFileSizeBytes)
+                  <> "-byte cap for grep."
+            else do
+              files <-
+                if isFile
+                  then pure [resolved]
+                  else collectFiles resolved 0 exts
+              (matches, scanned, truncated) <- searchFiles resolved files pat ci cap
+              pure $ renderResults args._grepPath pat matches scanned truncated
 
 -- | Lowercase and strip leading dots so callers can pass "hs" or ".hs".
 normalizeExtensions :: [Text] -> [Text]

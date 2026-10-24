@@ -111,6 +111,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented what happens at `agMaxToolRounds`: the last round's tools run
   and their results are in `gerPartialNewMessages`, but the model is not
   called again, so it never sees them.
+- Smaller file-tool gaps. `grep` on an explicit file path skipped the 1 MB
+  size cap that applies to files found by its directory walk; such a file is
+  now refused with an error. `read_file_paginated` threw on bytes that are
+  not valid UTF-8; it now shows them as U+FFFD, like the other read-only
+  tools. `find_files` backtracked exponentially on patterns with many `*`s
+  (e.g. `*a*a*a*a*a*a*a*a*b` took seconds on a 40-character name); matching
+  is now O(pattern × name), with the same results. Its walk no longer
+  recounts and reverses the match list at every entry.
 
 ## [0.3.0.0] - 2026-10-13
 

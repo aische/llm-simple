@@ -131,24 +131,26 @@ walk ::
   [Text] ->
   Int ->
   IO ([FilePath], Int, Bool)
-walk root includeHidden kind pat cap = go root [] 0 0 [] False
+walk root includeHidden kind pat cap = do
+  WalkState acc _ scanned truncated <- go root [] 0 (WalkState [] 0 0 False)
+  pure (reverse acc, scanned, truncated)
   where
     -- relSegs is the path from root to current dir, in reverse order
     -- depth is current directory depth (0 = root)
-    go dir relSegs depth scanned acc truncated
-      | length acc >= cap = pure (reverse acc, scanned, True)
-      | depth > maxDepth = pure (reverse acc, scanned, truncated)
+    go dir relSegs depth st@(WalkState acc n scanned _)
+      | n >= cap = pure (WalkState acc n scanned True)
+      | depth > maxDepth = pure st
       | otherwise = do
           entries <- sort <$> safeListDirectory dir
           let visible =
                 if includeHidden
                   then entries
                   else filter (not . isFileHidden) entries
-          step visible dir relSegs depth scanned acc truncated
+          step visible dir relSegs depth st
 
-    step [] _ _ _ scanned acc truncated = pure (reverse acc, scanned, truncated)
-    step (name : rest) dir relSegs depth scanned acc truncated
-      | length acc >= cap = pure (reverse acc, scanned + 1, True)
+    step [] _ _ _ st = pure st
+    step (name : rest) dir relSegs depth (WalkState acc n scanned truncated)
+      | n >= cap = pure (WalkState acc n (scanned + 1) True)
       | otherwise = do
           let full = dir </> name
               entryRel = reverse (T.pack name : relSegs)
@@ -156,7 +158,7 @@ walk root includeHidden kind pat cap = go root [] 0 0 [] False
           -- Skip symlinks: they could point outside the sandbox.
           isLink <- isSymlink full
           if isLink
-            then step rest dir relSegs depth (scanned + 1) acc truncated
+            then step rest dir relSegs depth (WalkState acc n (scanned + 1) truncated)
             else do
               isDir <- doesDirectoryExist full
               let entryKind = if isDir then DirectoryOnly else FileOnly
@@ -165,12 +167,18 @@ walk root includeHidden kind pat cap = go root [] 0 0 [] False
                     FileOnly -> entryKind == FileOnly
                     DirectoryOnly -> entryKind == DirectoryOnly
                   matched = kindOk && matchGlob pat entryRel
-                  acc' = if matched then relPath : acc else acc
-              (descendAcc, descendScanned, descendTrunc) <-
+                  st'
+                    | matched = WalkState (relPath : acc) (n + 1) (scanned + 1) truncated
+                    | otherwise = WalkState acc n (scanned + 1) truncated
+              st'' <-
                 if isDir
-                  then go full (T.pack name : relSegs) (depth + 1) (scanned + 1) acc' truncated
-                  else pure (reverse acc', scanned + 1, truncated)
-              step rest dir relSegs depth descendScanned (reverse descendAcc) descendTrunc
+                  then go full (T.pack name : relSegs) (depth + 1) st'
+                  else pure st'
+              step rest dir relSegs depth st''
+
+-- | Walk state: matches so far (newest first), their count, entries
+-- inspected, and whether the cap truncated the output.
+data WalkState = WalkState [FilePath] Int Int Bool
 
 safeListDirectory :: FilePath -> IO [FilePath]
 safeListDirectory path = do
@@ -207,17 +215,20 @@ matchGlob (p : ps) (s : ss) = matchSegment (T.unpack p) (T.unpack s) && matchGlo
 
 -- | Match a single glob segment (no '/' allowed in either side).
 -- Supports '*' (any run of chars, possibly empty) and '?' (one char).
+-- On a mismatch only the most recent '*' takes one more char, which is
+-- enough for this glob syntax and keeps matching O(pattern * name) instead
+-- of exponential in the number of stars.
 matchSegment :: String -> String -> Bool
-matchSegment [] [] = True
-matchSegment ('*' : ps) ss =
-  -- '*' matches zero or more chars; try each split
-  matchSegment ps ss
-    || case ss of
-      [] -> False
-      (_ : rest) -> matchSegment ('*' : ps) rest
-matchSegment ('?' : ps) (_ : ss) = matchSegment ps ss
-matchSegment (p : ps) (s : ss) = p == s && matchSegment ps ss
-matchSegment _ _ = False
+matchSegment pat0 str0 = go pat0 str0 Nothing
+  where
+    -- lastStar: the pattern after the most recent '*' and the input it
+    -- was last retried from.
+    go ('*' : ps) ss _ = go ps ss (Just (ps, ss))
+    go (p : ps) (s : ss) lastStar
+      | p == '?' || p == s = go ps ss lastStar
+    go [] [] _ = True
+    go _ _ (Just (ps, _ : ss)) = go ps ss (Just (ps, ss))
+    go _ _ _ = False
 
 -- ---------------------------------------------------------------------------
 -- Rendering

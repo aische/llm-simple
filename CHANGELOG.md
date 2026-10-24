@@ -125,6 +125,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already held; after a fallback, Claude and OpenAI reject or mismatch
   those. Ids are now `call_<random UUID v4>`. New direct dependency:
   `random`.
+- Gemini errors, blocks and finish reasons are no longer all
+  `EmptyResponse`. A stream that fails midway stays HTTP 200 and sends
+  `{"error": {"code": 503, ...}}` as a data event; that event was ignored,
+  so the call ended as a non-retryable `EmptyResponse` (or as a shortened
+  success). It is now `HttpError code body`, retried like the same error
+  before streaming, as for Claude and OpenAI. A response without content
+  names why Gemini stopped: a blocked prompt (`promptFeedback.blockReason`)
+  or a filter finish reason (`SAFETY`, `RECITATION`, `PROHIBITED_CONTENT`,
+  …) gives the new `ResponseBlocked`; `MAX_TOKENS` (common when thinking
+  uses the whole budget) and other finish reasons give a `ParseError` naming
+  the reason. A response with content is still returned when the token
+  limit cut it off. Structured output cut off by `MAX_TOKENS` is a
+  `ParseError` saying so. **Breaking:** new `LLMError` constructor
+  `ResponseBlocked`.
 
 ## [0.3.0.0] - 2026-10-13
 

@@ -2,7 +2,7 @@
 
 module LLM.GeminiSpec (spec) where
 
-import Data.Aeson (Value (Array, Object, String), eitherDecodeFileStrict', object, (.=))
+import Data.Aeson (Value (Array, Object, String), decodeStrict', eitherDecodeFileStrict', object, (.=))
 import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString qualified as BS
@@ -11,6 +11,7 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.UUID.Types qualified as UUID
 import Data.Vector qualified as V
 import LLM.Core.LLMProvider (LLMProvider (..))
@@ -18,6 +19,7 @@ import LLM.Core.ProviderUtils (normalizeSchemaOpenAI, stripBoundsAndComments)
 import LLM.Core.Types
   ( ChatRequest (..),
     ChatResponse (respContent, respReasoning, respText),
+    LLMError (..),
     ToolDef (..),
     ProviderOpaque (..),
     ThinkingContent (..),
@@ -233,6 +235,56 @@ spec = describe "Gemini" $ do
           resp.respText `shouldBe` "Answer."
           length resp.respContent `shouldBe` 2
         Left err -> expectationFailure ("unexpected error: " <> show err)
+
+  describe "errors and finish reasons" $ do
+    let stream sse = do
+          reader <- mkBodyReader sse
+          (geminiProvider "key").parseStream (object []) reader (\_ -> pure ())
+        textChunk = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]}}]}\n\n"
+        errorData = "{\"error\":{\"code\":503,\"message\":\"The model is overloaded.\",\"status\":\"UNAVAILABLE\"}}"
+        parse json = case decodeStrict' json of
+          Just v -> parseGeminiResponse v
+          Nothing -> error "bad fixture"
+        isParseErrorWith s = \case
+          Left (ParseError msg) -> s `T.isInfixOf` msg
+          _ -> False
+
+    -- Shape as the Gemini API sends it with alt=sse: HTTP 200, then an
+    -- error object as a data event after some content.
+    it "turns a mid-stream error chunk into HttpError with its code" $ do
+      result <- stream (textChunk <> "data: " <> errorData <> "\n\n")
+      result `shouldBe` Left (HttpError 503 (TE.decodeUtf8 errorData))
+
+    it "reports a blocked prompt as ResponseBlocked" $ do
+      result <- stream "data: {\"promptFeedback\":{\"blockReason\":\"SAFETY\"}}\n\n"
+      result `shouldSatisfy` \case
+        Left (ResponseBlocked msg) -> "SAFETY" `T.isInfixOf` msg
+        _ -> False
+      parsed <- parse "{\"promptFeedback\":{\"blockReason\":\"PROHIBITED_CONTENT\"}}"
+      parsed `shouldSatisfy` \case
+        Left (ResponseBlocked msg) -> "PROHIBITED_CONTENT" `T.isInfixOf` msg
+        _ -> False
+
+    it "reports an empty response stopped by a safety filter as ResponseBlocked" $ do
+      parsed <- parse "{\"candidates\":[{\"finishReason\":\"RECITATION\"}]}"
+      parsed `shouldSatisfy` \case
+        Left (ResponseBlocked msg) -> "RECITATION" `T.isInfixOf` msg
+        _ -> False
+
+    it "explains an empty response cut off by the token limit" $ do
+      result <- stream "data: {\"candidates\":[{\"content\":{\"role\":\"model\"},\"finishReason\":\"MAX_TOKENS\"}]}\n\n"
+      result `shouldSatisfy` isParseErrorWith "MAX_TOKENS"
+      parsed <- parse "{\"candidates\":[{\"content\":{\"role\":\"model\"},\"finishReason\":\"MAX_TOKENS\"}]}"
+      parsed `shouldSatisfy` isParseErrorWith "MAX_TOKENS"
+
+    it "keeps partial content cut off by the token limit" $ do
+      result <- stream (textChunk <> "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"lo\"}]},\"finishReason\":\"MAX_TOKENS\"}]}\n\n")
+      fmap (.respText) result `shouldBe` Right "Hello"
+
+    it "explains structured output cut off by the token limit" $ do
+      let Just resp = decodeStrict' "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"{\\\"a\\\": \"}]},\"finishReason\":\"MAX_TOKENS\"}]}"
+      result <- (geminiProvider "").parseObjectResponse resp
+      result `shouldSatisfy` isParseErrorWith "MAX_TOKENS"
 
   describe "thought signature round-trip" $ do
     it "replays signature only for a matching model, else sends the placeholder" $ do

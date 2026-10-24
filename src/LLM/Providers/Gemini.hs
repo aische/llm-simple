@@ -29,6 +29,7 @@ import Data.Aeson.Types (Pair, Parser, parseMaybe)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Char (isDigit)
+import Data.Foldable (for_)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
@@ -49,7 +50,7 @@ import LLM.Core.Types
         reqTools
       ),
     ContentPart (..),
-    LLMError (EmptyResponse),
+    LLMError (EmptyResponse, HttpError, ParseError, ResponseBlocked),
     LLMGateway,
     LLMObjectResult,
     LLMTextResult,
@@ -181,10 +182,17 @@ parseGeminiStream :: HC.BodyReader -> (StreamEvent -> IO ()) -> IO LLMTextResult
 parseGeminiStream reader callback = do
   partsRef <- newIORef ([] :: [ContentPart])
   usageRef <- newIORef Nothing
+  errorRef <- newIORef (Nothing :: Maybe LLMError)
+  stopRef <- newIORef (Nothing :: Maybe GeminiStop)
   readSSEEvents (HC.brRead reader) $ \sse -> do
     case decodeStrict' (encodeUtf8 sse.sseData) of
       Nothing -> pure ()
       Just v -> do
+        -- The stream stays HTTP 200 when it fails midway; the error arrives
+        -- as a data event. Keep the first one.
+        for_ (parseMaybe parseErrorCode v) $ \code ->
+          modifyIORef' errorRef (<|> Just (HttpError code sse.sseData))
+        for_ (parseGeminiStop v) (writeIORef stopRef . Just)
         let modelVer = parseMaybe parseModelVersion v
         case parseMaybe (parseChunkParts modelVer) v of
           Just parts -> do
@@ -196,9 +204,13 @@ parseGeminiStream reader callback = do
           Nothing -> pure ()
   parts <- readIORef partsRef
   usage <- readIORef usageRef
-  if null parts
-    then pure $ Left EmptyResponse
-    else pure $ Right (mkChatResponse parts usage)
+  mError <- readIORef errorRef
+  stop <- readIORef stopRef
+  pure $ case mError of
+    Just err -> Left err
+    Nothing
+      | null parts -> Left (noContentError stop)
+      | otherwise -> Right (mkChatResponse parts usage)
   where
     assignToolId :: (StreamEvent -> IO ()) -> ContentPart -> IO ContentPart
     assignToolId cb (ContentPart (TextPart t) hint) = do
@@ -420,13 +432,63 @@ readMaybeInt t =
     [(n, "")] -> Just n
     _ -> Nothing
 
+-- | Why Gemini stopped: the prompt was blocked (@promptFeedback.blockReason@)
+-- or the first candidate finished (@finishReason@).
+data GeminiStop = GeminiPromptBlocked Text | GeminiFinished Text
+
+parseGeminiStop :: Value -> Maybe GeminiStop
+parseGeminiStop v = parseMaybe blocked v <|> parseMaybe finished v
+  where
+    blocked = withObject "GeminiResponse" $ \o -> do
+      fb <- o .: "promptFeedback"
+      GeminiPromptBlocked <$> withObject "promptFeedback" (.: "blockReason") fb
+    finished = withObject "GeminiResponse" $ \o -> do
+      (cand : _) <- o .: "candidates" :: Parser [Value]
+      GeminiFinished <$> withObject "candidate" (.: "finishReason") cand
+
+-- | The error for a response without usable content, named by why Gemini
+-- stopped. Responses that do have content are returned as they are, even
+-- when cut off by the token limit.
+noContentError :: Maybe GeminiStop -> LLMError
+noContentError = \case
+  Just (GeminiPromptBlocked reason) ->
+    ResponseBlocked ("Gemini blocked the prompt (blockReason: " <> reason <> ")")
+  Just (GeminiFinished reason)
+    | reason `elem` blockedFinishReasons ->
+        ResponseBlocked ("Gemini blocked the response (finishReason: " <> reason <> ")")
+    | reason == "MAX_TOKENS" ->
+        ParseError "Gemini returned no content (finishReason: MAX_TOKENS); increase max tokens, which thinking also uses"
+    | reason /= "STOP" ->
+        ParseError ("Gemini returned no content (finishReason: " <> reason <> ")")
+  _ -> EmptyResponse
+
+-- | Finish reasons that mean a filter stopped the response.
+blockedFinishReasons :: [Text]
+blockedFinishReasons =
+  [ "SAFETY",
+    "RECITATION",
+    "LANGUAGE",
+    "BLOCKLIST",
+    "PROHIBITED_CONTENT",
+    "SPII",
+    "IMAGE_SAFETY",
+    "IMAGE_PROHIBITED_CONTENT",
+    "IMAGE_RECITATION"
+  ]
+
+-- | The status code of an error event: @{"error": {"code": 503, ...}}@.
+parseErrorCode :: Value -> Parser Int
+parseErrorCode = withObject "GeminiError" $ \o -> do
+  e <- o .: "error"
+  withObject "error" (.: "code") e
+
 parseGeminiResponse :: Value -> IO LLMTextResult
 parseGeminiResponse v = case parseMaybe (go modelVer) v of
-  Nothing -> pure $ Left EmptyResponse
+  Nothing -> pure $ Left (noContentError (parseGeminiStop v))
   Just parts -> do
     parts' <- mapM normalizePart parts
     case parts' of
-      [] -> pure $ Left EmptyResponse
+      [] -> pure $ Left (noContentError (parseGeminiStop v))
       _ -> pure $ Right (mkChatResponse parts' (parseGeminiUsage v))
   where
     modelVer = parseMaybe parseModelVersion v
@@ -551,11 +613,16 @@ parseGeminiUsageObject uo = do
 
 parseGeminiObjectResponse :: Value -> IO LLMObjectResult
 parseGeminiObjectResponse v = case parseMaybe go v of
-  Nothing -> pure $ Left EmptyResponse
+  Nothing -> pure $ Left (noContentError stop)
   Just text -> case decodeStrict' (encodeUtf8 (stripJsonFences text)) of
-    Nothing -> pure $ Left EmptyResponse
+    Nothing
+      | Just (GeminiFinished "MAX_TOKENS") <- stop ->
+          pure $ Left $ ParseError "Gemini structured output was cut off (finishReason: MAX_TOKENS); increase max tokens"
+      | otherwise -> pure $ Left EmptyResponse
     Just obj -> pure $ Right (obj, parseGeminiUsage v)
   where
+    stop = parseGeminiStop v
+
     -- The JSON is the text of all parts that are not thought summaries
     -- (@"thought": true@), which come first when thinking is enabled.
     go :: Value -> Parser Text

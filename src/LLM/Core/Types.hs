@@ -591,6 +591,9 @@ data LLMError
   | Aborted -- the request's abort signal fired
   | -- | Model lacks a required catalog capability (e.g. vision) for this request.
     UnsupportedCapability Text
+  | -- | The provider blocked the prompt or the response (e.g. a safety or
+    -- recitation filter); the text names the reason. Not retried.
+    ResponseBlocked Text
   deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
 -- | A request to an LLM provider

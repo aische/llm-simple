@@ -6,9 +6,12 @@ import Data.Aeson (Value (Array, Object, String), eitherDecodeFileStrict', objec
 import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString qualified as BS
+import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.UUID.Types qualified as UUID
 import Data.Vector qualified as V
 import LLM.Core.LLMProvider (LLMProvider (..))
 import LLM.Core.ProviderUtils (normalizeSchemaOpenAI, stripBoundsAndComments)
@@ -38,6 +41,7 @@ import Test.Hspec
     expectationFailure,
     it,
     shouldBe,
+    shouldSatisfy,
   )
 
 spec :: Spec
@@ -202,6 +206,15 @@ spec = describe "Gemini" $ do
           let [tc] = getToolCalls r
           tc.tcName `shouldBe` "get_weather"
         Left err -> expectationFailure $ "Parse failed: " <> show err
+
+    -- Data.Unique ids restarted at call_1 in every process, so a reloaded
+    -- history could get duplicate ids. A random UUID cannot repeat.
+    it "gives each function call a random UUID id that Claude accepts" $ do
+      Right val <- eitherDecodeFileStrict' "test/fixtures/gemini-tool-use.json"
+      Right r <- parseGeminiResponse val
+      let [tc] = getToolCalls r
+      (UUID.fromText =<< T.stripPrefix "call_" tc.tcId) `shouldSatisfy` isJust
+      tc.tcId `shouldSatisfy` T.all (\c -> isAsciiUpper c || isAsciiLower c || isDigit c || c == '_' || c == '-')
 
   describe "streamed reasoning" $ do
     it "keeps every thought chunk, not just the first" $ do

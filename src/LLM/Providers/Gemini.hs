@@ -32,7 +32,8 @@ import Data.Char (isDigit)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
-import Data.Unique (hashUnique, newUnique)
+import Data.UUID.Types (UUID)
+import Data.UUID.Types qualified as UUID
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
 import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, stripBoundsAndComments, stripJsonFences)
 import LLM.Core.SSE (SSEEvent (sseData), readSSEEvents)
@@ -87,6 +88,7 @@ import Network.HTTP.Req
     (/:),
     (=:),
   )
+import System.Random (randomIO)
 
 geminiProviderName :: Text
 geminiProviderName = "gemini"
@@ -367,11 +369,13 @@ encodeFunctionResponse tr =
           ]
     ]
 
+-- | Give a Gemini function call an id. A random UUID, so ids never repeat
+-- across processes: a reloaded history must not get new calls with ids it
+-- already holds, or Claude / OpenAI reject it after a fallback.
 normalizeToolCallId :: ToolCall -> IO ToolCall
 normalizeToolCallId tc = do
-  u <- newUnique
-  let callId = "call_" <> T.pack (show (hashUnique u))
-  pure tc {tcId = callId}
+  u <- randomIO :: IO UUID
+  pure tc {tcId = "call_" <> UUID.toText u}
 
 normalizePart :: ContentPart -> IO ContentPart
 normalizePart (ContentPart (ToolCallPart tc) hint) =

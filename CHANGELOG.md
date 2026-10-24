@@ -119,6 +119,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (e.g. `*a*a*a*a*a*a*a*a*b` took seconds on a 40-character name); matching
   is now O(pattern × name), with the same results. Its walk no longer
   recounts and reverses the match list at every entry.
+- Gemini tool-call ids no longer repeat across processes. They were
+  `call_<n>` from `Data.Unique`, which restarts at 1 in every process, so a
+  saved conversation reloaded in a new process got new calls with ids it
+  already held; after a fallback, Claude and OpenAI reject or mismatch
+  those. Ids are now `call_<random UUID v4>`. New direct dependency:
+  `random`.
 
 ## [0.3.0.0] - 2026-10-13
 

@@ -76,7 +76,9 @@ data ModelConfig = ModelConfig
     mcThrottleDelay :: Maybe Int,
     -- | Number of retries on retryable 'LLMError's before giving up on this model.
     mcRetryCount :: Int,
-    -- | Base backoff in milliseconds between retries (jittered).
+    -- | Base backoff in milliseconds between retries (jittered). The
+    -- server's @Retry-After@ header is not honoured, so for a provider that
+    -- often rate-limits (429), raise this (each delay is capped at 30 s).
     mcJitterBackoff :: Int
   }
 
@@ -93,7 +95,7 @@ mfwToModelConfigs :: ModelWithFallbacks -> [ModelConfig]
 mfwToModelConfigs mwf = mwf.mwfModel : mwf.mwfFallbacks
 
 -- | 'mcRetryCount' retries with full-jitter exponential backoff from
--- 'mcJitterBackoff', each delay capped at 30 s.
+-- 'mcJitterBackoff', each delay capped at 30 s. @Retry-After@ is ignored.
 modelRetryPolicy :: ModelConfig -> RetryPolicyM IO
 modelRetryPolicy mc =
   capDelay 30_000_000 $

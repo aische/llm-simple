@@ -91,7 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTTP 500, 502 and 504 are retried, like 429/503/529. They are usually
   transient, and a Claude mid-stream `api_error` (mapped to 500) was never
   retried. Each retry delay is now capped at 30 s; `fullJitterBackoff` grew
-  without bound for large `retryCount`s. `Retry-After` is still ignored.
+  without bound for large `retryCount`s. `Retry-After` is still ignored;
+  the `mcJitterBackoff` docs and the README now say so.
 - Reasoning is no longer cut to its first chunk. `respReasoning` (and
   `projectReasoning`) returned only the first thinking part, so a streamed
   Gemini response kept only its first thought chunk, and the OpenAI/DeepSeek

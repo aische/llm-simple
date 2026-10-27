@@ -60,6 +60,10 @@ mkFsConfig dir =
 -- If the path doesn't exist yet (e.g. for writes), the longest
 -- existing ancestor is canonicalized (so symlinks in the parent
 -- chain are resolved) and the missing tail is appended verbatim.
+--
+-- A symlink counts as existing even when its target does not, so a
+-- dangling link is resolved to that target and judged by where it
+-- points rather than appended as if it were an ordinary new file.
 -- Throws 'SandboxViolation' on escape attempts.
 sandboxPath :: FsConfig -> FilePath -> IO FilePath
 sandboxPath cfg relPath = do
@@ -134,16 +138,20 @@ stripPathPrefix (p : ps) (y : ys)
 -- @baseJoined@ is the canonical base directory (without trailing
 -- separator); @tailComps@ are the components below it that must be
 -- traversed.
+--
+-- Every component is lstat'd ('isSymlink') whether or not it resolves:
+-- a dangling link must be rejected here too, since it is still a link
+-- that a later @open@ would follow. 'isSymlink' already answers 'False'
+-- for a component that does not exist at all, so no existence test
+-- guards it.
 verifyNoSymlinksInChain :: FilePath -> FilePath -> [FilePath] -> IO ()
 verifyNoSymlinksInChain base = walk
   where
     walk _ [] = pure ()
     walk acc (c : cs) = do
       let next = acc </> c
-      exists <- doesPathExist next
-      when exists $ do
-        sym <- isSymlink next
-        when sym $ throwIO (SandboxViolation next base)
+      sym <- isSymlink next
+      when sym $ throwIO (SandboxViolation next base)
       walk next cs
 
 -- | Canonicalize the longest existing prefix of a path, then append
@@ -154,9 +162,16 @@ verifyNoSymlinksInChain base = walk
 -- Uses 'splitFileName' to peel the trailing component instead of a
 -- character-level @drop (length parent)@, which is brittle across
 -- trailing-separator and platform-separator variations.
+--
+-- Existence is tested with 'pathExistsNoFollow' rather than
+-- 'doesPathExist': a dangling symlink must be handed to
+-- 'canonicalizePath' (which resolves it to its missing target) instead
+-- of being mistaken for an ordinary nonexistent file whose own name is
+-- then appended verbatim. Getting that wrong let a write through a
+-- dangling link land outside the sandbox.
 canonicalizeExisting :: FilePath -> IO FilePath
 canonicalizeExisting path = do
-  exists <- doesPathExist path
+  exists <- pathExistsNoFollow path
   if exists
     then canonicalizePath path
     else do
@@ -190,6 +205,15 @@ isFileHidden :: [Char] -> Bool
 isFileHidden path = case path of
   ('.' : _) -> True
   _ -> False
+
+-- | Whether a directory entry exists at @p@, without following a final
+-- symbolic link. 'doesPathExist' stats through links and so reports
+-- 'False' for a dangling one; such a link is still an entry that an
+-- @open@ would follow, so it must count as existing here.
+pathExistsNoFollow :: FilePath -> IO Bool
+pathExistsNoFollow p = do
+  exists <- doesPathExist p
+  if exists then pure True else isSymlink p
 
 -- | Check whether a path is a symbolic link (without following it).
 -- Returns 'False' if the path doesn't exist or can't be stat'd.

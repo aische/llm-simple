@@ -1,6 +1,6 @@
 module LLM.FsToolsSpec (spec) where
 
-import Control.Exception (bracket_, evaluate)
+import Control.Exception (bracket_, evaluate, try)
 import Data.Aeson (Value, object, (.=))
 import Data.ByteString qualified as BS
 import Data.Map qualified as Map
@@ -13,6 +13,7 @@ import LLM.Agent.Types (RuntimeArgs (..), Tool (..), ToolContext (..))
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
 import LLM.Load.FsTools (fsTools)
+import LLM.Tools.FsConfig (SandboxViolation (..))
 import System.Directory
   ( createDirectory,
     createDirectoryLink,
@@ -29,6 +30,7 @@ import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
   ( Spec,
     describe,
+    expectationFailure,
     it,
     shouldBe,
     shouldContain,
@@ -213,6 +215,20 @@ spec = describe "FsTools" $ do
       pathIsSymbolicLink (sb </> "link") `shouldReturn` True
       readFile (sb </> "real.txt") `shouldReturn` "keep"
       doesPathExist (sb </> "moved.txt") `shouldReturn` False
+
+    it "writefile refuses a dangling link pointing outside the workspace" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      -- The link target does not exist yet, so the link looks absent to
+      -- every check that stats through it; the write must still not
+      -- create it. The agent loop turns the violation into a model-facing
+      -- message, so here it surfaces as the exception itself.
+      let outside = takeDirectory sb </> "outside.txt"
+      createFileLink outside (sb </> "dangling")
+      r <- try (runTool tm "writefile" (object ["path" .= ("dangling" :: Text), "content" .= ("pwned" :: Text)]))
+      case r of
+        Left (SandboxViolation _ _) -> pure ()
+        Right _ -> expectationFailure "expected SandboxViolation but writefile succeeded"
+      doesPathExist outside `shouldReturn` False
 
     it "copy_file refuses a link source" $ withSandbox $ \sb -> do
       tm <- fsTools sb

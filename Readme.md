@@ -256,7 +256,7 @@ Use `fsTools'` to map tool results through a custom embedding function.
 
 ### Filesystem sandbox
 
-Filesystem tools enforce **workspace-relative path containment**: `..` escapes, absolute paths outside the workspace, and symlinks pointing outside are rejected. Recursive tools skip symlinks rather than following them.
+Filesystem tools enforce **workspace-relative path containment**: `..` escapes, absolute paths outside the workspace, and symlinks pointing outside are rejected. A symlink is judged by where it points, including when its target does not exist yet: writing through a dangling link that leads out of the workspace is refused and does not create the target. A link that resolves inside the workspace is followed, and the operation lands on its target. Recursive tools skip symlinks rather than following them.
 
 **Limitations (0.1.x):**
 

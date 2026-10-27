@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A write through a dangling symlink no longer escapes the workspace.
+  `sandboxPath` tested path existence with `doesPathExist`, which stats
+  through symlinks and so reported a link whose target does not exist as
+  absent. Such a link was treated as an ordinary new file: the containment
+  check ran on the link's own path, and the tool's later open followed the
+  link. A workspace holding `output -> /tmp/outside`, with the target
+  missing, let `writefile output` create `/tmp/outside`. Link components are
+  now lstat'd whether or not they resolve, so a dangling link is resolved to
+  its target before the containment check and the chain walk rejects a
+  dangling link planted after it. A dangling link whose target is inside the
+  workspace still resolves, and now yields the target's path rather than the
+  link's.
+
 ## [0.4.0.0] - 2026-10-24
 
 ### Fixed

@@ -13,6 +13,7 @@ import System.Directory
     createDirectoryLink,
     createFileLink,
     doesFileExist,
+    doesPathExist,
   )
 import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
@@ -133,6 +134,39 @@ spec = describe "FsConfig sandbox" $ do
         -- permitted and the resolved path points at the real file.
         resolved <- sandboxPath cfg "link/f.txt"
         resolved `shouldBe` (sb </> "real" </> "f.txt")
+
+    it "rejects a dangling final-component symlink pointing outside" $
+      withSystemTempDirectory "llm-simple-fsconfig" $ \root -> do
+        let sb = root </> "sandbox"
+            outside = root </> "outside"
+        createDirectory sb
+        createDirectory outside
+        -- The target does not exist, so 'doesPathExist' reports the link
+        -- as absent; only an lstat sees it.
+        createFileLink (outside </> "new.txt") (sb </> "dangling")
+        cfg <- mkFsConfig sb
+        shouldViolate (sandboxWritePath cfg "dangling")
+        doesPathExist (outside </> "new.txt") >>= (`shouldBe` False)
+
+    it "rejects a write below a dangling directory symlink pointing outside" $
+      withSystemTempDirectory "llm-simple-fsconfig" $ \root -> do
+        let sb = root </> "sandbox"
+            outside = root </> "outside"
+        createDirectory sb
+        createDirectory outside
+        createDirectoryLink (outside </> "missing") (sb </> "dangdir")
+        cfg <- mkFsConfig sb
+        shouldViolate (sandboxWritePath cfg "dangdir/new.txt")
+        doesPathExist (outside </> "missing") >>= (`shouldBe` False)
+
+    it "allows a dangling symlink whose target is inside the sandbox" $
+      withSandbox $ \sb -> do
+        createFileLink (sb </> "real-new.txt") (sb </> "dangling")
+        cfg <- mkFsConfig sb
+        -- Resolving the link keeps the write inside the workspace, so it
+        -- is permitted and lands on the link's target, not the link.
+        resolved <- sandboxWritePath cfg "dangling"
+        resolved `shouldBe` (sb </> "real-new.txt")
 
   describe "sandboxWritePath: non-existent targets" $ do
     it "resolves a write path under a not-yet-existing nested dir" $ withSandbox $ \sb -> do

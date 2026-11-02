@@ -23,6 +23,8 @@ cabal build
 
 Requires GHC 9.6–9.12 with `GHC2021` (see `tested-with` in `llm-simple.cabal`).
 
+Tested on Linux and macOS. Windows is not supported and not tested.
+
 ## Quick start
 
 1. Create a `.env` file with API keys for the providers you use:

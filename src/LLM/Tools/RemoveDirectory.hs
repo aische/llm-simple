@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, isSymlink, sandboxPath, sandboxSymlink)
+import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, isSymlink, sandboxPath, sandboxSymlink, withWorkspacePaths)
 import System.Directory
   ( doesDirectoryExist,
     listDirectory,
@@ -37,7 +37,7 @@ removeDirectoryToolTyped cfg =
           <> "Use with caution — this operation is irreversible. "
           <> "A symbolic link is removed itself; its target is left unchanged.",
       ttoolReadonly = False,
-      ttoolExecute = const (removeDirectoryExecTyped cfg)
+      ttoolExecute = const (withWorkspacePaths cfg . removeDirectoryExecTyped cfg)
     }
 
 removeDirectoryExecTyped :: FsConfig -> RemoveDirectoryToolArgs -> IO Text

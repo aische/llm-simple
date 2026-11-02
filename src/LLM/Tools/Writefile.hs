@@ -6,7 +6,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, sandboxWritePath)
+import LLM.Tools.FsConfig (FsConfig, sandboxWritePath, withWorkspacePaths)
 import LLM.Tools.FsLimits (writeUtf8File)
 
 data WritefileToolArgs = WritefileToolArgs
@@ -33,7 +33,7 @@ writefileToolTyped cfg =
           <> "Creates the file if it doesn't exist, overwrites if it does. "
           <> "Automatically creates parent directories as needed.",
       ttoolReadonly = False,
-      ttoolExecute = const (writefileExecTyped cfg)
+      ttoolExecute = const (withWorkspacePaths cfg . writefileExecTyped cfg)
     }
 
 writefileExecTyped :: FsConfig -> WritefileToolArgs -> IO Text

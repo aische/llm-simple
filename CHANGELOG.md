@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `LLM.Core`) blocks until the signal fires.
 - `LLM.Core.Utils.interruptOnAbort` runs an action and interrupts it when
   the signal fires.
+- `LLM.Tools.FsConfig.withWorkspacePaths` runs a filesystem action so that
+  an `IOException` it throws names its file relative to the workspace.
 - `LLM.Core.ProviderUtils.decodeObjectText` and `unexpectedResponse`, and
   `LLM.Providers.OpenAI.parseOpenAIObjectResponse`: the structured-output
   parsing the bundled providers use, for custom providers.
@@ -96,6 +98,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Behaviour change:** code that matched `EmptyResponse` for these cases
   gets `ParseError`. Neither is retried, and both still fall back to the
   next model.
+- Tool errors no longer show the model absolute host paths. An
+  `IOException` from a filesystem tool (a missing file, a permission error)
+  was shown to the model with its absolute path, revealing where the
+  workspace lives on the host. The bundled filesystem tools now name the
+  file relative to the workspace (`sub/missing.txt: removeLink: does not
+  exist ...`), or leave it out if it is outside the workspace. For any tool,
+  the model-facing error drops an absolute file name from an
+  `IOException`. **Behaviour change:** the `IOException`s the filesystem
+  tools throw carry the relative path, and `onToolError` gets the same
+  redacted text as the model.
 
 ## [0.4.0.1] - 2026-10-27
 

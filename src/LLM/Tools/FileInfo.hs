@@ -13,7 +13,7 @@ import Data.Text qualified as T
 import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, sandboxPath, withWorkspacePaths)
 import LLM.Tools.Internal.TextFile (readLenient, withTextHandle)
 import System.Directory
   ( Permissions (..),
@@ -65,7 +65,7 @@ fileInfoToolTyped cfg =
           <> "Reports clearly if the path does not exist. "
           <> "Use this before read_file_paginated to decide whether a file is worth reading.",
       ttoolReadonly = True,
-      ttoolExecute = const (execute cfg)
+      ttoolExecute = const (withWorkspacePaths cfg . execute cfg)
     }
 
 execute :: FsConfig -> FileInfoToolArgs -> IO Text

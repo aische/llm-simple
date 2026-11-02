@@ -13,7 +13,7 @@ import Data.Text.Encoding (decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, sandboxPath, withWorkspacePaths)
 import LLM.Tools.FsLimits (maxPaginatedFileBytes)
 import LLM.Tools.Internal.TextFile (withTextHandle)
 import System.IO
@@ -71,7 +71,7 @@ readFilePaginatedToolTyped cfg =
           <> "with the next offset to use. The tool is stateless: pass the next offset on the "
           <> "following call. Binary files are refused.",
       ttoolReadonly = True,
-      ttoolExecute = const (execute cfg)
+      ttoolExecute = const (withWorkspacePaths cfg . execute cfg)
     }
 
 execute :: FsConfig -> ReadFilePaginatedArgs -> IO Text

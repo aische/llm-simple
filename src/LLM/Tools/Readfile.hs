@@ -6,7 +6,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, sandboxPath, withWorkspacePaths)
 import LLM.Tools.FsLimits (maxReadBytes, readBoundedTextFile)
 
 newtype ReadfileToolArgs = ReadfileToolArgs
@@ -31,7 +31,7 @@ readfileToolTyped cfg =
           <> T.pack (show maxReadBytes)
           <> " bytes are refused; use read_file_paginated instead.",
       ttoolReadonly = True,
-      ttoolExecute = const (readfileExecTyped cfg)
+      ttoolExecute = const (withWorkspacePaths cfg . readfileExecTyped cfg)
     }
 
 readfileExecTyped :: FsConfig -> ReadfileToolArgs -> IO Text

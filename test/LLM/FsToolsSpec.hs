@@ -1,6 +1,6 @@
 module LLM.FsToolsSpec (spec) where
 
-import Control.Exception (bracket_, evaluate, try)
+import Control.Exception (IOException, bracket_, evaluate, try)
 import Data.Aeson (Value, object, (.=))
 import Data.ByteString qualified as BS
 import Data.Map qualified as Map
@@ -9,7 +9,9 @@ import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import GHC.IO.Encoding (getLocaleEncoding, setLocaleEncoding)
 import Heptapod (generate)
+import LLM.Agent.ToolUtils (executeTool)
 import LLM.Agent.Types (RuntimeArgs (..), Tool (..), ToolContext (..))
+import LLM.Core.Types (ToolCall (..), ToolResult (..))
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
 import LLM.Load.FsTools (fsTools)
@@ -25,6 +27,7 @@ import System.Directory
   )
 import System.FilePath (takeDirectory, (</>))
 import System.IO (TextEncoding, char8)
+import System.IO.Error (ioeGetFileName)
 import GHC.Clock (getMonotonicTime)
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
@@ -187,6 +190,25 @@ spec = describe "FsTools" $ do
       doesFileExist (sb </> "tmp" </> "x.txt") `shouldReturn` False
       runTool_ tm "remove_directory" (object ["path" .= ("tmp" :: Text)])
       doesDirectoryExist (sb </> "tmp") `shouldReturn` False
+
+  describe "tool errors" $ do
+    it "name the file relative to the workspace in the raised IOException" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      createDirectory (sb </> "sub")
+      r <- try (runTool tm "remove_file" (object ["path" .= ("sub/missing.txt" :: Text)]))
+      case r of
+        Left (e :: IOException) -> ioeGetFileName e `shouldBe` Just ("sub" </> "missing.txt")
+        Right out -> expectationFailure ("expected an IOException, got " <> T.unpack out)
+
+    it "do not show the workspace's host path to the model" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      ctx <- mkToolContext
+      let call = ToolCall {tcId = "1", tcName = "remove_file", tcArguments = object ["path" .= ("missing.txt" :: Text)], tcProviderMeta = Nothing}
+      res <- executeTool noHooks ctx (Map.elems tm) call
+      let out = T.unpack res.trContent
+      out `shouldContain` "missing.txt"
+      out `shouldContain` "does not exist"
+      out `shouldNotContain` "llm-simple-fstools"
 
   describe "symbolic links" $ do
     it "remove_file removes the link and leaves its target intact" $ withSandbox $ \sb -> do

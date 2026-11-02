@@ -17,7 +17,8 @@ where
 
 import Autodocodec qualified as AC
 import Autodocodec.Schema (jsonSchemaVia)
-import Control.Exception (SomeException, fromException)
+import Control.Exception (IOException, SomeException, fromException)
+import Control.Monad (mfilter)
 import Data.Aeson (FromJSON)
 import Data.Aeson qualified as AE
 import Data.Map qualified as Map
@@ -45,6 +46,8 @@ import LLM.Core.Utils (interruptOnAbort, toolResult, trySync)
 import LLM.Generate.Logger (Hooks (..))
 import LLM.Generate.Types (GenRequest (..))
 import LLM.Tools.FsConfig (SandboxViolation, formatSandboxViolation)
+import GHC.IO.Exception (IOException (ioe_filename))
+import System.FilePath (isRelative)
 
 -- | Execute a single tool call by looking it up in the tool list
 executeTool :: Hooks -> ToolContext -> [Tool Text] -> ToolCall -> IO ToolResult
@@ -232,8 +235,17 @@ embedTextTool embed tool =
         pure $ embed result
     }
 
+-- | Model-facing text for an exception a tool threw.
+--
+-- A 'SandboxViolation' shows its path relative to the workspace. An
+-- 'IOException' keeps its file name only if that is relative: the bundled
+-- filesystem tools make their paths workspace-relative
+-- ('LLM.Tools.FsConfig.withWorkspacePaths'), and an absolute path, from
+-- any tool, is dropped so the host's directory layout does not reach the
+-- model. The operation and the error description are kept.
 formatToolException :: SomeException -> Text
-formatToolException e =
-  case fromException e of
-    Just (sv :: SandboxViolation) -> formatSandboxViolation sv
-    Nothing -> T.pack (show e)
+formatToolException e
+  | Just (sv :: SandboxViolation) <- fromException e = formatSandboxViolation sv
+  | Just (ioe :: IOException) <- fromException e =
+      T.pack (show ioe {ioe_filename = mfilter isRelative (ioe_filename ioe)})
+  | otherwise = T.pack (show e)

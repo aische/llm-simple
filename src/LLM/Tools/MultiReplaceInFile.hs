@@ -6,7 +6,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, sandboxPath, withWorkspacePaths)
 import LLM.Tools.FsLimits (maxReadBytes, readBoundedUtf8File, writeUtf8File)
 
 data Replacement = Replacement
@@ -51,7 +51,7 @@ multiReplaceInFileToolTyped cfg =
           <> T.pack (show maxReadBytes)
           <> " bytes are refused.",
       ttoolReadonly = False,
-      ttoolExecute = const (replaceExecTyped cfg)
+      ttoolExecute = const (withWorkspacePaths cfg . replaceExecTyped cfg)
     }
 
 replaceExecTyped :: FsConfig -> MultiReplaceInFileToolArgs -> IO Text

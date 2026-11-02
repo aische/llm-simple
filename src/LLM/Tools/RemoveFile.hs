@@ -6,7 +6,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, sandboxPath, sandboxSymlink)
+import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, sandboxPath, sandboxSymlink, withWorkspacePaths)
 import System.Directory (doesDirectoryExist, removeFile)
 
 newtype RemoveFileToolArgs = RemoveFileToolArgs
@@ -29,7 +29,7 @@ removeFileToolTyped cfg =
           <> "Fails if the path does not exist or is a directory. "
           <> "A symbolic link is removed itself; its target is left unchanged.",
       ttoolReadonly = False,
-      ttoolExecute = const (removeFileExecTyped cfg)
+      ttoolExecute = const (withWorkspacePaths cfg . removeFileExecTyped cfg)
     }
 
 removeFileExecTyped :: FsConfig -> RemoveFileToolArgs -> IO Text

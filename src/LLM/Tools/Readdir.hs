@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath, withWorkspacePaths)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath ((</>))
 
@@ -33,7 +33,7 @@ readdirToolTyped fsConfig =
           <> "symbolic links with '@' (links are not followed). "
           <> "Use path '.' to list the workspace root.",
       ttoolReadonly = True,
-      ttoolExecute = const (readdirExecTyped fsConfig)
+      ttoolExecute = const (withWorkspacePaths fsConfig . readdirExecTyped fsConfig)
     }
 
 readdirExecTyped :: FsConfig -> ReaddirToolArgs -> IO Text

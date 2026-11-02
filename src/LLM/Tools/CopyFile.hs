@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, sandboxPath, sandboxSymlink, sandboxWritePath)
+import LLM.Tools.FsConfig (FsConfig, sandboxPath, sandboxSymlink, sandboxWritePath, withWorkspacePaths)
 import System.Directory (copyFile, doesDirectoryExist, doesFileExist, doesPathExist)
 
 data CopyFileToolArgs = CopyFileToolArgs
@@ -33,7 +33,7 @@ copyFileToolTyped cfg =
           <> "Overwrites the destination if it already exists. "
           <> "Creates parent directories at the destination as needed.",
       ttoolReadonly = False,
-      ttoolExecute = const (copyFileExecTyped cfg)
+      ttoolExecute = const (withWorkspacePaths cfg . copyFileExecTyped cfg)
     }
 
 copyFileExecTyped :: FsConfig -> CopyFileToolArgs -> IO Text

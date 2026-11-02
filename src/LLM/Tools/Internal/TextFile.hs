@@ -14,6 +14,7 @@ module LLM.Tools.Internal.TextFile
 where
 
 import Control.Exception (IOException, throwIO, try)
+import GHC.IO.Exception (IOException (ioe_filename))
 import Data.ByteString qualified as BS
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -63,7 +64,7 @@ readBoundedBytesWith open display cap = do
     sizeRes <- try (hFileSize h)
     case sizeRes of
       Left (e :: IOException) ->
-        pure $ Left $ "could not stat " <> display <> ": " <> T.pack (show e)
+        pure $ Left $ "could not stat " <> display <> ": " <> describeIOError e
       Right sz
         | sz > fromIntegral cap ->
             pure $
@@ -78,7 +79,7 @@ readBoundedBytesWith open display cap = do
             bsRes <- try (BS.hGet h (cap + 1))
             pure $ case bsRes of
               Left (e :: IOException) ->
-                Left $ "could not read " <> display <> ": " <> T.pack (show e)
+                Left $ "could not read " <> display <> ": " <> describeIOError e
               Right bs
                 | BS.length bs > cap ->
                     Left $
@@ -91,6 +92,11 @@ readBoundedBytesWith open display cap = do
     fromMaybe
       (Left (display <> " appears to be a binary file; only text files are supported."))
       r
+
+-- | An 'IOException' without its file name, which for a handle is the
+-- absolute path it was opened with. Callers name the file themselves.
+describeIOError :: IOException -> Text
+describeIOError e = T.pack (show e {ioe_filename = Nothing})
 
 -- | 'readBoundedBytesWith', decoded for display. Invalid UTF-8 bytes become
 -- U+FFFD, so never write the result back.

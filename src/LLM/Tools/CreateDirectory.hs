@@ -6,7 +6,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, sandboxPath, withWorkspacePaths)
 import System.Directory (createDirectoryIfMissing)
 
 data CreateDirectoryToolArgs = CreateDirectoryToolArgs
@@ -32,7 +32,7 @@ createDirectoryToolTyped cfg =
           <> "When 'parents' is true (the default), intermediate directories are created as needed "
           <> "and no error is raised if the directory already exists.",
       ttoolReadonly = False,
-      ttoolExecute = const (createDirectoryExecTyped cfg)
+      ttoolExecute = const (withWorkspacePaths cfg . createDirectoryExecTyped cfg)
     }
 
 createDirectoryExecTyped :: FsConfig -> CreateDirectoryToolArgs -> IO Text

@@ -12,7 +12,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath, withWorkspacePaths)
 import LLM.Tools.FsLimits (expensiveWalkDepth)
 import LLM.Tools.Internal.TextFile (readLenient, withTextHandle)
 import System.Directory
@@ -100,7 +100,7 @@ grepToolTyped cfg =
           <> "Output is capped at 'maxResults' lines (default 50, hard cap 500); "
           <> "the header reports whether results were truncated and how many files were scanned.",
       ttoolReadonly = True,
-      ttoolExecute = const (execute cfg)
+      ttoolExecute = const (withWorkspacePaths cfg . execute cfg)
     }
 
 execute :: FsConfig -> GrepToolArgs -> IO Text

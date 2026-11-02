@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, sandboxPath, sandboxSymlink, sandboxWritePath)
+import LLM.Tools.FsConfig (FsConfig, isSandboxRoot, sandboxPath, sandboxSymlink, sandboxWritePath, withWorkspacePaths)
 import System.Directory (doesDirectoryExist, doesFileExist, doesPathExist, renameFile)
 
 data MoveFileToolArgs = MoveFileToolArgs
@@ -32,7 +32,7 @@ moveFileToolTyped cfg =
         "Move (rename) a file from source to destination (both paths relative to the workspace). "
           <> "Creates parent directories at the destination as needed.",
       ttoolReadonly = False,
-      ttoolExecute = const (moveFileExecTyped cfg)
+      ttoolExecute = const (withWorkspacePaths cfg . moveFileExecTyped cfg)
     }
 
 moveFileExecTyped :: FsConfig -> MoveFileToolArgs -> IO Text

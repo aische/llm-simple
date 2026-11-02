@@ -12,8 +12,9 @@ import LLM.Agent.Types (EventObserver, GenerateEventDetail (..), RuntimeArgs (..
 import LLM.Core.Types (ToolCall (..), ToolDef (..), ToolResult (..))
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (Hooks (..), LogLevel (..), noHooks, safeHooks)
+import System.IO.Error (doesNotExistErrorType, mkIOError)
 import System.Timeout (timeout)
-import Test.Hspec (Spec, describe, it, shouldBe, shouldContain)
+import Test.Hspec (Spec, describe, it, shouldBe, shouldContain, shouldNotContain)
 
 spec :: Spec
 spec = describe "ToolUtils" $ do
@@ -89,6 +90,17 @@ spec = describe "ToolUtils" $ do
       let failing = mkTool "boom" (throwIO (userError "kaput"))
       r <- executeTool noHooks ctx [failing] (mkCall "boom")
       T.unpack r.trContent `shouldContain` "Tool error"
+
+    it "executeTool drops an absolute file name from an IOException" $ do
+      ctx <- mkContext (\_ -> pure ())
+      let failing =
+            mkTool "open" $
+              throwIO (mkIOError doesNotExistErrorType "openFile" Nothing (Just "/home/someone/project/secret.txt"))
+      r <- executeTool noHooks ctx [failing] (mkCall "open")
+      let out = T.unpack r.trContent
+      out `shouldNotContain` "/home/someone"
+      out `shouldContain` "openFile"
+      out `shouldContain` "does not exist"
 
     it "emitEvent does not swallow a timeout in the observer" $ do
       ctx <- mkContext (\_ -> threadDelay 1_000_000)

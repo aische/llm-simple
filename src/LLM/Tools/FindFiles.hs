@@ -13,7 +13,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath)
+import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath, withWorkspacePaths)
 import LLM.Tools.FsLimits (cheapWalkDepth)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath ((</>))
@@ -96,7 +96,7 @@ findFilesToolTyped cfg =
           <> "Output is capped at 'maxResults' (default 200, hard cap 2000); "
           <> "the header reports whether results were truncated and how many entries were scanned.",
       ttoolReadonly = True,
-      ttoolExecute = const (execute cfg)
+      ttoolExecute = const (withWorkspacePaths cfg . execute cfg)
     }
 
 execute :: FsConfig -> FindFilesToolArgs -> IO Text

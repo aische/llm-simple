@@ -2,6 +2,7 @@ module LLM.Tools.FsConfig
   ( FsConfig (..),
     SandboxViolation (..),
     formatSandboxViolation,
+    withWorkspacePaths,
     mkFsConfig,
     sandboxPath,
     sandboxWritePath,
@@ -12,13 +13,14 @@ module LLM.Tools.FsConfig
   )
 where
 
-import Control.Exception (Exception, IOException, throwIO, try)
+import Control.Exception (Exception, IOException, handle, throwIO, try)
 import Control.Monad (when)
 import Data.List (foldl')
 import Data.Text (Text)
 import Data.Text qualified as T
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesPathExist, pathIsSymbolicLink)
-import System.FilePath (addTrailingPathSeparator, dropTrailingPathSeparator, equalFilePath, joinPath, normalise, splitDirectories, splitFileName, takeDirectory, (</>))
+import GHC.IO.Exception (IOException (ioe_filename))
+import System.FilePath (addTrailingPathSeparator, dropTrailingPathSeparator, equalFilePath, isRelative, joinPath, normalise, splitDirectories, splitFileName, takeDirectory, (</>))
 
 -- | Configuration for file-system tools.
 -- 'fsBasePath' must be a canonical absolute path (use 'mkFsConfig').
@@ -48,6 +50,24 @@ formatSandboxViolation (SandboxViolation attempted base) =
         <> T.pack (joinPath relComps)
     Nothing ->
       "Sandbox violation: path is outside the workspace"
+
+-- | Run a filesystem tool's action so that an 'IOException' it throws names
+-- its file relative to the workspace root (@.@ for the root itself)
+-- instead of by its absolute host path. A file outside the workspace is
+-- left out of the error. The error is rethrown; other exceptions pass
+-- through unchanged. The bundled tools all run inside this, so the model
+-- never sees where the workspace lives on the host.
+withWorkspacePaths :: FsConfig -> IO a -> IO a
+withWorkspacePaths cfg = handle $ \(e :: IOException) ->
+  throwIO e {ioe_filename = ioe_filename e >>= workspaceRelative}
+  where
+    baseComps = splitDirectories (dropTrailingPathSeparator cfg.fsBasePath)
+    workspaceRelative f
+      | isRelative f = Just f
+      | otherwise = case stripPathPrefix baseComps (splitDirectories f) of
+          Just [] -> Just "."
+          Just comps -> Just (joinPath comps)
+          Nothing -> Nothing
 
 -- | Create an 'FsConfig' by canonicalizing the given base directory.
 -- The directory must already exist.

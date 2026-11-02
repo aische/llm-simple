@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `LLM.Tools.FsLimits.atomicWriteWith` replaces a file by writing a
+  temporary file in the same directory and renaming it over the target.
+
+### Fixed
+
+- `writefile`, `replace_in_file` and `multi_replace_in_file` no longer
+  leave a partial or empty file when a write fails, and two edits of one
+  file at the same time no longer lose one of them. **Behaviour change:**
+  - The file is written to a temporary file next to it, then renamed over
+    it. An existing file keeps its mode bits; a new file gets the default
+    mode (`0666` minus the umask), as before. The data is flushed but not
+    `fsync`ed.
+  - The file gets a new inode. A hard link to it keeps the old content, so
+    a write no longer changes a file outside the workspace through a hard
+    link (a read still can). The new file is owned by the user running the
+    process; ACLs and extended attributes are not copied.
+  - The edit tools hold a per-file lock from the read to the write. It
+    covers threads of the same process only; edits from other processes
+    can still be lost.
+
 ## [0.4.1.0] - 2026-11-02
 
 ### Added

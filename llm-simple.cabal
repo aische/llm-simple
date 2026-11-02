@@ -140,6 +140,7 @@ library
 
     other-modules:
         LLM.Core.SSE
+        LLM.Tools.Internal.PathLock
         LLM.Tools.Internal.TextFile
     hs-source-dirs:     src
     build-depends:
@@ -264,4 +265,6 @@ test-suite llm-simple-test
         scientific     >=0.3   && <0.4,
         uuid-types     >=1.0.4 && <1.1,
         vector         >=0.13  && <0.14
+    if !os(windows)
+        build-depends: unix >=2.8 && <2.9
     build-tool-depends: hspec-discover:hspec-discover

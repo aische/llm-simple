@@ -8,6 +8,7 @@ import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath, withWorkspacePaths)
 import LLM.Tools.FsLimits (maxReadBytes, readBoundedUtf8File, writeUtf8File)
+import LLM.Tools.Internal.PathLock (withPathLock)
 
 data Replacement = Replacement
   { _repOld :: Text,
@@ -55,21 +56,23 @@ multiReplaceInFileToolTyped cfg =
     }
 
 replaceExecTyped :: FsConfig -> MultiReplaceInFileToolArgs -> IO Text
-replaceExecTyped cfg args = do
-  let MultiReplaceInFileToolArgs {_mrifPath, _mrifReplacements} = args
+replaceExecTyped cfg MultiReplaceInFileToolArgs {_mrifPath, _mrifReplacements} = do
   resolved <- sandboxPath cfg (T.unpack _mrifPath)
-  contentE <- readBoundedUtf8File resolved _mrifPath maxReadBytes
-  case contentE of
-    Left err -> pure $ "Error: " <> err
-    Right content -> case applyReplacements _mrifReplacements content of
-      Left err -> pure err
-      Right result -> do
-        writeUtf8File resolved result
-        pure $
-          "Successfully applied "
-            <> T.pack (show (length _mrifReplacements))
-            <> " replacement(s) in "
-            <> _mrifPath
+  -- Hold the lock from the read to the write, so a concurrent edit of the
+  -- same file cannot be lost.
+  withPathLock resolved $ do
+    contentE <- readBoundedUtf8File resolved _mrifPath maxReadBytes
+    case contentE of
+      Left err -> pure $ "Error: " <> err
+      Right content -> case applyReplacements _mrifReplacements content of
+        Left err -> pure err
+        Right result -> do
+          writeUtf8File resolved result
+          pure $
+            "Successfully applied "
+              <> T.pack (show (length _mrifReplacements))
+              <> " replacement(s) in "
+              <> _mrifPath
 
 -- | Apply a list of replacements sequentially, failing on the first error.
 applyReplacements :: [Replacement] -> Text -> Either Text Text

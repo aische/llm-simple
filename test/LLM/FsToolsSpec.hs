@@ -1,6 +1,9 @@
 module LLM.FsToolsSpec (spec) where
 
+import Control.Concurrent (forkIO)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import Control.Exception (IOException, bracket_, evaluate, try)
+import Control.Monad (forM, forM_)
 import Data.Aeson (Value, object, (.=))
 import Data.ByteString qualified as BS
 import Data.Map qualified as Map
@@ -85,6 +88,26 @@ spec = describe "FsTools" $ do
       T.unpack result `shouldContain` "Successfully replaced"
       readBack <- runTool tm "read_file_paginated" (object ["path" .= ("code.hs" :: Text)])
       T.unpack readBack `shouldContain` "foo = 2"
+
+    it "lands every edit when many run on one file at once" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      -- A large file makes each edit slow enough that the threads would
+      -- interleave between read and write without the per-path lock.
+      let n = 40 :: Int
+          tok i = "<tok " <> T.pack (show i) <> ">"
+          done i = "<done " <> T.pack (show i) <> ">"
+          padding = T.replicate 95000 "0123456789"
+      runTool_ tm "writefile" (object ["path" .= ("big.txt" :: Text), "content" .= (padding <> T.concat (map tok [1 .. n]))])
+      dones <- forM [1 .. n] $ \i -> do
+        mv <- newEmptyMVar
+        _ <- forkIO $ do
+          r <- try (runTool tm "replace_in_file" (object ["path" .= ("big.txt" :: Text), "old" .= tok i, "new" .= done i]))
+          putMVar mv (r :: Either IOException Text)
+        pure mv
+      results <- mapM takeMVar dones
+      forM_ results $ \r -> r `shouldSatisfy` either (const False) ("Successfully" `T.isPrefixOf`)
+      final <- BS.readFile (sb </> "big.txt")
+      forM_ [1 .. n] $ \i -> encodeUtf8 (done i) `shouldSatisfy` (`BS.isInfixOf` final)
 
   describe "grep" $ do
     it "finds a literal substring" $ withSandbox $ \sb -> do

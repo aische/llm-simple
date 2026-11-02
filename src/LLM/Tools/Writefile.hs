@@ -8,6 +8,7 @@ import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxWritePath, withWorkspacePaths)
 import LLM.Tools.FsLimits (writeUtf8File)
+import LLM.Tools.Internal.PathLock (withPathLock)
 
 data WritefileToolArgs = WritefileToolArgs
   { _wfPath :: Text,
@@ -31,7 +32,8 @@ writefileToolTyped cfg =
       ttoolDescription =
         "Write content to a file at the given path (relative to the workspace). "
           <> "Creates the file if it doesn't exist, overwrites if it does. "
-          <> "Automatically creates parent directories as needed.",
+          <> "Automatically creates parent directories as needed. "
+          <> "The file is replaced as a whole, so a failed write leaves the old content.",
       ttoolReadonly = False,
       ttoolExecute = const (withWorkspacePaths cfg . writefileExecTyped cfg)
     }
@@ -41,5 +43,5 @@ writefileExecTyped cfg args = do
   let p = args._wfPath
       c = args._wfContent
   resolved <- sandboxWritePath cfg (T.unpack p)
-  writeUtf8File resolved c
+  withPathLock resolved $ writeUtf8File resolved c
   pure $ "Successfully wrote " <> T.pack (show (T.length c)) <> " characters to " <> p

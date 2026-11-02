@@ -27,10 +27,12 @@ module LLM.Tools.FsLimits
     readBoundedUtf8File,
     readTextFileLenient,
     writeUtf8File,
+    atomicWriteWith,
   )
 where
 
-import Control.Exception (IOException, try)
+import Control.Exception (IOException, bracketOnError, try)
+import Control.Monad (when)
 import Data.ByteString qualified as BS
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
@@ -40,7 +42,15 @@ import LLM.Tools.Internal.TextFile
     readBoundedTextWith,
     readBoundedUtf8With,
   )
-import System.IO (IOMode (ReadMode), withBinaryFile)
+import System.Directory (copyPermissions, doesFileExist, removeFile, renameFile)
+import System.FilePath (splitFileName)
+import System.IO
+  ( Handle,
+    IOMode (ReadMode),
+    hClose,
+    openBinaryTempFileWithDefaultPermissions,
+    withBinaryFile,
+  )
 
 -- | Maximum directory depth for traversals that only stat entries.
 cheapWalkDepth :: Int
@@ -98,6 +108,45 @@ readBoundedUtf8File path = readBoundedUtf8With (withBinaryFile path ReadMode)
 readTextFileLenient :: FilePath -> IO Text
 readTextFileLenient path = decodeUtf8With lenientDecode <$> BS.readFile path
 
--- | Write text as UTF-8, independent of the locale.
+-- | Write text as UTF-8, independent of the locale. The file is replaced
+-- atomically ('atomicWriteWith').
 writeUtf8File :: FilePath -> Text -> IO ()
-writeUtf8File path = BS.writeFile path . encodeUtf8
+writeUtf8File path t = atomicWriteWith path (`BS.hPut` encodeUtf8 t)
+
+-- | Replace the file at @path@ with what the action writes, so that readers
+-- see either the old content or the new content, never a partial file.
+--
+-- The action writes to a temporary file in the same directory, which is
+-- then closed and renamed over @path@. If @path@ already exists, its mode
+-- is copied to the new file first ('copyPermissions': the full mode on
+-- POSIX, the read-only attribute on Windows); a new file gets the default
+-- mode (@0666@ minus the umask). On any exception the temporary file is
+-- removed and the exception rethrown, leaving @path@ unchanged.
+--
+-- Limits:
+--
+-- * The data is flushed to the operating system but not @fsync@ed, so a
+--   power loss shortly after the write can still lose it.
+-- * The file gets a new inode. A hard link to the old file keeps the old
+--   content, and ACLs and extended attributes are not copied. The new file
+--   is owned by the user running the process.
+-- * On Windows, the rename fails while another process has @path@ open.
+atomicWriteWith :: FilePath -> (Handle -> IO ()) -> IO ()
+atomicWriteWith path write =
+  bracketOnError
+    (openBinaryTempFileWithDefaultPermissions dir ("." <> name <> ".tmp"))
+    ( \(tmp, h) -> do
+        _ <- try @IOException (hClose h)
+        _ <- try @IOException (removeFile tmp)
+        pure ()
+    )
+    ( \(tmp, h) -> do
+        write h
+        hClose h
+        exists <- doesFileExist path
+        when exists $ copyPermissions path tmp
+        renameFile tmp path
+    )
+  where
+    (dirRaw, name) = splitFileName path
+    dir = if null dirRaw then "." else dirRaw

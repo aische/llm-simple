@@ -15,7 +15,7 @@ module LLM.Load.LoadGateways
 where
 
 import Configuration.Dotenv (defaultConfig, loadFile)
-import Control.Exception (SomeException, catch, throwIO)
+import Control.Exception (IOException, catch, throwIO)
 import Data.Map qualified as Map
 import Data.ByteString.Char8 qualified as B
 import Data.Char (isDigit)
@@ -207,7 +207,10 @@ loadGateways = loadGatewaysFromCatalog defaultProviderCatalogMap
 
 -- | Load @.env@ (if present) and then build a gateway map from the bundled
 -- default provider catalog.
+--
+-- A missing or unreadable @.env@ is ignored. A @.env@ that dotenv cannot
+-- parse is not: its error is rethrown, as are asynchronous exceptions.
 loadGatewaysWithDotenv :: IO GatewayMap
 loadGatewaysWithDotenv = do
-  loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
+  loadFile defaultConfig `catch` \(_ :: IOException) -> pure ()
   loadGateways

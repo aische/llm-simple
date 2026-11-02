@@ -12,7 +12,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import LLM.Core.Types (LLMGateway (..))
 import LLM.Generate.ModelConfig (ModelCapabilities (..), ModelConfig (..), defaultModelCapabilities)
-import LLM.Load.LoadGateways (ProviderUnavailable (..), buildGateway, loadGateways, loadGatewaysFromCatalog, loadGatewaysFromCatalogOrThrow, parseProviderBaseUrl, resolveGateway)
+import LLM.Load.LoadGateways (ProviderUnavailable (..), buildGateway, loadGateways, loadGatewaysFromCatalog, loadGatewaysWithDotenv, loadGatewaysFromCatalogOrThrow, parseProviderBaseUrl, resolveGateway)
 import LLM.Load.LoadModels (loadModelOrThrow, loadModelOrThrow_, loadModelsOrThrow)
 import LLM.Load.ModelCatalog (ModelCatalogItem (..))
 import LLM.Load.ProviderCatalog
@@ -24,6 +24,7 @@ import LLM.Load.ProviderCatalog
   )
 import LLM.Load.Types (LoadConfigError (..))
 import LLM.Load.Utils (getSystemPrompt)
+import System.Directory (createDirectory, withCurrentDirectory)
 import System.Environment (setEnv)
 import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
@@ -35,6 +36,8 @@ import Test.Hspec
     shouldBe,
     shouldContain,
     shouldSatisfy,
+    shouldThrow,
+    anyErrorCall,
   )
 
 ollamaCatalog :: FilePath
@@ -127,6 +130,23 @@ spec = describe "Load" $ do
             T.unpack msg `shouldContain` "baseUrl"
           Left other -> expectationFailure $ "expected LoadModelConfigError, got: " <> show other
           Right _ -> expectationFailure "expected failure"
+
+  describe "loadGatewaysWithDotenv" $ do
+    it "ignores a missing .env" $
+      inTempDir $ \_ -> do
+        gateways <- loadGatewaysWithDotenv
+        Map.member "ollama" gateways `shouldBe` True
+
+    it "ignores a .env it cannot read" $
+      inTempDir $ \dir -> do
+        createDirectory (dir </> ".env")
+        gateways <- loadGatewaysWithDotenv
+        Map.member "ollama" gateways `shouldBe` True
+
+    it "only swallows IO errors, not other exceptions" $
+      inTempDir $ \dir -> do
+        writeFile (dir </> ".env") "not a dotenv line\n"
+        loadGatewaysWithDotenv `shouldThrow` anyErrorCall
 
   describe "loadGateways" $ do
     it "always includes ollama" $ do
@@ -333,3 +353,10 @@ withProviderCatalogDir providersFixture act =
     providersJson <- readFile providersFixture
     writeFile providersPath providersJson
     act catalogPath `catch` \(_ :: IOException) -> act catalogPath
+
+-- | Run in a fresh temporary directory as the working directory, so a
+-- @.env@ in the repository is never loaded.
+inTempDir :: (FilePath -> IO a) -> IO a
+inTempDir act =
+  withSystemTempDirectory "llm-simple-dotenv" $ \dir ->
+    withCurrentDirectory dir (act dir)

@@ -157,11 +157,11 @@ Custom providers from a co-located `providers.json` apply when loading models vi
 
 ```haskell
 import Configuration.Dotenv (defaultConfig, loadFile)
-import Control.Exception (SomeException, catch)
+import Control.Exception (IOException, catch)
 import LLM.Load (loadModelsOrThrow)
 
 main = do
-  loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
+  loadFile defaultConfig `catch` \(_ :: IOException) -> pure ()
   (gemini, deepseek) <-
     loadModelsOrThrow "./model-catalog.json" ("gemini_lite", "deepseek4flash")
   ...
@@ -177,7 +177,7 @@ An agent runs a loop: the model may call tools, results are fed back, and the lo
 
 ```haskell
 import Configuration.Dotenv (defaultConfig, loadFile)
-import Control.Exception (SomeException, catch)
+import Control.Exception (IOException, catch)
 import Heptapod (generate)
 import LLM.Agent (Agent (..), RuntimeArgs (..), generateText, noEventObserver)
 import LLM.Core (pattern UserTurn)
@@ -186,7 +186,7 @@ import LLM.Load (fsTools, loadModelsOrThrow)
 
 main :: IO ()
 main = do
-  loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
+  loadFile defaultConfig `catch` \(_ :: IOException) -> pure ()
 
   (gemini, deepseek) <-
     loadModelsOrThrow "./model-catalog.json" ("gemini_lite", "deepseek4flash")

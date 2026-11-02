@@ -64,6 +64,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was meant to avoid. Before a retry, throttle and backoff add up.
   **Behaviour change:** a call that retries with a throttle set now takes
   longer.
+- `loadGatewaysWithDotenv` no longer swallows cancellation. It ignored every
+  exception from loading `.env`, including `ThreadKilled`, `UserInterrupt`
+  and timeouts, so a cancellation that arrived during loading was lost. It
+  now ignores only `IOException` (a missing or unreadable `.env`). The
+  example executables and the README examples do the same.
+  **Behaviour change:** a `.env` that dotenv cannot parse used to be ignored
+  silently; its parse error is now thrown.
 
 ## [0.4.0.1] - 2026-10-27
 

@@ -1,7 +1,7 @@
 module Main where
 
 import Configuration.Dotenv (defaultConfig, loadFile)
-import Control.Exception (SomeException, catch)
+import Control.Exception (IOException, catch)
 import Control.Monad (unless, void, when)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -125,7 +125,7 @@ optionsParser =
 
 main :: IO ()
 main = do
-  loadFile defaultConfig `catch` \(_ :: SomeException) -> pure ()
+  loadFile defaultConfig `catch` \(_ :: IOException) -> pure ()
   opts <- execParser optionsInfo
   when (opts.optGeneratedOnly && opts.optStreamedOnly) $
     die "--generated-only and --streamed-only are mutually exclusive"

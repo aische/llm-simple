@@ -115,9 +115,11 @@ execute cfg args = do
       pat = args._grepPattern
       ci = args._grepCaseInsensitive
       exts = normalizeExtensions args._grepExtensions
-      cap = max 1 (min maxResultsCap args._grepMaxResults)
+      cap = min maxResultsCap args._grepMaxResults
   if T.null pat
     then pure "Error: pattern must be non-empty"
+    else if args._grepMaxResults <= 0
+    then pure $ "Error: maxResults must be positive, got " <> T.pack (show args._grepMaxResults)
     else do
       resolved <- sandboxPath cfg rel
       isDir <- doesDirectoryExist resolved

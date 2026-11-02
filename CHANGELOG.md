@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Invalid tool arguments are reported instead of silently replaced.
+  **Behaviour change** for invalid arguments only: `find_files` returns an
+  error for an unknown `type` (it searched for any kind) and for
+  `maxResults <= 0`; `grep` for `maxResults <= 0`; `read_file_paginated`
+  for `offset < 1` or `limit < 1` (all were clamped to 1). Values above a
+  tool's hard cap are still lowered to the cap.
 - `file_info` reports a symbolic link as a link. It resolved the path
   first, so it described the target and never said "symlink". It now
   shows `=== <path> | symbolic link ===` and the target relative to the

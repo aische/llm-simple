@@ -76,47 +76,52 @@ readFilePaginatedToolTyped cfg =
     }
 
 execute :: FsConfig -> ReadFilePaginatedArgs -> IO Text
-execute cfg args = do
-  let rel = T.unpack args._rfpPath
-      offset = max 1 args._rfpOffset
-      limit = max 1 (min maxLimit args._rfpLimit)
-      path = args._rfpPath
-      capText = T.pack (show maxPaginatedFileBytes)
-  resolved <- sandboxPath cfg rel
-  result <- withTextHandle (withBinaryFile resolved ReadMode) $ \h -> do
-    size <- hFileSize h
-    if size > maxPaginatedFileBytes
-      then
-        pure . Left $
-          path
-            <> " is "
-            <> T.pack (show size)
-            <> " bytes, which exceeds the "
-            <> capText
-            <> "-byte cap for read_file_paginated."
-      else do
-        -- Read one byte past the cap, so a file that grew past it since
-        -- the size check is reported instead of looking like it ended.
-        bytes <- BS.hGet h (fromIntegral maxPaginatedFileBytes + 1)
-        pure $
-          if fromIntegral (BS.length bytes) > maxPaginatedFileBytes
-            then
-              Left $
-                path
-                  <> " grew past the "
-                  <> capText
-                  <> "-byte cap for read_file_paginated during the read."
-            else
-              let (lns, hasMore) = takePage offset limit bytes
-               in Right (size, lns, hasMore)
-  pure $ case result of
-    Nothing ->
-      "Error: "
-        <> path
-        <> " appears to be a binary file; read_file_paginated only supports text files."
-    Just (Left err) -> "Error: " <> err
-    Just (Right (size, lns, hasMore)) ->
-      renderPage path size offset lns hasMore
+execute cfg args
+  | args._rfpOffset < 1 =
+      pure $ "Error: offset is a 1-based line number and must be at least 1, got " <> T.pack (show args._rfpOffset)
+  | args._rfpLimit < 1 =
+      pure $ "Error: limit must be positive, got " <> T.pack (show args._rfpLimit)
+  | otherwise = do
+      let rel = T.unpack args._rfpPath
+          offset = args._rfpOffset
+          limit = min maxLimit args._rfpLimit
+          path = args._rfpPath
+          capText = T.pack (show maxPaginatedFileBytes)
+      resolved <- sandboxPath cfg rel
+      result <- withTextHandle (withBinaryFile resolved ReadMode) $ \h -> do
+        size <- hFileSize h
+        if size > maxPaginatedFileBytes
+          then
+            pure . Left $
+              path
+                <> " is "
+                <> T.pack (show size)
+                <> " bytes, which exceeds the "
+                <> capText
+                <> "-byte cap for read_file_paginated."
+          else do
+            -- Read one byte past the cap, so a file that grew past it since
+            -- the size check is reported instead of looking like it ended.
+            bytes <- BS.hGet h (fromIntegral maxPaginatedFileBytes + 1)
+            pure $
+              if fromIntegral (BS.length bytes) > maxPaginatedFileBytes
+                then
+                  Left $
+                    path
+                      <> " grew past the "
+                      <> capText
+                      <> "-byte cap for read_file_paginated during the read."
+                else
+                  let (lns, hasMore) = takePage offset limit bytes
+                   in Right (size, lns, hasMore)
+      pure $ case result of
+        Nothing ->
+          "Error: "
+            <> path
+            <> " appears to be a binary file; read_file_paginated only supports text files."
+        Just (Left err) -> "Error: " <> err
+        Just (Right (size, lns, hasMore)) ->
+          renderPage path size offset lns hasMore
 
 -- | Take up to @limit@ lines starting at line @offset@, and report whether
 -- more lines follow.

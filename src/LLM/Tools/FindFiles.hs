@@ -37,12 +37,15 @@ maxDepth = cheapWalkDepth
 data EntryFilter = AnyEntry | FileOnly | DirectoryOnly
   deriving (Eq, Show)
 
-parseEntryFilter :: Text -> EntryFilter
+-- | 'Nothing' for an unknown kind.
+parseEntryFilter :: Text -> Maybe EntryFilter
 parseEntryFilter t = case T.toLower (T.strip t) of
-  "file" -> FileOnly
-  "directory" -> DirectoryOnly
-  "dir" -> DirectoryOnly
-  _ -> AnyEntry
+  "file" -> Just FileOnly
+  "directory" -> Just DirectoryOnly
+  "dir" -> Just DirectoryOnly
+  "any" -> Just AnyEntry
+  "" -> Just AnyEntry
+  _ -> Nothing
 
 data FindFilesToolArgs = FindFilesToolArgs
   { _ffPattern :: Text,
@@ -107,12 +110,15 @@ execute :: FsConfig -> FindFilesToolArgs -> IO Text
 execute cfg args = do
   let rel = T.unpack args._ffPath
       pat = args._ffPattern
-      kind = parseEntryFilter args._ffType
       includeHidden = args._ffIncludeHidden
-      cap = max 1 (min maxResultsCap args._ffMaxResults)
-  if T.null pat
-    then pure "Error: pattern must be non-empty"
-    else do
+      cap = min maxResultsCap args._ffMaxResults
+  case parseEntryFilter args._ffType of
+    _ | T.null pat -> pure "Error: pattern must be non-empty"
+    Nothing ->
+      pure $ "Error: unknown type " <> T.pack (show args._ffType) <> "; use 'file', 'directory' or 'any'"
+    _ | args._ffMaxResults <= 0 ->
+      pure $ "Error: maxResults must be positive, got " <> T.pack (show args._ffMaxResults)
+    Just kind -> do
       resolved <- sandboxPath cfg rel
       isDir <- doesDirectoryExist resolved
       if not isDir

@@ -510,6 +510,33 @@ spec = describe "FsTools" $ do
       filter (not . T.isPrefixOf "===") (T.lines result) `shouldBe` ["     9| l9", "    10| l10"]
       T.unpack result `shouldContain` "end of file"
 
+  describe "argument checks" $ do
+    it "find_files rejects an unknown type" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      out <- runTool tm "find_files" (object ["pattern" .= ("*" :: Text), "type" .= ("files" :: Text)])
+      out `shouldBe` "Error: unknown type \"files\"; use 'file', 'directory' or 'any'"
+
+    it "find_files still accepts file, directory, dir and any" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      forM_ ["file", "directory", "dir", "any", "File"] $ \t -> do
+        out <- runTool tm "find_files" (object ["pattern" .= ("*" :: Text), "type" .= (t :: Text)])
+        T.unpack out `shouldNotContain` "Error"
+
+    it "find_files and grep reject a non-positive maxResults" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      ff <- runTool tm "find_files" (object ["pattern" .= ("*" :: Text), "maxResults" .= (0 :: Int)])
+      ff `shouldBe` "Error: maxResults must be positive, got 0"
+      g <- runTool tm "grep" (object ["pattern" .= ("x" :: Text), "maxResults" .= (-3 :: Int)])
+      g `shouldBe` "Error: maxResults must be positive, got -3"
+
+    it "read_file_paginated rejects a non-positive offset or limit" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "f.txt") "a\n"
+      o <- runTool tm "read_file_paginated" (object ["path" .= ("f.txt" :: Text), "offset" .= (0 :: Int)])
+      T.unpack o `shouldContain` "Error: offset is a 1-based line number"
+      l <- runTool tm "read_file_paginated" (object ["path" .= ("f.txt" :: Text), "limit" .= (0 :: Int)])
+      l `shouldBe` "Error: limit must be positive, got 0"
+
   describe "workspace root guard" $ do
     let rootPaths = [".", "", "./", "sub/.."] :: [Text]
     it "remove_directory refuses the workspace root" $ withSandbox $ \sb -> do

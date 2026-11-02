@@ -5,6 +5,8 @@ module LLM.Core.ProviderUtils
     handleStreamResponse,
     normalizeSchemaOpenAI,
     stripJsonFences,
+    decodeObjectText,
+    unexpectedResponse,
     stripBoundsAndComments,
     decodeToolArguments,
     invalidToolArgumentsError,
@@ -12,14 +14,16 @@ module LLM.Core.ProviderUtils
 where
 
 import Control.Retry (limitRetries)
-import Data.Aeson (ToJSON (toJSON), Value (..), decodeStrict', object)
+import Data.Aeson (ToJSON (toJSON), Value (..), decodeStrict', eitherDecodeStrict', encode, object)
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString qualified as BS
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
 import Data.Text.Encoding.Error (lenientDecode)
-import LLM.Core.Types (LLMError (HttpError, ParseError), LLMTextResult)
+import Data.Text.Lazy qualified as TL
+import Data.Text.Lazy.Encoding qualified as TLE
+import LLM.Core.Types (LLMError (EmptyResponse, HttpError, ParseError), LLMResult, LLMTextResult)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Req (HttpConfig, defaultHttpConfig, httpConfigAltManager, httpConfigCheckResponse, httpConfigRetryPolicy)
@@ -123,6 +127,35 @@ stripJsonFences t =
           then T.strip $ T.dropEnd 3 t''
           else t''
    in t'''
+
+-- | Decode the text a model returned for a structured-output request, after
+-- 'stripJsonFences'. Text that is empty then is 'EmptyResponse'. Text that
+-- is not valid JSON is a 'ParseError' with the decoder's message and the
+-- start of the text.
+decodeObjectText :: Text -> LLMResult Value
+decodeObjectText raw
+  | T.null text = Left EmptyResponse
+  | otherwise = case eitherDecodeStrict' (encodeUtf8 text) of
+      Left err ->
+        Left $
+          ParseError $
+            "structured output is not valid JSON: " <> T.pack err <> "; text: " <> excerpt text
+      Right v -> Right v
+  where
+    text = stripJsonFences raw
+
+-- | 'ParseError' for a response body that does not have the expected
+-- shape, with the parser's message and the start of the body.
+unexpectedResponse :: String -> Value -> LLMError
+unexpectedResponse err body =
+  ParseError $
+    "unexpected response: " <> T.pack err <> "; body: " <> excerpt (TL.toStrict (TLE.decodeUtf8 (encode body)))
+
+-- | At most 200 characters of @t@, with @...@ when cut.
+excerpt :: Text -> Text
+excerpt t
+  | T.length t > 200 = T.take 200 t <> "..."
+  | otherwise = t
 
 -- | Remove @minimum@, @maximum@ and @$comment@ keywords from a JSON Schema.
 --

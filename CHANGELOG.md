@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `LLM.Core`) blocks until the signal fires.
 - `LLM.Core.Utils.interruptOnAbort` runs an action and interrupts it when
   the signal fires.
+- `LLM.Core.ProviderUtils.decodeObjectText` and `unexpectedResponse`, and
+  `LLM.Providers.OpenAI.parseOpenAIObjectResponse`: the structured-output
+  parsing the bundled providers use, for custom providers.
 
 ### Fixed
 
@@ -82,6 +85,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `{provider}-{request|response}-{timestamp}-{unique}.json`. **Behaviour
   change:** dump file names have the extra suffix, and dump files are now
   readable only by their owner (mode 0600).
+- Structured-output responses that cannot be parsed are no longer reported
+  as `EmptyResponse`. OpenAI, Ollama, DeepSeek and Claude reported model
+  text that is not valid JSON, and a response body without the expected
+  fields, as `EmptyResponse`, dropping the reason; Gemini did the same for
+  text that is not valid JSON. These are now `ParseError`s with the JSON
+  decoder's message and the first 200 characters of the text or body.
+  `EmptyResponse` is kept for content that is actually empty: no choice or
+  text block, or text that is empty once code fences are stripped.
+  **Behaviour change:** code that matched `EmptyResponse` for these cases
+  gets `ParseError`. Neither is retried, and both still fall back to the
+  next model.
 
 ## [0.4.0.1] - 2026-10-27
 

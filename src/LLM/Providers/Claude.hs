@@ -27,7 +27,7 @@ import Data.Aeson
     (.:?),
   )
 import Data.Aeson.KeyMap qualified as KM
-import Data.Aeson.Types (Object, Pair, Parser, parseMaybe)
+import Data.Aeson.Types (Object, Pair, Parser, parseEither, parseMaybe)
 import Data.ByteString qualified as BS
 import Data.Foldable (for_)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
@@ -40,7 +40,7 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, stripJsonFences)
+import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, unexpectedResponse)
 import LLM.Core.SSE (SSEEvent (sseData, sseEvent), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( commonImageMediaTypes,
@@ -450,26 +450,24 @@ parseClaudeUsageObject uo = do
         usageTotalCost = 0
       }
 
+-- | The JSON text of the first text block. No text block is
+-- 'EmptyResponse'; invalid JSON text or a body without @content@ is a
+-- 'ParseError' (see 'decodeObjectText' and 'unexpectedResponse').
 parseClaudeObjectResponse :: Value -> IO (LLMResult (Value, Maybe Usage))
-parseClaudeObjectResponse v = case parseMaybe go v of
-  Nothing -> pure $ Left EmptyResponse
-  Just text -> case decodeStrict' (encodeUtf8 (stripJsonFences text)) of
-    Nothing -> pure $ Left EmptyResponse
-    Just obj -> pure $ Right (obj, parseClaudeUsage v)
+parseClaudeObjectResponse v = pure $ case parseEither go v of
+  Left err -> Left (unexpectedResponse err v)
+  Right [] -> Left EmptyResponse
+  Right (text : _) -> (\obj -> (obj, parseClaudeUsage v)) <$> decodeObjectText text
   where
-    go :: Value -> Parser Text
+    go :: Value -> Parser [Text]
     go = withObject "ClaudeResponse" $ \o -> do
       content <- o .: "content" :: Parser [Value]
-      texts <- mapMaybeM textOf content
-      case texts of
-        (t : _) -> pure t
-        _ -> fail "No content"
+      pure (mapMaybe textOf content)
     textOf = parseMaybe $ withObject "content_block" $ \o -> do
       typ <- o .: "type" :: Parser Text
       case typ of
         "text" -> o .: "text"
         _ -> fail "not text"
-    mapMaybeM f xs = pure (mapMaybe f xs)
 
 -- Streaming ------------------------------------------------------------------
 

@@ -8,17 +8,12 @@ where
 
 import Data.Aeson
   ( KeyValue ((.=)),
-    Value,
-    decodeStrict',
     object,
-    withObject,
-    (.:),
   )
-import Data.Aeson.Types (Pair, Parser, parseMaybe)
+import Data.Aeson.Types (Pair)
 import Data.Text (Text)
-import Data.Text.Encoding (encodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, normalizeSchemaOpenAI, stripJsonFences)
+import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, normalizeSchemaOpenAI)
 import LLM.Core.Types
   ( commonImageMediaTypes,
     ChatRequest
@@ -27,11 +22,10 @@ import LLM.Core.Types
         reqTemperature,
         reqTools
       ),
-    LLMError (EmptyResponse),
     LLMGateway,
     defaultMessageEncodeOptions,
   )
-import LLM.Providers.OpenAI (buildMessages, encodeToolDef, parseOpenAIResponse, parseOpenAIStream, parseOpenAIUsage)
+import LLM.Providers.OpenAI (buildMessages, encodeToolDef, parseOpenAIObjectResponse, parseOpenAIResponse, parseOpenAIStream)
 import Network.HTTP.Req
   ( Option,
     POST (POST),
@@ -92,11 +86,7 @@ ollamaProviderWith baseUrl baseOpts =
                      ]
                ],
       sendObjectRequest = sendRequest,
-      parseObjectResponse = \v -> case parseMaybe parseObject v of
-        Nothing -> pure $ Left EmptyResponse
-        Just contentStr -> case decodeStrict' (encodeUtf8 (stripJsonFences contentStr)) of
-          Nothing -> pure $ Left EmptyResponse
-          Just obj -> pure $ Right (obj, parseOpenAIUsage v)
+      parseObjectResponse = pure . parseOpenAIObjectResponse
     }
   where
     sendRequest body =
@@ -104,10 +94,6 @@ ollamaProviderWith baseUrl baseOpts =
         let url = baseUrl /: "v1" /: "chat" /: "completions"
         resp <- req POST url (ReqBodyJson body) bsResponse baseOpts
         pure (responseStatusCode resp, responseBody resp)
-    parseObject :: Value -> Parser Text
-    parseObject = withObject "OpenAIObjectResponse" $ \o -> do
-      (choice : _) <- o .: "choices" :: Parser [Value]
-      withObject "choice" (\co -> co .: "message" >>= withObject "message" (.: "content")) choice
 
 -- | Request body for Ollama's OpenAI-compatible endpoint. Like OpenAI's, but
 -- the token limit is @max_tokens@: Ollama ignores @max_completion_tokens@

@@ -36,7 +36,7 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.UUID.Types (UUID)
 import Data.UUID.Types qualified as UUID
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, stripBoundsAndComments, stripJsonFences)
+import LLM.Core.ProviderUtils (decodeObjectText, handleStreamResponse, lenientConfig, stripBoundsAndComments)
 import LLM.Core.SSE (SSEEvent (sseData), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( supportedImageMediaTypes,
@@ -621,12 +621,12 @@ parseGeminiUsageObject uo = do
 parseGeminiObjectResponse :: Value -> IO LLMObjectResult
 parseGeminiObjectResponse v = case parseMaybe go v of
   Nothing -> pure $ Left (noContentError stop)
-  Just text -> case decodeStrict' (encodeUtf8 (stripJsonFences text)) of
-    Nothing
+  Just text -> case decodeObjectText text of
+    Left _
       | Just (GeminiFinished "MAX_TOKENS") <- stop ->
           pure $ Left $ ParseError "Gemini structured output was cut off (finishReason: MAX_TOKENS); increase max tokens"
-      | otherwise -> pure $ Left EmptyResponse
-    Just obj -> pure $ Right (obj, parseGeminiUsage v)
+    Left err -> pure $ Left err
+    Right obj -> pure $ Right (obj, parseGeminiUsage v)
   where
     stop = parseGeminiStop v
 

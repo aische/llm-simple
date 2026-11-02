@@ -232,6 +232,7 @@ test-suite llm-simple-test
                         LLM.LoggerSpec
                         LLM.StreamingSpec
                         LLM.StreamCompletenessSpec
+                        LLM.StructuredOutputSpec
                         LLM.HistoryToolSpec
                         LLM.HttpConfigSpec
                         LLM.LLMProviderSpec

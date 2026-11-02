@@ -6,6 +6,7 @@ module LLM.Providers.OpenAI
     openAIProviderWith,
     openAIProviderWithName,
     parseOpenAIResponse,
+    parseOpenAIObjectResponse,
     parseOpenAIUsage,
     buildMessages,
     encodeTurn,
@@ -30,7 +31,7 @@ import Data.Aeson
     (.:),
     (.:?),
   )
-import Data.Aeson.Types (Pair, Parser, parseMaybe)
+import Data.Aeson.Types (Pair, Parser, parseEither, parseMaybe)
 import Data.ByteString.Lazy qualified as BSL
 import Control.Monad (when, zipWithM)
 import Data.Either (lefts, rights)
@@ -44,7 +45,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, normalizeSchemaOpenAI, stripJsonFences)
+import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, normalizeSchemaOpenAI, unexpectedResponse)
 import LLM.Core.SSE (SSEEvent (sseData), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( commonImageMediaTypes,
@@ -61,6 +62,7 @@ import LLM.Core.Types
     ContentPart (..),
     LLMError (EmptyResponse, HttpError),
     LLMGateway,
+    LLMResult,
     LLMTextResult,
     MessageEncodeOptions (..),
     PartBody (..),
@@ -151,16 +153,7 @@ openAIProviderWithName name baseUrl baseOpts apiKey =
                      ]
                ],
       sendObjectRequest = sendRequest,
-      parseObjectResponse = \v ->
-        let parseObject :: Value -> Parser Text
-            parseObject = withObject "OpenAIObjectResponse" $ \o -> do
-              (choice : _) <- o .: "choices" :: Parser [Value]
-              withObject "choice" (\co -> co .: "message" >>= withObject "message" (.: "content")) choice
-         in case parseMaybe parseObject v of
-              Nothing -> pure $ Left EmptyResponse
-              Just contentStr -> case decodeStrict' (encodeUtf8 (stripJsonFences contentStr)) of
-                Nothing -> pure $ Left EmptyResponse
-                Just obj -> pure $ Right (obj, parseOpenAIUsage v)
+      parseObjectResponse = pure . parseOpenAIObjectResponse
     }
   where
     sendRequest body =
@@ -358,6 +351,27 @@ parseOpenAIResponse v = case parseMaybe go v of
 -- | The finish reason, if it says the response hit the token limit.
 truncationReason :: Maybe Text -> Maybe Text
 truncationReason r = if r == Just "length" then r else Nothing
+
+-- | Parse a structured-output response from an OpenAI-compatible chat
+-- completions API: the JSON text in the first choice's message content.
+--
+-- No choice, or a missing or null content, is 'EmptyResponse'; so is
+-- content that is empty once code fences are stripped. Content that is not
+-- valid JSON, and a body without the expected fields, are 'ParseError's
+-- that quote the decoder's message and the start of the text or body.
+parseOpenAIObjectResponse :: Value -> LLMResult (Value, Maybe Usage)
+parseOpenAIObjectResponse v = case parseEither content v of
+  Left err -> Left (unexpectedResponse err v)
+  Right Nothing -> Left EmptyResponse
+  Right (Just text) -> (\obj -> (obj, parseOpenAIUsage v)) <$> decodeObjectText text
+  where
+    content :: Value -> Parser (Maybe Text)
+    content = withObject "OpenAIObjectResponse" $ \o -> do
+      choices <- o .: "choices" :: Parser [Value]
+      case choices of
+        [] -> pure Nothing
+        choice : _ ->
+          withObject "choice" (\co -> co .: "message" >>= withObject "message" (.:? "content")) choice
 
 parseOpenAIUsage :: Value -> Maybe Usage
 parseOpenAIUsage = parseMaybe $ withObject "OpenAIResponse" $ \o -> do

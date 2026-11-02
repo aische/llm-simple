@@ -6,6 +6,7 @@ module LLM.Core.Utils
     withRetry,
     withTimeout,
     withFirstEventTimeout,
+    interruptOnAbort,
     trySync,
     streamResponseJson,
     printValue,
@@ -37,6 +38,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Unique (Unique, newUnique)
+import LLM.Core.Abort (AbortSignal, isAborted, waitAborted)
 import LLM.Core.Types
   ( ChatResponse (..),
     ContentPart (..),
@@ -109,6 +111,42 @@ withFirstEventTimeout (Just ms) run onEvent = do
     (guard . (== ex))
     (\_ -> pure (Left TimeoutError))
     (bracket watchdog (uninterruptibleMask_ . killThread) (\_ -> run onEvent'))
+
+-- | Run an action, interrupting it when the abort signal fires. Returns
+-- 'Nothing' if the signal had fired before the action started, or fired
+-- while it ran. In the second case the action received an asynchronous
+-- exception, so its 'bracket' cleanups (such as closing an HTTP connection)
+-- have run. With no signal, the action runs normally.
+--
+-- The action stays on the calling thread. A watchdog thread waits for the
+-- signal and throws to it. Code that catches every exception, asynchronous
+-- ones included, can swallow the interrupt and keep running.
+interruptOnAbort :: Maybe AbortSignal -> IO a -> IO (Maybe a)
+interruptOnAbort Nothing act = Just <$> act
+interruptOnAbort (Just sig) act = do
+  aborted <- isAborted sig
+  if aborted
+    then pure Nothing
+    else do
+      caller <- myThreadId
+      ex <- AbortInterrupt <$> newUnique
+      let watchdog = forkIOWithUnmask $ \unmask -> unmask $ do
+            waitAborted sig
+            throwTo caller ex
+      handleJust
+        (guard . (== ex))
+        (\_ -> pure Nothing)
+        (bracket watchdog (uninterruptibleMask_ . killThread) (\_ -> Just <$> act))
+
+newtype AbortInterrupt = AbortInterrupt Unique
+  deriving (Eq)
+
+instance Show AbortInterrupt where
+  show _ = "<<aborted>>"
+
+instance Exception AbortInterrupt where
+  toException = asyncExceptionToException
+  fromException = asyncExceptionFromException
 
 -- | Like @try \@SomeException@, but re-throws asynchronous exceptions
 -- ('System.Timeout.timeout', 'Control.Concurrent.killThread', @cancel@), so

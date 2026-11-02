@@ -35,10 +35,10 @@ data GenRequest = GenRequest
     grMessages :: [Turn],
     -- | Tool definitions included in the provider request.
     grTools :: [ToolDef],
-    -- | Cooperative cancellation. Checked before each model in the fallback
-    -- chain and before each attempt (also after throttle and backoff
-    -- sleeps); a stream is cut off at its next event. A non-streaming HTTP
-    -- call already in flight is not interrupted. Yields 'GErrAborted'.
+    -- | Cancellation. Checked before each model in the fallback chain. A
+    -- model call in flight (streaming or not, including its throttle and
+    -- backoff sleeps) is interrupted when the signal fires, and its HTTP
+    -- connection is closed. Yields 'GErrAborted'.
     grAbortSignal :: Maybe AbortSignal,
     -- | Provider wire hooks for raw request/response JSON.
     grLLMHooks :: LLMHooks,
@@ -67,7 +67,9 @@ data GenerateErrorResult = GenerateErrorResult
   { gerError :: GenerateError,
     -- | Turns produced before the failure. Safe to append to the history:
     -- every tool call has a result. On an abort during a tool round, calls
-    -- that did not run get the result "Aborted before execution".
+    -- that did not finish get the result "Aborted before execution". A call
+    -- interrupted while running counts as not finished, though its side
+    -- effects may have partly happened.
     gerPartialNewMessages :: [Turn],
     gerUsage :: Usage
   }

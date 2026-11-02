@@ -48,7 +48,8 @@ data Agent = Agent
 data RuntimeArgs = RuntimeArgs
   { -- | Correlates lifecycle events and result records for one run.
     rtGenerationId :: UUID,
-    -- | When fired, in-flight generation and tool execution stop cooperatively.
+    -- | When fired, the model call or tool call in flight is interrupted and
+    -- the run ends with 'LLM.Generate.Types.GErrAborted'.
     rtAbortSignal :: Maybe AbortSignal,
     -- | Provider wire hooks (request/response JSON). See 'LLMHooks'.
     rtLLMHooks :: LLMHooks,

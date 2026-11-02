@@ -2,8 +2,10 @@
 
 module LLM.ChatSpec (spec) where
 
+import Control.Concurrent (forkIO, newEmptyMVar, putMVar, takeMVar, threadDelay)
+import Control.Exception (finally)
 import Data.Aeson (object, (.=))
-import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Map qualified as Map
 import Data.Text (Text)
 import Heptapod (generate)
@@ -37,7 +39,7 @@ import LLM.Core.Types
     mkToolCall,
   )
 import LLM.Core.Usage (PricingInfo (..), defaultPricingInfo, mkUsage)
-import LLM.Generate.Logger (noHooks)
+import LLM.Generate.Logger (Hooks (..), noHooks)
 import LLM.Generate.ModelConfig
   ( ModelCapabilities (..),
     ModelConfig (..),
@@ -55,8 +57,10 @@ import Test.Hspec
     expectationFailure,
     it,
     shouldBe,
+    shouldReturn,
     shouldSatisfy,
   )
+import System.Timeout (timeout)
 
 -- | A mock gateway that returns a fixed response
 mockGateway :: ChatResponse -> LLMGateway
@@ -173,6 +177,41 @@ runGenerate ::
 runGenerate agent models toolMap mSig turns = do
   rt <- mkRuntime mSig
   generateText agent models toolMap rt turns
+
+-- | A tool named @name@ that ignores its arguments and runs @act@.
+constTool :: Text -> IO Text -> Tool Text
+constTool name act =
+  Tool
+    { toolDef =
+        ToolDef
+          { toolName = name,
+            toolDescription = "test tool",
+            toolReadonly = True,
+            toolParameters = object ["type" .= ("object" :: Text)]
+          },
+      toolExecute = \_ _ -> act
+    }
+
+-- | A gateway that always asks for two calls (@c1@, @c2@) of tool @name@.
+twoToolCallGateway :: Text -> LLMGateway
+twoToolCallGateway name =
+  LLMGateway
+    { gwName = "mock-two",
+      gwImageMediaTypes = supportedImageMediaTypes,
+      gwImageUrlSupport = True,
+      gwGenerateText = \_ _ ->
+        let tc1 = mkToolCall "c1" name (object [])
+            tc2 = mkToolCall "c2" name (object [])
+         in pure $ Right (ChatResponse "" [toolCallPart tc1, toolCallPart tc2] Nothing Nothing),
+      gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing),
+      gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
+    }
+
+-- | (call id, content) of the results in the last turn, if it is a tool turn.
+lastToolResults :: [Turn] -> Maybe [(Text, Text)]
+lastToolResults turns = case reverse turns of
+  ToolTurn results : _ -> Just [(r.trCallId, r.trContent) | r <- results]
+  _ -> Nothing
 
 runStreamGenerate ::
   Agent ->
@@ -514,47 +553,47 @@ spec = describe "Chat" $ do
         Left GenerateErrorResult {gerError = GErrAborted} -> pure ()
         other -> expectationFailure $ "Expected GErrAborted, got: " <> show other
 
-    it "returns Aborted during tool execution" $ do
+    it "stops before the next tool call once the signal fired" $ do
       sig <- newAbortSignal
-      let slowTool =
-            Tool
-              { toolDef =
-                  ToolDef
-                    { toolName = "slow",
-                      toolDescription = "A slow tool",
-                      toolReadonly = True,
-                      toolParameters = object ["type" .= ("object" :: Text)]
-                    },
-                toolExecute = \_ _ -> do
-                  abort sig
-                  pure "done"
-              }
-          twoCallGw =
-            LLMGateway
-              { gwName = "mock-two",
-                gwImageMediaTypes = supportedImageMediaTypes,
-                gwImageUrlSupport = True,
-                gwGenerateText = \_ _ ->
-                  let tc1 = mkToolCall "c1" "slow" (object [])
-                      tc2 = mkToolCall "c2" "slow" (object [])
-                   in pure $ Right (ChatResponse "" [toolCallPart tc1, toolCallPart tc2] Nothing Nothing),
-                gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing),
-                gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
-              }
-          tm = Map.fromList [("slow", slowTool)]
+      let tm = Map.fromList [("slow", constTool "slow" (pure "done"))]
           agent = defaultAgent {agTools = ["slow"]}
-          models = ModelWithFallbacks (mockModel twoCallGw) []
-      result <- runGenerate agent models tm (Just sig) [UserTurn "go"]
+          models = ModelWithFallbacks (mockModel (twoToolCallGateway "slow")) []
+      rt <- mkRuntime (Just sig)
+      -- Fire the signal once the first call has finished.
+      let rt' = rt {rtHooks = noHooks {onToolResult = \_ _ -> abort sig}}
+      result <- generateText agent models tm rt' [UserTurn "go"]
       case result of
         Left GenerateErrorResult {gerError = GErrAborted, gerPartialNewMessages} ->
           -- Every tool call in the history must have a result, or the next
           -- request is rejected. c1 ran; c2 never did.
-          case reverse gerPartialNewMessages of
-            ToolTurn results : _ ->
-              [(r.trCallId, r.trContent) | r <- results]
-                `shouldBe` [("c1", "done"), ("c2", "Aborted before execution")]
-            _ -> expectationFailure $ "Expected history to end with a ToolTurn, got: " <> show gerPartialNewMessages
+          lastToolResults gerPartialNewMessages
+            `shouldBe` Just [("c1", "done"), ("c2", "Aborted before execution")]
         other -> expectationFailure $ "Expected GErrAborted during tools, got: " <> show other
+
+    it "interrupts a running tool" $ do
+      sig <- newAbortSignal
+      started <- newEmptyMVar
+      finished <- newIORef False
+      errors <- newIORef []
+      let hangingTool =
+            constTool "hang" $
+              (putMVar started () >> threadDelay 60_000_000 >> pure "done")
+                `finally` writeIORef finished True
+          tm = Map.fromList [("hang", hangingTool)]
+          agent = defaultAgent {agTools = ["hang"]}
+          models = ModelWithFallbacks (mockModel (twoToolCallGateway "hang")) []
+      rt <- mkRuntime (Just sig)
+      let rt' = rt {rtHooks = noHooks {onToolError = \name msg -> modifyIORef' errors ((name, msg) :)}}
+      _ <- forkIO (takeMVar started >> abort sig)
+      result <- timeout 5_000_000 $ generateText agent models tm rt' [UserTurn "go"]
+      case result of
+        Just (Left GenerateErrorResult {gerError = GErrAborted, gerPartialNewMessages}) ->
+          -- The interrupted call counts as not run.
+          lastToolResults gerPartialNewMessages
+            `shouldBe` Just [("c1", "Aborted before execution"), ("c2", "Aborted before execution")]
+        other -> expectationFailure $ "Expected GErrAborted from the running tool, got: " <> show other
+      readIORef finished `shouldReturn` True
+      readIORef errors `shouldReturn` [("hang", "Aborted")]
 
     describe "sticky fallback" $ stickyFallbackSpec runGenerate toolMap
 

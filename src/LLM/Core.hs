@@ -56,6 +56,7 @@ module LLM.Core
     abort,
     isAborted,
     isAbortedMaybe,
+    waitAborted,
     LLMProvider (..),
     hasToolCalls,
     getToolCalls,

@@ -130,8 +130,9 @@ streamTextAttempts emittedRef onChunk gr mc =
             writeIORef emittedRef False
           ProviderStreamCallback {pscOnEvent, pscFinalize} <-
             mkProviderStreamCallback gr onChunk'
-          -- Cut the stream off at the first event after the abort signal
-          -- fired: the callback throws out of the provider's stream reader.
+          -- Deliver no event after the abort signal fired. ('callWithRetry'
+          -- also interrupts the attempt, but asynchronously, so an event
+          -- could otherwise slip through first.)
           let onEvent e = do
                 aborted <- isAbortedMaybe gr.grAbortSignal
                 if aborted then throwIO StreamAborted else pscOnEvent e

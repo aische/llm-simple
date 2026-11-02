@@ -7,8 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `waitAborted :: AbortSignal -> IO ()` (in `LLM.Core.Abort` and
+  `LLM.Core`) blocks until the signal fires.
+- `LLM.Core.Utils.interruptOnAbort` runs an action and interrupts it when
+  the signal fires.
+
 ### Fixed
 
+- An abort now interrupts work in flight. Before, the signal was only
+  checked between steps, so it could not stop a non-streaming call that was
+  waiting for its response, a stream that stalled after its first event, a
+  throttle or backoff sleep, or a running tool. **Behaviour change:**
+  - When `grAbortSignal` / `rtAbortSignal` fires, the model call in flight
+    is interrupted wherever it is, its HTTP connection is closed, and the
+    call returns `GErrAborted`.
+  - A tool call that is running when the signal fires is interrupted. It
+    counts as not run: it gets the result "Aborted before execution", like
+    the calls after it, and `onToolError` reports `"Aborted"`. Its side
+    effects may have partly happened.
+  - The interrupt is an asynchronous exception thrown to the calling thread.
+    Tool code that catches every exception, asynchronous ones included, can
+    swallow it and keep running.
+  - A stream that stalls after its first event still blocks until it is
+    aborted: there is no idle timeout yet.
 - A truncated or corrupt stream is no longer reported as success.
   **Behaviour change:** some streams that used to return `Right` with a
   partial answer, or throw, now return `Left`.

@@ -2,13 +2,14 @@
 
 module LLM.StreamingSpec (spec) where
 
-import Control.Concurrent (threadDelay)
+import Control.Concurrent (MVar, forkIO, newEmptyMVar, putMVar, takeMVar, threadDelay)
+import Control.Exception (finally)
 import Control.Monad (when)
 import Control.Retry (RetryPolicyM (getRetryPolicyM), RetryStatus (rsIterNumber), defaultRetryStatus)
 import Data.Aeson (object, (.=))
-import Data.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef)
+import Data.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Text (Text)
-import LLM.Core.Abort (abort, newAbortSignal)
+import LLM.Core.Abort (AbortSignal, abort, newAbortSignal)
 import LLM.Core.Types
   ( ChatResponse (..),
     LLMError (..),
@@ -34,6 +35,7 @@ import LLM.Generate.Types
     RoundTextRole (..),
     StreamChunk (..),
   )
+import System.Timeout (timeout)
 import Test.Hspec (Spec, describe, it, shouldBe, shouldReturn)
 
 spec :: Spec
@@ -173,6 +175,50 @@ spec = describe "Streaming" $ do
       fmap (.respText) r `shouldBe` Left GErrAborted
       reverse <$> readIORef ref `shouldReturn` [TextDelta "a"]
 
+    it "interrupts a stream that stalls after its first event" $ do
+      sig <- newAbortSignal
+      started <- newEmptyMVar
+      closed <- newIORef False
+      let resp = ChatResponse "a" [textPart "a"] Nothing Nothing
+          gw =
+            (streamGateway [] resp)
+              { gwStreamText = \_ _ onEvent ->
+                  (onEvent (StreamDelta "a") >> putMVar started () >> hang >> pure (Right resp))
+                    `finally` writeIORef closed True
+              }
+          -- The first event arrives in time, so the first-event timeout is off.
+          mc = (testModelConfig gw) {mcRequestTimeout = Just 1000}
+      abortAfter started sig
+      ref <- newIORef []
+      r <- timeout 5_000_000 $ streamTextWithFallbacks (\c -> modifyIORef' ref (c :)) (testGenRequest []) {grAbortSignal = Just sig} (ModelWithFallbacks mc [])
+      fmap (fmap (.respText)) r `shouldBe` Just (Left GErrAborted)
+      readIORef closed `shouldReturn` True
+      reverse <$> readIORef ref `shouldReturn` [TextDelta "a"]
+
+    it "interrupts a non-streaming call in flight" $ do
+      sig <- newAbortSignal
+      started <- newEmptyMVar
+      closed <- newIORef False
+      let gw =
+            (streamGateway [] (ChatResponse "" [] Nothing Nothing))
+              { gwGenerateText = \_ _ ->
+                  (putMVar started () >> hang >> pure (Left TimeoutError))
+                    `finally` writeIORef closed True
+              }
+      abortAfter started sig
+      r <- timeout 5_000_000 $ generateTextWithFallbacks (testGenRequest []) {grAbortSignal = Just sig} (ModelWithFallbacks (testModelConfig gw) [])
+      fmap (fmap (.respText)) r `shouldBe` Just (Left GErrAborted)
+      readIORef closed `shouldReturn` True
+
+    it "interrupts the throttle sleep before a call" $ do
+      sig <- newAbortSignal
+      (gw, calls) <- countingGateway (Right (ChatResponse "hi" [textPart "hi"] Nothing Nothing))
+      let mc = (testModelConfig gw) {mcThrottleDelay = Just 60_000}
+      _ <- forkIO (threadDelay 50_000 >> abort sig)
+      r <- timeout 5_000_000 $ generateTextWithFallbacks (testGenRequest []) {grAbortSignal = Just sig} (ModelWithFallbacks mc [])
+      fmap (fmap (.respText)) r `shouldBe` Just (Left GErrAborted)
+      readIORef calls `shouldReturn` 0
+
   describe "modelRetryPolicy" $ do
     it "caps the backoff delay at 30 s" $ do
       let mc =
@@ -228,6 +274,14 @@ spec = describe "Streaming" $ do
                      TextDelta "xyz",
                      RoundTextRoleCommitted AnswerRole
                    ]
+
+-- | Block for a minute: long enough that only an abort ends it in a test.
+hang :: IO ()
+hang = threadDelay 60_000_000
+
+-- | Fire @sig@ from another thread once @started@ is filled.
+abortAfter :: MVar () -> AbortSignal -> IO ()
+abortAfter started sig = () <$ forkIO (takeMVar started >> abort sig)
 
 -- | First call streams @first@ (if non-empty) then fails with a retryable
 -- 503; later calls stream @second@ and succeed.

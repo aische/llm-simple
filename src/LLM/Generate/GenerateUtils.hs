@@ -16,6 +16,7 @@ import Control.Monad (when)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.List (nub)
+import Data.Maybe (fromMaybe)
 import LLM.Core.Abort (isAbortedMaybe)
 import LLM.Core.Types
   ( ChatRequest (..),
@@ -30,7 +31,7 @@ import LLM.Core.Types
     conversationHasImages,
   )
 import LLM.Core.Usage (Usage (..), estimateCost)
-import LLM.Core.Utils (withRetry, withTimeout)
+import LLM.Core.Utils (interruptOnAbort, withRetry, withTimeout)
 import LLM.Generate.Logger (Hooks (..), LogLevel (..))
 import LLM.Generate.ModelConfig
   ( ModelCapabilities (..),
@@ -139,14 +140,20 @@ imageSources turns =
 
 -- | Run one model call with the model's throttle delay and retry policy.
 -- @attempt@ is run once per try; any per-attempt timeout must be inside it.
+--
+-- When 'grAbortSignal' fires, the call is interrupted wherever it is (in an
+-- attempt, or in the throttle or backoff sleep) and returns 'Aborted'. An
+-- interrupted attempt is cancelled, which closes its HTTP connection.
 callWithRetry ::
   GenRequest ->
   ModelConfig ->
   IO (Either LLMError a) ->
   IO (Either LLMError a)
 callWithRetry gr mc attempt =
-  maybeThrottle mc.mcThrottleDelay $
-    withRetry (modelRetryPolicy mc) (gr.grHooks.onLog Warn) (unlessAborted gr attempt)
+  fmap (fromMaybe (Left Aborted)) $
+    interruptOnAbort gr.grAbortSignal $
+      maybeThrottle mc.mcThrottleDelay $
+        withRetry (modelRetryPolicy mc) (gr.grHooks.onLog Warn) (unlessAborted gr attempt)
 
 -- | Run @act@ unless 'grAbortSignal' has fired, else return 'Aborted'
 -- (which is not retried). Checked before every attempt, so also after

@@ -21,6 +21,7 @@ import Control.Exception (SomeException, fromException)
 import Data.Aeson (FromJSON)
 import Data.Aeson qualified as AE
 import Data.Map qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import LLM.Agent.Tools.HistoryTool (historyToolTyped)
@@ -40,32 +41,42 @@ import LLM.Core.Types
     TypedTool (TypedTool),
   )
 import LLM.Core.Usage (Usage)
-import LLM.Core.Utils (toolResult, trySync)
+import LLM.Core.Utils (interruptOnAbort, toolResult, trySync)
 import LLM.Generate.Logger (Hooks (..))
 import LLM.Generate.Types (GenRequest (..))
 import LLM.Tools.FsConfig (SandboxViolation, formatSandboxViolation)
 
 -- | Execute a single tool call by looking it up in the tool list
 executeTool :: Hooks -> ToolContext -> [Tool Text] -> ToolCall -> IO ToolResult
-executeTool hooks ctx tools tc = case lookup tc.tcName toolMap of
-  Nothing -> pure $ toolResult tc ("Unknown tool: " <> tc.tcName)
+executeTool hooks ctx tools tc =
+  -- Without a signal the call cannot be interrupted, so the default is unused.
+  fromMaybe (toolResult tc "Aborted") <$> executeToolInterruptible Nothing hooks ctx tools tc
+
+-- | Like 'executeTool', but the tool is interrupted when the signal fires.
+-- Returns 'Nothing' if it was; 'onToolError' then reports @\"Aborted\"@.
+executeToolInterruptible :: Maybe AbortSignal -> Hooks -> ToolContext -> [Tool Text] -> ToolCall -> IO (Maybe ToolResult)
+executeToolInterruptible mSig hooks ctx tools tc = case lookup tc.tcName toolMap of
+  Nothing -> pure $ Just $ toolResult tc ("Unknown tool: " <> tc.tcName)
   Just tool -> do
     if ctx.tcRuntimeArgs.rtReadonly && not tool.toolDef.toolReadonly
       then do
         let msg = "Error: tool is not available in readonly mode: " <> tc.tcName
         hooks.onToolError tc.tcName msg
-        pure $ toolResult tc msg
+        pure $ Just $ toolResult tc msg
       else do
         hooks.onToolCall tc.tcName (AE.toJSON tc.tcArguments)
-        result <- trySync (tool.toolExecute ctx tc.tcArguments)
+        result <- interruptOnAbort mSig (trySync (tool.toolExecute ctx tc.tcArguments))
         case result of
-          Right text -> do
+          Nothing -> do
+            hooks.onToolError tc.tcName "Aborted"
+            pure Nothing
+          Just (Right text) -> do
             hooks.onToolResult tc.tcName text
-            pure $ toolResult tc text
-          Left (e :: SomeException) -> do
+            pure $ Just $ toolResult tc text
+          Just (Left (e :: SomeException)) -> do
             let msg = formatToolException e
             hooks.onToolError tc.tcName msg
-            pure $ toolResult tc ("Tool error: " <> msg)
+            pure $ Just $ toolResult tc ("Tool error: " <> msg)
   where
     toolMap = [(t.toolDef.toolName, t) | t <- tools]
 
@@ -77,12 +88,14 @@ executeTools hooks ctx tools = mapM (executeTool hooks ctx tools)
 data ToolRoundOutcome
   = -- | Every call ran.
     ToolRoundCompleted [ToolResult]
-  | -- | The abort signal fired: results of the calls that ran, and the calls
-    -- that did not.
+  | -- | The abort signal fired: results of the calls that finished, and the
+    -- calls that did not. The first of those may have been interrupted while
+    -- running, so its side effects may have partly happened.
     ToolRoundAborted [ToolResult] [ToolCall]
   deriving (Show, Eq)
 
--- | Execute tool calls one at a time, checking the abort signal before each.
+-- | Execute tool calls one at a time. The abort signal is checked before
+-- each call, and a call that is running when it fires is interrupted.
 executeToolsWithAbort :: Maybe AbortSignal -> Hooks -> ToolContext -> [Tool Text] -> [ToolCall] -> IO ToolRoundOutcome
 executeToolsWithAbort Nothing hooks ctx tools tcs = ToolRoundCompleted <$> executeTools hooks ctx tools tcs
 executeToolsWithAbort (Just sig) hooks ctx tools tcs = go [] tcs
@@ -90,11 +103,13 @@ executeToolsWithAbort (Just sig) hooks ctx tools tcs = go [] tcs
     go acc [] = pure (ToolRoundCompleted (reverse acc))
     go acc remaining@(tc : rest) = do
       aborted <- isAborted sig
-      if aborted
-        then pure (ToolRoundAborted (reverse acc) remaining)
-        else do
-          r <- executeTool hooks ctx tools tc
-          go (r : acc) rest
+      r <-
+        if aborted
+          then pure Nothing
+          else executeToolInterruptible (Just sig) hooks ctx tools tc
+      case r of
+        Nothing -> pure (ToolRoundAborted (reverse acc) remaining)
+        Just res -> go (res : acc) rest
 
 createToolContext ::
   Agent ->

@@ -6,7 +6,7 @@ module LLM.Core.LLMProvider
   )
 where
 
-import Control.Exception (Handler (..), catches)
+import Control.Exception (Exception, Handler (..), SomeAsyncException, SomeException, catch, catches, fromException, throwIO, try)
 import Data.Aeson (Value, eitherDecodeStrict')
 import Data.ByteString (ByteString)
 import Data.Text (Text)
@@ -58,11 +58,17 @@ data LLMProvider = LLMProvider
   }
 
 -- | Generic streaming chat via the LLMProvider.
+--
+-- An exception thrown by the stream callback propagates unchanged, even an
+-- 'HttpException' (the caller's own HTTP call, say): it is not the
+-- provider's failure, so it is neither a 'NetworkError' nor retried.
 genericStreamText :: LLMProvider -> LLMHooks -> ChatRequest -> (StreamEvent -> IO ()) -> IO LLMTextResult
 genericStreamText p hooks r callback = do
   let body = p.buildBody True r
   hooks.onLLMRequest p.providerName body
-  result <- providerCall p hooks (p.openStream body (\readChunk -> p.parseStream body readChunk callback))
+  result <-
+    unwrapCallbackFailure $
+      providerCall p hooks (p.openStream body (\readChunk -> p.parseStream body readChunk (wrapCallback callback)))
   case result of
     Left e -> pure (Left e)
     Right r' -> do
@@ -93,6 +99,31 @@ genericGenerateObject p hooks schema r = do
   case result of
     Left e -> pure (Left e)
     Right resp -> handleResponse p hooks p.parseObjectResponse resp
+
+-- | An exception thrown by the caller's stream callback, carried past the
+-- provider's exception handlers.
+newtype CallbackFailure = CallbackFailure SomeException
+  deriving (Show)
+
+instance Exception CallbackFailure
+
+-- | Wrap whatever the callback throws in 'CallbackFailure'. Asynchronous
+-- exceptions (an abort, a timeout) are thrown to the thread, not by the
+-- callback, and pass through unwrapped.
+wrapCallback :: (a -> IO ()) -> a -> IO ()
+wrapCallback callback ev =
+  callback ev `catch` \(e :: SomeException) ->
+    case fromException e of
+      Just (_ :: SomeAsyncException) -> throwIO e
+      Nothing -> throwIO (CallbackFailure e)
+
+-- | Rethrow the callback's own exception unchanged.
+unwrapCallbackFailure :: IO a -> IO a
+unwrapCallbackFailure act = do
+  r <- try act
+  case r of
+    Left (CallbackFailure e) -> throwIO e
+    Right a -> pure a
 
 -- | Run a provider's HTTP call. An 'HttpException' becomes a 'NetworkError'
 -- and a response body over the size cap a 'ParseError'; both are reported

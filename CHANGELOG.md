@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An `HttpException` thrown by the caller's own stream callback (for
+  example from an HTTP call it makes) is no longer reported as the
+  provider's `NetworkError` and retried, which repeated the callback's
+  effects. It now propagates from `streamTextLLM` (and the functions built
+  on it) unchanged, after one attempt, like any other exception from the
+  callback.
 - Provider response bodies are now bounded. **Behaviour change:**
   - An error body (non-200) is read up to 64 KiB and cut there, with `...`
     appended, for both streaming and non-streaming calls. `readAll` does

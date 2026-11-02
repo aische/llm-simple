@@ -179,6 +179,25 @@ spec = describe "FsTools" $ do
       doesFileExist (sb </> "moved.txt") `shouldReturn` True
       doesFileExist (sb </> "copy.txt") `shouldReturn` False
 
+    it "move_file refuses to overwrite an existing file and changes neither" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "a.txt") "A"
+      BS.writeFile (sb </> "b.txt") "B"
+      result <- runTool tm "move_file" (object ["source" .= ("a.txt" :: Text), "destination" .= ("b.txt" :: Text)])
+      result `shouldBe` "Error: destination already exists: b.txt; remove it first"
+      BS.readFile (sb </> "a.txt") `shouldReturn` "A"
+      BS.readFile (sb </> "b.txt") `shouldReturn` "B"
+
+    it "move_file refuses to move onto a dangling link" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "a.txt") "A"
+      createFileLink (sb </> "missing.txt") (sb </> "link.txt")
+      result <- runTool tm "move_file" (object ["source" .= ("a.txt" :: Text), "destination" .= ("link.txt" :: Text)])
+      result `shouldBe` "Error: destination already exists: link.txt; remove it first"
+      BS.readFile (sb </> "a.txt") `shouldReturn` "A"
+      doesPathExist (sb </> "missing.txt") `shouldReturn` False
+      pathIsSymbolicLink (sb </> "link.txt") `shouldReturn` True
+
   describe "multi_replace_in_file" $ do
     it "applies ordered replacements" $ withSandbox $ \sb -> do
       tm <- fsTools sb

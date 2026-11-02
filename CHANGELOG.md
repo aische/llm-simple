@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `move_file` no longer overwrites its destination silently. If anything
+  exists there, a symbolic link included (even a dangling one), it returns
+  "Error: destination already exists: <dst>; remove it first" and changes
+  nothing. **Behaviour change.** The check and the rename are not atomic,
+  so another process can still create the destination in between.
 - An exception thrown by a hook no longer fails a run whose side effects
   (a tool call, a paid model call) already happened. **Behaviour change:**
   every entry point (`generateTextLLM`, `streamTextLLM`, the

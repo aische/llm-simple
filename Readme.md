@@ -252,7 +252,7 @@ Define a `Tool` with a `ToolDef` (sent to the model) and an execution function, 
 | `file_info`             | File metadata                           |
 | `find_files`            | Find files by pattern                   |
 | `grep`                  | Search file contents                    |
-| `move_file`             | Move/rename a file                      |
+| `move_file`             | Move/rename a file (never overwrites)   |
 | `multi_replace_in_file` | Multiple search-and-replace in one file |
 | `readdir`               | List directory contents                 |
 | `read_file_paginated`   | Read a file in pages                    |

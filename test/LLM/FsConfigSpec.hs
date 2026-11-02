@@ -1,8 +1,9 @@
 module LLM.FsConfigSpec (spec) where
 
-import Control.Exception (try)
+import Control.Exception (IOException, try)
 import LLM.Tools.FsConfig
   ( SandboxViolation (..),
+    isSymlink,
     mkFsConfig,
     sandboxPath,
     sandboxWritePath,
@@ -24,6 +25,7 @@ import Test.Hspec
     expectationFailure,
     it,
     shouldBe,
+    shouldReturn,
     shouldSatisfy,
   )
 
@@ -167,6 +169,34 @@ spec = describe "FsConfig sandbox" $ do
         -- is permitted and lands on the link's target, not the link.
         resolved <- sandboxWritePath cfg "dangling"
         resolved `shouldBe` (sb </> "real-new.txt")
+
+  describe "isSymlink" $ do
+    it "is False when nothing exists at the path" $ withSandbox $ \sb -> do
+      writeFile (sb </> "file.txt") "x"
+      isSymlink (sb </> "missing") `shouldReturn` False
+      isSymlink (sb </> "missing" </> "child") `shouldReturn` False
+      -- ENOTDIR: a component on the way is a regular file
+      isSymlink (sb </> "file.txt" </> "child") `shouldReturn` False
+
+    it "is True for a symlink, dangling or not" $ withSandbox $ \sb -> do
+      writeFile (sb </> "file.txt") "x"
+      createFileLink (sb </> "file.txt") (sb </> "link")
+      createFileLink (sb </> "gone") (sb </> "dangling")
+      isSymlink (sb </> "link") `shouldReturn` True
+      isSymlink (sb </> "dangling") `shouldReturn` True
+
+    it "is True when the lookup fails for another reason" $ withSandbox $ \sb -> do
+      -- Looking up loop/child must follow loop, which points to itself (ELOOP).
+      createFileLink (sb </> "loop") (sb </> "loop")
+      isSymlink (sb </> "loop" </> "child") `shouldReturn` True
+
+    it "keeps a path under a regular file an ordinary error, not a violation" $ withSandbox $ \sb -> do
+      cfg <- mkFsConfig sb
+      writeFile (sb </> "file.txt") "x"
+      r <- try (sandboxWritePath cfg "file.txt/new")
+      case r of
+        Left (_ :: IOException) -> pure ()
+        Right p -> expectationFailure ("expected an IOException, got " <> p)
 
   describe "sandboxWritePath: non-existent targets" $ do
     it "resolves a write path under a not-yet-existing nested dir" $ withSandbox $ \sb -> do

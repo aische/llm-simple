@@ -108,6 +108,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `IOException`. **Behaviour change:** the `IOException`s the filesystem
   tools throw carry the relative path, and `onToolError` gets the same
   redacted text as the model.
+- `isSymlink` (`LLM.Tools.FsConfig`) no longer fails open. When the lookup
+  failed for any reason, it answered `False` ("not a link"), so the sandbox
+  checks and the recursive tools treated a path they could not inspect as a
+  regular file or directory. It still answers `False` when nothing exists
+  at the path (missing, or a component is not a directory), so new paths
+  can be written. Any other failure (permission denied, a symlink loop) now
+  answers `True`, so the path is refused or skipped like a symlink.
+  **Behaviour change:** such a path now fails the sandbox check, is skipped
+  by `grep`, `find_files` and `directory_tree`, and is listed with `@` by
+  `readdir`.
 
 ## [0.4.0.1] - 2026-10-27
 

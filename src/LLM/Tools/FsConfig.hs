@@ -19,7 +19,9 @@ import Data.List (foldl')
 import Data.Text (Text)
 import Data.Text qualified as T
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesPathExist, pathIsSymbolicLink)
-import GHC.IO.Exception (IOException (ioe_filename))
+import Foreign.C.Error (Errno (..), eNOTDIR)
+import GHC.IO.Exception (IOException (ioe_errno, ioe_filename))
+import System.IO.Error (isDoesNotExistError)
 import System.FilePath (addTrailingPathSeparator, dropTrailingPathSeparator, equalFilePath, isRelative, joinPath, normalise, splitDirectories, splitFileName, takeDirectory, (</>))
 
 -- | Configuration for file-system tools.
@@ -236,10 +238,18 @@ pathExistsNoFollow p = do
   if exists then pure True else isSymlink p
 
 -- | Check whether a path is a symbolic link (without following it).
--- Returns 'False' if the path doesn't exist or can't be stat'd.
+--
+-- 'False' if nothing exists at the path: either it is missing, or a
+-- component on the way is not a directory (ENOTDIR). If the lookup fails
+-- for any other reason (permission denied, a symlink loop, ...), the
+-- answer is 'True': the path cannot be shown to be safe, and every caller
+-- refuses or skips a symlink.
 isSymlink :: FilePath -> IO Bool
 isSymlink p = do
   r <- try (pathIsSymbolicLink p) :: IO (Either IOException Bool)
   case r of
     Right b -> pure b
-    Left _ -> pure False
+    Left e -> pure (not (isMissing e))
+  where
+    isMissing e = isDoesNotExistError e || ioe_errno e == Just enotdir
+    Errno enotdir = eNOTDIR

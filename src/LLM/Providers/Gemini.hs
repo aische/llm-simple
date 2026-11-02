@@ -27,8 +27,8 @@ import Data.Aeson
 import Data.Aeson.KeyMap qualified as KM
 import Data.Aeson.Types (Pair, Parser, parseMaybe)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
-import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
-import Data.Char (isDigit)
+import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
+import Data.Char (isDigit, isSpace)
 import Data.Foldable (for_)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -37,7 +37,7 @@ import Data.UUID.Types (UUID)
 import Data.UUID.Types qualified as UUID
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
 import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, stripBoundsAndComments, stripJsonFences)
-import LLM.Core.SSE (SSEEvent (sseData), readSSEEvents)
+import LLM.Core.SSE (SSEEvent (sseData), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( supportedImageMediaTypes,
     ChatRequest
@@ -184,9 +184,12 @@ parseGeminiStream reader callback = do
   usageRef <- newIORef Nothing
   errorRef <- newIORef (Nothing :: Maybe LLMError)
   stopRef <- newIORef (Nothing :: Maybe GeminiStop)
-  readSSEEvents (HC.brRead reader) $ \sse -> do
+  malformedRef <- newIORef (Nothing :: Maybe Text)
+  badUtf8 <- readSSEEvents (HC.brRead reader) $ \sse -> do
     case decodeStrict' (encodeUtf8 sse.sseData) of
-      Nothing -> pure ()
+      Nothing
+        | T.all isSpace sse.sseData -> pure ()
+        | otherwise -> modifyIORef' malformedRef (<|> Just (malformedEvent sse.sseData))
       Just v -> do
         -- The stream stays HTTP 200 when it fails midway; the error arrives
         -- as a data event. Keep the first one.
@@ -206,7 +209,11 @@ parseGeminiStream reader callback = do
   usage <- readIORef usageRef
   mError <- readIORef errorRef
   stop <- readIORef stopRef
-  pure $ case mError of
+  malformed <- (badUtf8 <|>) <$> readIORef malformedRef
+  -- The last chunk carries a finishReason; a blocked prompt carries a
+  -- blockReason instead.
+  let complete = isJust stop
+  pure $ case mError <|> streamFailure "finishReason" complete malformed of
     Just err -> Left err
     Nothing
       | null parts -> Left (noContentError stop)

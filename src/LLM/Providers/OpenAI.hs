@@ -39,12 +39,13 @@ import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Control.Applicative ((<|>))
+import Data.Char (isSpace)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
 import LLM.Core.ProviderUtils (decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, normalizeSchemaOpenAI, stripJsonFences)
-import LLM.Core.SSE (SSEEvent (sseData), readSSEEvents)
+import LLM.Core.SSE (SSEEvent (sseData), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( commonImageMediaTypes,
     projectReasoning,
@@ -419,12 +420,18 @@ parseOpenAIStream reader callback = do
               callback (StreamToolCall tc)
             Nothing -> modifyIORef' badToolRef (<|> Just name)
         writeIORef toolAccRef Map.empty
-  readSSEEvents (HC.brRead reader) $ \sse -> do
+  -- Set by @[DONE]@ or a non-null @finish_reason@. Some compatible servers
+  -- send only one of the two.
+  doneRef <- newIORef False
+  malformedRef <- newIORef (Nothing :: Maybe Text)
+  badUtf8 <- readSSEEvents (HC.brRead reader) $ \sse -> do
     let raw = sse.sseData
     if raw == "[DONE]"
-      then pure ()
+      then writeIORef doneRef True
       else case decodeStrict' (encodeUtf8 raw) of
-        Nothing -> pure ()
+        Nothing
+          | T.all isSpace raw -> pure ()
+          | otherwise -> modifyIORef' malformedRef (<|> Just (malformedEvent raw))
         Just v -> do
           for_ (parseMaybe parseStreamError v) $ \status ->
             modifyIORef' errorRef (<|> Just (HttpError status raw))
@@ -443,6 +450,7 @@ parseOpenAIStream reader callback = do
           case parseMaybe parseFinishReason v of
             Just reason -> do
               writeIORef finishReasonRef (Just reason)
+              writeIORef doneRef True
               when (reason == "tool_calls") flushTools
             Nothing -> pure ()
           case parseMaybe parseStreamUsage v of
@@ -461,7 +469,9 @@ parseOpenAIStream reader callback = do
   mError <- readIORef errorRef
   mBadTool <- readIORef badToolRef
   finishReason <- readIORef finishReasonRef
-  pure $ case (mError, mBadTool) of
+  done <- readIORef doneRef
+  malformed <- (badUtf8 <|>) <$> readIORef malformedRef
+  pure $ case (mError <|> streamFailure "[DONE] or finish_reason" done malformed, mBadTool) of
     (Just err, _) -> Left err
     (Nothing, Just name) -> Left (invalidToolArgumentsError name (truncationReason finishReason))
     _

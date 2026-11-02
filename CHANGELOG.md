@@ -5,6 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A truncated or corrupt stream is no longer reported as success.
+  **Behaviour change:** some streams that used to return `Right` with a
+  partial answer, or throw, now return `Left`.
+  - The stream parsers did not check for the end-of-stream marker, so a
+    connection that closed cleanly partway through returned the text received
+    so far as a complete answer. Each protocol now needs its marker:
+    `[DONE]` or a `finish_reason` (OpenAI-compatible: OpenAI, DeepSeek,
+    Ollama), a `finishReason` or `blockReason` (Gemini), or `message_stop`
+    (Claude). A stream that ends without its marker is
+    `NetworkError "stream ended before <marker>"`. It is retried and then
+    falls back like any other network error.
+  - A data event that is not valid JSON was skipped. It is now a
+    `ParseError` quoting the start of the event.
+  - A stream event that is not valid UTF-8 threw a `UnicodeException`, which
+    escaped the typed error path, so fallback models were never tried. It is
+    now a `ParseError`.
+  - An in-band provider error event (for example Claude's `overloaded_error`)
+    still takes precedence over these checks.
+
 ## [0.4.0.1] - 2026-10-27
 
 ### Fixed

@@ -31,7 +31,9 @@ import Data.Aeson.Types (Object, Pair, Parser, parseMaybe)
 import Data.ByteString qualified as BS
 import Data.Foldable (for_)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
-import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, isNothing, mapMaybe)
+import Control.Monad (when)
+import Data.Char (isSpace)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
@@ -39,7 +41,7 @@ import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
 import LLM.Core.ProviderUtils (decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, stripJsonFences)
-import LLM.Core.SSE (SSEEvent (sseData, sseEvent), readSSEEvents)
+import LLM.Core.SSE (SSEEvent (sseData, sseEvent), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( commonImageMediaTypes,
     CacheHint (..),
@@ -488,13 +490,19 @@ parseClaudeStream modelHint readChunk callback = do
   errorRef <- newIORef (Nothing :: Maybe LLMError)
   stopReasonRef <- newIORef (Nothing :: Maybe Text)
   badToolRef <- newIORef (Nothing :: Maybe Text) -- first tool with invalid JSON args
-  readSSEEvents readChunk $ \sse -> do
+  stoppedRef <- newIORef False
+  malformedRef <- newIORef (Nothing :: Maybe Text)
+  badUtf8 <- readSSEEvents readChunk $ \sse -> do
+    let mv = decodeStrict' (encodeUtf8 sse.sseData) :: Maybe Value
+    when (isNothing mv && sse.sseEvent /= Just "error" && not (T.all isSpace sse.sseData)) $
+      modifyIORef' malformedRef (<|> Just (malformedEvent sse.sseData))
     case sse.sseEvent of
       Just "error" -> do
-        let status = maybe 500 claudeErrorStatus (parseMaybe parseErrorType =<< decodeStrict' (encodeUtf8 sse.sseData))
+        let status = maybe 500 claudeErrorStatus (parseMaybe parseErrorType =<< mv)
         modifyIORef' errorRef (<|> Just (HttpError status sse.sseData))
+      Just "message_stop" -> writeIORef stoppedRef True
       Just "message_start" ->
-        case decodeStrict' (encodeUtf8 sse.sseData) of
+        case mv of
           Just v -> do
             case parseMaybe parseMessageStartUsage v of
               Just startUsage -> modifyIORef' usageRef $ \u ->
@@ -509,7 +517,7 @@ parseClaudeStream modelHint readChunk callback = do
               (writeIORef modelRef)
           Nothing -> pure ()
       Just "content_block_start" ->
-        case decodeStrict' (encodeUtf8 sse.sseData) of
+        case mv of
           Just v -> case parseMaybe parseContentBlockStart v of
             Just (StartTool cid name) -> writeIORef toolAccRef (Just (cid, name, ""))
             Just StartThinking -> writeIORef thinkingAccRef (Just ("", Nothing))
@@ -518,7 +526,7 @@ parseClaudeStream modelHint readChunk callback = do
             Nothing -> pure ()
           Nothing -> pure ()
       Just "content_block_delta" ->
-        case decodeStrict' (encodeUtf8 sse.sseData) of
+        case mv of
           Just v -> do
             case parseMaybe parseTextDelta v of
               Just txt -> do
@@ -563,7 +571,7 @@ parseClaudeStream modelHint readChunk callback = do
             writeIORef toolAccRef Nothing
           Nothing -> pure ()
       Just "message_delta" ->
-        case decodeStrict' (encodeUtf8 sse.sseData) of
+        case mv of
           Just v -> do
             case parseMaybe parseMessageDeltaUsage v of
               Just outputToks -> modifyIORef' usageRef $ \u -> u {usageOutputTokens = outputToks}
@@ -577,9 +585,11 @@ parseClaudeStream modelHint readChunk callback = do
   mError <- readIORef errorRef
   mBadTool <- readIORef badToolRef
   stopReason <- readIORef stopReasonRef
+  stopped <- readIORef stoppedRef
+  malformed <- (badUtf8 <|>) <$> readIORef malformedRef
   let parts = map (streamBlockToPart model) rawBlocks
       truncated = if stopReason == Just "max_tokens" then stopReason else Nothing
-  pure $ case (mError, mBadTool) of
+  pure $ case (mError <|> streamFailure "message_stop" stopped malformed, mBadTool) of
     (Just err, _) -> Left err
     (Nothing, Just name) -> Left (invalidToolArgumentsError name truncated)
     _

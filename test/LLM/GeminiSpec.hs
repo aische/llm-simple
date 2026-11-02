@@ -226,7 +226,12 @@ spec = describe "Gemini" $ do
               <> "\""
               <> (if thought then ",\"thought\":true" else "")
               <> "}]}}],\"modelVersion\":\"gemini-2.5-flash\"}\n\n"
-          sse = chunk "Let me " True <> chunk "think about " True <> chunk "this." True <> chunk "Answer." False
+          sse =
+            chunk "Let me " True
+              <> chunk "think about " True
+              <> chunk "this." True
+              <> chunk "Answer." False
+              <> "data: {\"candidates\":[{\"finishReason\":\"STOP\"}]}\n\n"
       reader <- mkBodyReader sse
       result <- (geminiProvider "key").parseStream (object []) reader (\_ -> pure ())
       case result of

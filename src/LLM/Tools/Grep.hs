@@ -7,14 +7,14 @@ where
 import Autodocodec qualified as AC
 import Control.Exception (IOException, try)
 import Data.Aeson (FromJSON)
-import Data.ByteString qualified as BS
 import Data.List (sort)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath)
-import LLM.Tools.FsLimits (binarySniffBytes, expensiveWalkDepth, readTextFileLenient)
+import LLM.Tools.FsLimits (expensiveWalkDepth)
+import LLM.Tools.Internal.TextFile (readLenient, withTextHandle)
 import System.Directory
   ( doesDirectoryExist,
     doesFileExist,
@@ -212,21 +212,18 @@ searchFiles root files pat ci cap = go files [] 0 False
     go (f : rest) acc scanned truncated
       | length acc >= cap = go rest acc (scanned + 1) True
       | otherwise = do
-          isBin <- detectBinary f
-          if isBin
-            then go rest acc (scanned + 1) truncated
-            else do
-              r <-
-                try (readTextFileLenient f) ::
-                  IO (Either IOException Text)
-              case r of
-                Left _ -> go rest acc (scanned + 1) truncated
-                Right content -> do
-                  let ms = matchLines (relativeTo root f) content needle ci
-                      remaining = cap - length acc
-                      taken = take remaining ms
-                      truncated' = truncated || length ms > remaining
-                  go rest (reverse taken ++ acc) (scanned + 1) truncated'
+          -- Binary and unreadable files are skipped.
+          r <-
+            try (withTextHandle (withBinaryFile f ReadMode) readLenient) ::
+              IO (Either IOException (Maybe Text))
+          case r of
+            Right (Just content) -> do
+              let ms = matchLines (relativeTo root f) content needle ci
+                  remaining = cap - length acc
+                  taken = take remaining ms
+                  truncated' = truncated || length ms > remaining
+              go rest (reverse taken ++ acc) (scanned + 1) truncated'
+            _ -> go rest acc (scanned + 1) truncated
 
 data Match = Match
   { mPath :: FilePath,
@@ -286,15 +283,3 @@ renderResults rootDisplay pat matches scanned truncated =
         <> T.pack (show m.mLine)
         <> ": "
         <> m.mText
-
--- | NUL byte in the first few KB is a robust, cheap binary heuristic
--- (the same one used by git diff and grep). Uses the shared sniff
--- threshold from 'LLM.Tools.FsLimits' so all tools agree.
-detectBinary :: FilePath -> IO Bool
-detectBinary path = do
-  r <-
-    try (withBinaryFile path ReadMode (`BS.hGet` binarySniffBytes)) ::
-      IO (Either IOException BS.ByteString)
-  case r of
-    Right bs -> pure (BS.elem 0 bs)
-    Left _ -> pure True

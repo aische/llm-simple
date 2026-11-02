@@ -140,6 +140,7 @@ library
 
     other-modules:
         LLM.Core.SSE
+        LLM.Tools.Internal.TextFile
     hs-source-dirs:     src
     build-depends:
         aeson          >=2.0   && <2.3,

@@ -6,15 +6,15 @@ where
 
 import Autodocodec qualified as AC
 import Control.Exception (IOException, try)
+import Control.Monad (join)
 import Data.Aeson (FromJSON)
-import Data.ByteString qualified as BS
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath)
-import LLM.Tools.FsLimits (readTextFileLenient)
+import LLM.Tools.Internal.TextFile (readLenient, withTextHandle)
 import System.Directory
   ( Permissions (..),
     doesDirectoryExist,
@@ -26,11 +26,7 @@ import System.Directory
     listDirectory,
     pathIsSymbolicLink,
   )
-import System.IO (IOMode (ReadMode), withBinaryFile)
-
--- | Number of leading bytes inspected when sniffing for binary content.
-binarySniffBytes :: Int
-binarySniffBytes = 8192
+import System.IO (Handle, IOMode (ReadMode), withBinaryFile)
 
 -- | Skip line-counting on files larger than this (bytes). For large text
 -- files the line count is reported as "unknown (file too large)" so the
@@ -103,14 +99,15 @@ renderFileInfo ::
   IO Text
 renderFileInfo rel resolved isLink perms mtime = do
   size <- safeGetFileSize resolved
-  isBin <- detectBinary resolved
-  lineCount <-
-    if isBin
-      then pure Nothing
-      else case size of
-        Just n | n <= maxLineCountBytes -> safeLineCount resolved
+  -- 'Nothing' if the file looks binary or cannot be read.
+  sniffed <-
+    withTextHandle (withBinaryFile resolved ReadMode) $ \h ->
+      case size of
+        Just n | n <= maxLineCountBytes -> safeLineCount h
         _ -> pure Nothing
-  let header =
+  let isBin = null sniffed
+      lineCount = join sniffed
+      header =
         "=== "
           <> rel
           <> " | file"
@@ -217,9 +214,9 @@ safeListDirectory p = do
     Right xs -> xs
     Left _ -> []
 
-safeLineCount :: FilePath -> IO (Maybe Int)
-safeLineCount p = do
-  r <- try (readTextFileLenient p) :: IO (Either IOException Text)
+safeLineCount :: Handle -> IO (Maybe Int)
+safeLineCount h = do
+  r <- try (readLenient h) :: IO (Either IOException Text)
   pure $ case r of
     Right content -> Just (length (T.lines content))
     Left _ -> Nothing
@@ -227,14 +224,3 @@ safeLineCount p = do
 eitherToMaybe :: Either e a -> Maybe a
 eitherToMaybe (Right a) = Just a
 eitherToMaybe (Left _) = Nothing
-
--- | NUL byte in the first few KB is a robust, cheap binary heuristic
--- (the same one used by git diff and grep).
-detectBinary :: FilePath -> IO Bool
-detectBinary path = do
-  r <-
-    try (withBinaryFile path ReadMode (`BS.hGet` binarySniffBytes)) ::
-      IO (Either IOException BS.ByteString)
-  pure $ case r of
-    Right bs -> BS.elem 0 bs
-    Left _ -> True

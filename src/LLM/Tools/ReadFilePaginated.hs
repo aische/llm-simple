@@ -14,9 +14,11 @@ import Data.Text.Encoding.Error (lenientDecode)
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath)
-import LLM.Tools.FsLimits (detectBinary, maxPaginatedFileBytes)
+import LLM.Tools.FsLimits (maxPaginatedFileBytes)
+import LLM.Tools.Internal.TextFile (withTextHandle)
 import System.IO
-  ( IOMode (ReadMode),
+  ( Handle,
+    IOMode (ReadMode),
     hFileSize,
     withBinaryFile,
   )
@@ -78,36 +80,36 @@ execute cfg args = do
       offset = max 1 args._rfpOffset
       limit = max 1 (min maxLimit args._rfpLimit)
   resolved <- sandboxPath cfg rel
-  isBinary <- detectBinary resolved
-  if isBinary
-    then
-      pure $
-        "Error: "
-          <> args._rfpPath
-          <> " appears to be a binary file; read_file_paginated only supports text files."
-    else do
-      size <- withBinaryFile resolved ReadMode hFileSize
-      if size > maxPaginatedFileBytes
-        then
-          pure $
-            "Error: "
-              <> args._rfpPath
-              <> " is "
-              <> T.pack (show size)
-              <> " bytes, which exceeds the "
-              <> T.pack (show maxPaginatedFileBytes)
-              <> "-byte cap for read_file_paginated."
-        else do
-          (lns, hasMore) <- readPage resolved offset limit
-          pure $ renderPage args._rfpPath size offset lns hasMore
+  result <- withTextHandle (withBinaryFile resolved ReadMode) $ \h -> do
+    size <- hFileSize h
+    if size > maxPaginatedFileBytes
+      then pure (Left size)
+      else do
+        (lns, hasMore) <- readPage h offset limit
+        pure (Right (size, lns, hasMore))
+  pure $ case result of
+    Nothing ->
+      "Error: "
+        <> args._rfpPath
+        <> " appears to be a binary file; read_file_paginated only supports text files."
+    Just (Left size) ->
+      "Error: "
+        <> args._rfpPath
+        <> " is "
+        <> T.pack (show size)
+        <> " bytes, which exceeds the "
+        <> T.pack (show maxPaginatedFileBytes)
+        <> "-byte cap for read_file_paginated."
+    Just (Right (size, lns, hasMore)) ->
+      renderPage args._rfpPath size offset lns hasMore
 
 -- | Take up to @limit@ lines starting at line @offset@, and report whether
 -- more lines follow. Reads at most 'maxPaginatedFileBytes' (the file may
 -- have grown since the size check) and decodes leniently, so invalid UTF-8
 -- bytes show as U+FFFD instead of failing the read.
-readPage :: FilePath -> Int -> Int -> IO ([Text], Bool)
-readPage path offset limit = do
-  bytes <- withBinaryFile path ReadMode (`BS.hGet` fromIntegral maxPaginatedFileBytes)
+readPage :: Handle -> Int -> Int -> IO ([Text], Bool)
+readPage h offset limit = do
+  bytes <- BS.hGet h (fromIntegral maxPaginatedFileBytes)
   let rest = drop (offset - 1) (T.lines (decodeUtf8With lenientDecode bytes))
   pure (take limit rest, not (null (drop limit rest)))
 

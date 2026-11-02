@@ -33,10 +33,14 @@ where
 import Control.Exception (IOException, try)
 import Data.ByteString qualified as BS
 import Data.Text (Text)
-import Data.Text qualified as T
-import Data.Text.Encoding (decodeUtf8', decodeUtf8With, encodeUtf8)
+import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
 import Data.Text.Encoding.Error (lenientDecode)
-import System.IO (IOMode (ReadMode), hFileSize, withBinaryFile)
+import LLM.Tools.Internal.TextFile
+  ( binarySniffBytes,
+    readBoundedTextWith,
+    readBoundedUtf8With,
+  )
+import System.IO (IOMode (ReadMode), withBinaryFile)
 
 -- | Maximum directory depth for traversals that only stat entries.
 cheapWalkDepth :: Int
@@ -66,12 +70,6 @@ maxPaginatedFileBytes = 10 * 1024 * 1024 -- 10 MiB
 maxTreeEntries :: Int
 maxTreeEntries = 2000
 
--- | Number of leading bytes inspected when sniffing for binary content.
--- Matches the heuristic used by @git diff@ and @grep@: any NUL byte in
--- the prefix means binary.
-binarySniffBytes :: Int
-binarySniffBytes = 8192
-
 -- | A NUL byte in the first 'binarySniffBytes' is a robust, cheap binary
 -- heuristic. On I/O failure the file is treated as binary (the caller
 -- should fail closed rather than read an unreadable file as text).
@@ -88,18 +86,12 @@ detectBinary path = do
 -- become U+FFFD, so never write the result back; edit tools use
 -- 'readBoundedUtf8File'.
 readBoundedTextFile :: FilePath -> Text -> Int -> IO (Either Text Text)
-readBoundedTextFile path display cap =
-  fmap (decodeUtf8With lenientDecode) <$> readBoundedBytes path display cap
+readBoundedTextFile path = readBoundedTextWith (withBinaryFile path ReadMode)
 
 -- | Read a text file up to @cap@ bytes for editing. Refuses files that are
 -- not valid UTF-8, since writing them back would destroy their bytes.
 readBoundedUtf8File :: FilePath -> Text -> Int -> IO (Either Text Text)
-readBoundedUtf8File path display cap = do
-  r <- readBoundedBytes path display cap
-  pure $
-    r >>= \bs -> case decodeUtf8' bs of
-      Right t -> Right t
-      Left _ -> Left $ display <> " is not valid UTF-8; refusing to edit it."
+readBoundedUtf8File path = readBoundedUtf8With (withBinaryFile path ReadMode)
 
 -- | Read a whole file as UTF-8, replacing invalid bytes with U+FFFD.
 -- Independent of the locale. For read-only use.
@@ -109,59 +101,3 @@ readTextFileLenient path = decodeUtf8With lenientDecode <$> BS.readFile path
 -- | Write text as UTF-8, independent of the locale.
 writeUtf8File :: FilePath -> Text -> IO ()
 writeUtf8File path = BS.writeFile path . encodeUtf8
-
--- | Read a file up to @cap@ bytes. Refuses binary files, checks size
--- before reading, and performs a bounded read to mitigate TOCTOU growth.
-readBoundedBytes :: FilePath -> Text -> Int -> IO (Either Text BS.ByteString)
-readBoundedBytes path display cap = do
-  isBinary <- detectBinary path
-  if isBinary
-    then
-      pure $
-        Left $
-          display
-            <> " appears to be a binary file; only text files are supported."
-    else do
-      sizeRes <-
-        try (withBinaryFile path ReadMode hFileSize) ::
-          IO (Either IOException Integer)
-      case sizeRes of
-        Left e ->
-          pure $
-            Left $
-              "could not stat "
-                <> display
-                <> ": "
-                <> T.pack (show e)
-        Right sz
-          | sz > fromIntegral cap ->
-              pure $
-                Left $
-                  display
-                    <> " is "
-                    <> T.pack (show sz)
-                    <> " bytes, which exceeds the "
-                    <> T.pack (show cap)
-                    <> "-byte cap."
-          | otherwise -> do
-              bsRes <-
-                try (withBinaryFile path ReadMode (`BS.hGet` (cap + 1))) ::
-                  IO (Either IOException BS.ByteString)
-              case bsRes of
-                Left e ->
-                  pure $
-                    Left $
-                      "could not read "
-                        <> display
-                        <> ": "
-                        <> T.pack (show e)
-                Right bs
-                  | BS.length bs > cap ->
-                      pure $
-                        Left $
-                          display
-                            <> " grew past the "
-                            <> T.pack (show cap)
-                            <> "-byte cap during the read."
-                  | otherwise ->
-                      pure (Right bs)

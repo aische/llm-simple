@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `file_info` reports a symbolic link as a link. It resolved the path
+  first, so it described the target and never said "symlink". It now
+  shows `=== <path> | symbolic link ===` and the target relative to the
+  workspace, with its kind (file, directory, or does not exist); a target
+  outside the workspace is shown as "outside the workspace", not by its
+  host path. **Behaviour change.**
 - A path in which `..` would step back out of a symbolic link (`link/..`,
   `link/sub/../..`) is now refused with an error naming the link. The
   sandbox resolved `..` by name before following links, so such a path

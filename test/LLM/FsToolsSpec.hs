@@ -269,6 +269,23 @@ spec = describe "FsTools" $ do
         T.unpack out `shouldContain` "lnk"
         T.unpack out `shouldNotContain` "copy"
 
+    it "file_info reports a link inside the workspace as a link, with its target" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      createDirectory (sb </> "real")
+      BS.writeFile (sb </> "real" </> "f.txt") "x"
+      createFileLink (sb </> "real" </> "f.txt") (sb </> "lnk")
+      createFileLink (sb </> "real" </> "gone.txt") (sb </> "dangling")
+      out <- runTool tm "file_info" (object ["path" .= ("lnk" :: Text)])
+      T.lines out `shouldBe` ["=== lnk | symbolic link ===", "target: " <> T.pack ("real" </> "f.txt") <> " (file)"]
+      dangling <- runTool tm "file_info" (object ["path" .= ("dangling" :: Text)])
+      T.unpack dangling `shouldContain` "(does not exist)"
+
+    it "file_info does not name a link target outside the workspace" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      createFileLink (takeDirectory sb </> "secret.txt") (sb </> "out")
+      out <- runTool tm "file_info" (object ["path" .= ("out" :: Text)])
+      T.lines out `shouldBe` ["=== out | symbolic link ===", "target: outside the workspace"]
+
     it "still resolves '..' after an ordinary directory" $ withSandbox $ \sb -> do
       tm <- fsTools sb
       createDirectory (sb </> "dir")

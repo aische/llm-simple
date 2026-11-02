@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A path in which `..` would step back out of a symbolic link (`link/..`,
+  `link/sub/../..`) is now refused with an error naming the link. The
+  sandbox resolved `..` by name before following links, so such a path
+  named a different file than the operating system would open.
+  **Behaviour change** for such paths only. A surplus `..` at the
+  filesystem root no longer turns the path into a relative one.
 - `move_file` no longer overwrites its destination silently. If anything
   exists there, a symbolic link included (even a dangling one), it returns
   "Error: destination already exists: <dst>; remove it first" and changes

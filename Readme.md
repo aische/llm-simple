@@ -265,7 +265,7 @@ Use `fsTools'` to map tool results through a custom embedding function.
 
 ### Filesystem sandbox
 
-Filesystem tools enforce **workspace-relative path containment**: `..` escapes, absolute paths outside the workspace, and symlinks pointing outside are rejected. A symlink is judged by where it points, including when its target does not exist yet: writing through a dangling link that leads out of the workspace is refused and does not create the target. A link that resolves inside the workspace is followed, and the operation lands on its target. Recursive tools skip symlinks rather than following them. A path that cannot be checked for being a symlink (for example, permission denied) is treated as one.
+Filesystem tools enforce **workspace-relative path containment**: `..` escapes, absolute paths outside the workspace, and symlinks pointing outside are rejected. A symlink is judged by where it points, including when its target does not exist yet: writing through a dangling link that leads out of the workspace is refused and does not create the target. A link that resolves inside the workspace is followed, and the operation lands on its target. Recursive tools skip symlinks rather than following them. A `..` that would step back out of a symlink (`link/..`) is refused, since it names a different file by name than the operating system would open. A path that cannot be checked for being a symlink (for example, permission denied) is treated as one.
 
 Errors that reach the model name paths relative to the workspace, so the model does not learn where the workspace lives on the host. For any tool, the library drops an absolute file name from an `IOException` before it shows the error to the model.
 

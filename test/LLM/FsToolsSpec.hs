@@ -255,6 +255,27 @@ spec = describe "FsTools" $ do
       out `shouldNotContain` "llm-simple-fstools"
 
   describe "symbolic links" $ do
+    it "refuses a '..' that steps back out of a symbolic link" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      createDirectory (sb </> "real")
+      createDirectory (sb </> "real" </> "sub")
+      BS.writeFile (sb </> "x.txt") "root copy"
+      BS.writeFile (sb </> "real" </> "x.txt") "real copy"
+      createDirectoryLink (sb </> "real" </> "sub") (sb </> "lnk")
+      -- By name, lnk/../x.txt is the root's x.txt; the OS reads real/x.txt.
+      forM_ ["lnk/../x.txt", "lnk/a/../../x.txt"] $ \p -> do
+        out <- toolErrorText tm "read_file_paginated" (object ["path" .= (p :: Text)])
+        T.unpack out `shouldContain` "'..' after a symbolic link"
+        T.unpack out `shouldContain` "lnk"
+        T.unpack out `shouldNotContain` "copy"
+
+    it "still resolves '..' after an ordinary directory" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      createDirectory (sb </> "dir")
+      BS.writeFile (sb </> "x.txt") "root copy"
+      out <- runTool tm "read_file_paginated" (object ["path" .= ("dir/../x.txt" :: Text)])
+      T.unpack out `shouldContain` "root copy"
+
     it "remove_file removes the link and leaves its target intact" $ withSandbox $ \sb -> do
       tm <- fsTools sb
       writeFile (sb </> "real.txt") "keep"
@@ -540,6 +561,14 @@ runTool tm name args = do
   case Map.lookup name tm of
     Nothing -> error ("tool not found: " <> T.unpack name)
     Just tool -> tool.toolExecute ctx args
+
+-- | Run a tool the way the agent does and return what the model sees.
+toolErrorText :: Map.Map Text (Tool Text) -> Text -> Value -> IO Text
+toolErrorText tm name args = do
+  ctx <- mkToolContext
+  let call = ToolCall {tcId = "1", tcName = name, tcArguments = args, tcProviderMeta = Nothing}
+  res <- executeTool noHooks ctx (Map.elems tm) call
+  pure res.trContent
 
 runTool_ :: Map.Map Text (Tool Text) -> Text -> Value -> IO ()
 runTool_ tm name args = runTool tm name args >> pure ()

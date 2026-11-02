@@ -14,15 +14,15 @@ module LLM.Tools.FsConfig
 where
 
 import Control.Exception (Exception, IOException, handle, throwIO, try)
-import Control.Monad (when)
-import Data.List (foldl')
+import Control.Monad (foldM, when)
 import Data.Text (Text)
 import Data.Text qualified as T
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesPathExist, pathIsSymbolicLink)
 import Foreign.C.Error (Errno (..), eNOTDIR)
 import GHC.IO.Exception (IOException (ioe_errno, ioe_filename))
-import System.IO.Error (isDoesNotExistError)
-import System.FilePath (addTrailingPathSeparator, dropTrailingPathSeparator, equalFilePath, isRelative, joinPath, normalise, splitDirectories, splitFileName, takeDirectory, (</>))
+import System.IO.Error (ioeSetErrorString, isDoesNotExistError, mkIOError)
+import GHC.IO.Exception (IOErrorType (InvalidArgument))
+import System.FilePath (addTrailingPathSeparator, dropTrailingPathSeparator, equalFilePath, isAbsolute, isRelative, joinPath, normalise, splitDirectories, splitFileName, takeDirectory, (</>))
 
 -- | Configuration for file-system tools.
 -- 'fsBasePath' must be a canonical absolute path (use 'mkFsConfig').
@@ -86,11 +86,12 @@ mkFsConfig dir =
 -- A symlink counts as existing even when its target does not, so a
 -- dangling link is resolved to that target and judged by where it
 -- points rather than appended as if it were an ordinary new file.
--- Throws 'SandboxViolation' on escape attempts.
+-- Throws 'SandboxViolation' on escape attempts, and an 'IOException' for a
+-- @..@ that would step back out of a symbolic link (see 'collapseDots').
 sandboxPath :: FsConfig -> FilePath -> IO FilePath
 sandboxPath cfg relPath = do
   let base = cfg.fsBasePath
-      candidate = collapseDots (normalise (base </> relPath))
+  candidate <- collapseDots (normalise (base </> relPath))
   canonical <- canonicalizeExisting candidate
   let baseComps = splitDirectories (dropTrailingPathSeparator base)
       canonComps = splitDirectories canonical
@@ -121,8 +122,8 @@ sandboxPath cfg relPath = do
 -- lie anywhere, since acting on the link itself never touches it.
 sandboxSymlink :: FsConfig -> FilePath -> IO (Maybe FilePath)
 sandboxSymlink cfg relPath = do
-  let candidate = collapseDots (normalise (cfg.fsBasePath </> relPath))
-      (parentRaw, name) = splitFileName candidate
+  candidate <- collapseDots (normalise (cfg.fsBasePath </> relPath))
+  let (parentRaw, name) = splitFileName candidate
   isLink <- if null name then pure False else isSymlink candidate
   if not isLink
     then pure Nothing
@@ -213,15 +214,33 @@ sandboxWritePath cfg relPath = do
   createDirectoryIfMissing True (takeDirectory resolved)
   pure resolved
 
--- | Resolve @.@ and @..@ in a normalized absolute path
--- without touching the filesystem.
-collapseDots :: FilePath -> FilePath
-collapseDots = joinPath . reverse . foldl' step [] . splitDirectories
+-- | Resolve @.@ and @..@ in a normalized absolute path.
+--
+-- @..@ is resolved by name: @a/b/..@ becomes @a@. That matches the
+-- operating system only while @b@ is not a symbolic link; for a link the
+-- OS goes to the parent of the link's target instead. So a @..@ that would
+-- remove a symbolic link component throws an 'IOException' naming the link
+-- (one @lstat@ per @..@). A @..@ at the root is ignored.
+collapseDots :: FilePath -> IO FilePath
+collapseDots path = case splitDirectories path of
+  root : comps | isAbsolute root -> (root </>) . joinPath . reverse <$> foldM (step root) [] comps
+  comps -> joinPath . reverse <$> foldM (step "") [] comps
   where
-    step acc "." = acc
-    step (_ : rest) ".." = rest
-    step acc ".." = acc -- at root, ignore
-    step acc x = x : acc
+    step _ acc "." = pure acc
+    step _ [] ".." = pure []
+    step root acc@(_ : rest) ".." = do
+      let current = root </> joinPath (reverse acc)
+      link <- isSymlink current
+      when link $ throwIO (dotDotAfterLink current)
+      pure rest
+    step _ acc x = pure (x : acc)
+
+-- | The error for a @..@ that follows a symbolic link.
+dotDotAfterLink :: FilePath -> IOException
+dotDotAfterLink link =
+  ioeSetErrorString
+    (mkIOError InvalidArgument "sandboxPath" Nothing (Just link))
+    "'..' after a symbolic link is ambiguous; use a path without it"
 
 isFileHidden :: [Char] -> Bool
 isFileHidden path = case path of

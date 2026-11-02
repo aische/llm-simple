@@ -39,6 +39,8 @@ import LLM.Core.Types
     mkToolCall,
   )
 import LLM.Core.Usage (PricingInfo (..), defaultPricingInfo, mkUsage)
+import LLM.Generate.Generate (generateTextWithFallbacks)
+import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (Hooks (..), noHooks)
 import LLM.Generate.ModelConfig
   ( ModelCapabilities (..),
@@ -47,7 +49,8 @@ import LLM.Generate.ModelConfig
     defaultModelCapabilities,
   )
 import LLM.Generate.Types
-  ( GenerateError (..),
+  ( GenRequest (..),
+    GenerateError (..),
     GenerateErrorResult (..),
     GenerateTextResult (..),
   )
@@ -618,3 +621,45 @@ spec = describe "Chat" $ do
           length convs `shouldBe` 2
           mapM_ (`shouldSatisfy` hasCachedUserPrefix) convs
         Left err -> expectationFailure $ show err
+
+  describe "throwing hooks" $ do
+    it "an onToolResult that throws does not fail the run after a mutating tool ran" $ do
+      ran <- newIORef (0 :: Int)
+      let tool = constTool "get_weather" (modifyIORef' ran (+ 1) >> pure "done")
+          agent = defaultAgent {agTools = ["get_weather"]}
+          models = ModelWithFallbacks (mockModel mockToolGateway) []
+      rt0 <- mkRuntime Nothing
+      let rt = rt0 {rtHooks = noHooks {onToolResult = \_ _ -> ioError (userError "hook failed")}}
+      result <- generateText agent models (Map.fromList [("get_weather", tool)]) rt [UserTurn "weather?"]
+      readIORef ran `shouldReturn` 1
+      case result of
+        Right r -> do
+          r.gtrText `shouldBe` "The weather is sunny."
+          lastToolResults (init r.gtrNewMessages) `shouldBe` Just [("call_1", "done")]
+        Left err -> expectationFailure $ show err
+
+    it "an onLog that throws does not stop a model fallback" $ do
+      let gr =
+            GenRequest
+              { grSystemPrompt = Nothing,
+                grMessages = [UserTurn "hi"],
+                grTools = [],
+                grAbortSignal = Nothing,
+                grLLMHooks = llmHooks noHooks,
+                grHooks = noHooks {onLog = \_ _ -> ioError (userError "log failed")}
+              }
+          ok = ChatResponse "fallback answer" [textPart "fallback answer"] Nothing Nothing
+          models = ModelWithFallbacks (mockModel (mockErrorGateway (HttpError 503 "down"))) [mockModel (mockGateway ok)]
+      result <- generateTextWithFallbacks gr models
+      fmap (.respText) result `shouldBe` Right "fallback answer"
+
+    it "an LLM wire hook that throws does not fail the call" $ do
+      let gw = (mockGateway (ChatResponse "x" [textPart "x"] Nothing Nothing))
+            { gwGenerateText = \hooks _ -> do
+                hooks.onLLMRequest "mock" (object [])
+                pure (Right (ChatResponse "x" [textPart "x"] Nothing Nothing))
+            }
+          throwing = (llmHooks noHooks) {onLLMRequest = \_ _ -> ioError (userError "wire hook failed")}
+      rt0 <- mkRuntime Nothing
+      result <- generateText defaultAgent (ModelWithFallbacks (mockModel gw) []) Map.empty rt0 {rtLLMHooks = throwing} [UserTurn "hi"]
+      fmap (.gtrText) result `shouldBe` Right "x"

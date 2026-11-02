@@ -18,6 +18,7 @@ import LLM.Generate.GenerateUtils
   ( callWithRetryTimeout,
     mkRequest,
     usageWithModelCost,
+    safeGenRequest,
     withModelFallbacks,
   )
 import LLM.Generate.ModelConfig (ModelConfig (mcGateway), ModelWithFallbacks)
@@ -44,8 +45,9 @@ genObjectInternal ::
   GenRequest ->
   ModelWithFallbacks ->
   IO (Either GenerateErrorResult (t, Usage))
-genObjectInternal codec gr models = do
-  let jsonschema = stripBoundsAndComments $ AE.toJSON $ jsonSchemaVia codec
+genObjectInternal codec gr0 models = do
+  let gr = safeGenRequest gr0
+      jsonschema = stripBoundsAndComments $ AE.toJSON $ jsonSchemaVia codec
   res <- genObjectUntyped gr models jsonschema
   case res of
     Left e -> pure (Left e)
@@ -67,7 +69,8 @@ genObjectUntyped ::
   ModelWithFallbacks ->
   Value ->
   IO (Either GenerateErrorResult (Value, Usage))
-genObjectUntyped gr models schema = do
+genObjectUntyped gr0 models schema = do
+  let gr = safeGenRequest gr0
   aborted <- isAbortedMaybe gr.grAbortSignal
   if aborted
     then do

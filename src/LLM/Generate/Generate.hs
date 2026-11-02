@@ -29,6 +29,7 @@ import LLM.Generate.GenerateUtils
     callWithRetryTimeout,
     mkRequest,
     usageWithModelCost,
+    safeGenRequest,
     withModelFallbacksRotated,
   )
 import LLM.Generate.ModelConfig
@@ -51,7 +52,7 @@ generateTextWithFallbacks ::
   ModelWithFallbacks ->
   IO (GenerateResult ChatResponse)
 generateTextWithFallbacks gr models =
-  fmap snd <$> generateTextWithFallbacksRotated gr models
+  fmap snd <$> generateTextWithFallbacksRotated (safeGenRequest gr) models
 
 -- | Like 'generateTextWithFallbacks', but also returns the chain rotated so
 -- the model that answered comes first (see 'withModelFallbacksRotated').
@@ -59,7 +60,7 @@ generateTextWithFallbacksRotated ::
   GenRequest ->
   ModelWithFallbacks ->
   IO (GenerateResult (ModelWithFallbacks, ChatResponse))
-generateTextWithFallbacksRotated gr models =
+generateTextWithFallbacksRotated gr0 models =
   withModelFallbacksRotated gr models $ \mc -> do
     r <- generateTextLLM gr mc
     case r of
@@ -67,6 +68,8 @@ generateTextWithFallbacksRotated gr models =
       Right resp ->
         let usage = usageWithModelCost mc (fromMaybe emptyUsage resp.respUsage)
          in pure $ Right resp {respUsage = Just usage}
+  where
+    gr = safeGenRequest gr0
 
 -- | Like 'generateTextWithFallbacks', but streams 'StreamChunk' values
 -- through @onChunk@ as the provider responds.
@@ -76,7 +79,7 @@ streamTextWithFallbacks ::
   ModelWithFallbacks ->
   IO (GenerateResult ChatResponse)
 streamTextWithFallbacks onChunk gr models =
-  fmap snd <$> streamTextWithFallbacksRotated onChunk gr models
+  fmap snd <$> streamTextWithFallbacksRotated onChunk (safeGenRequest gr) models
 
 -- | Like 'streamTextWithFallbacks', but also returns the rotated chain
 -- (see 'withModelFallbacksRotated').
@@ -85,7 +88,8 @@ streamTextWithFallbacksRotated ::
   GenRequest ->
   ModelWithFallbacks ->
   IO (GenerateResult (ModelWithFallbacks, ChatResponse))
-streamTextWithFallbacksRotated onChunk gr models = do
+streamTextWithFallbacksRotated onChunk gr0 models = do
+  let gr = safeGenRequest gr0
   emittedRef <- newIORef False
   withModelFallbacksRotated gr models $ \mc -> do
     r <- streamTextAttempts emittedRef onChunk gr mc
@@ -96,10 +100,12 @@ streamTextWithFallbacksRotated onChunk gr models = do
          in pure $ Right resp {respUsage = Just usage}
 
 generateTextLLM :: GenRequest -> ModelConfig -> IO LLMTextResult
-generateTextLLM gr mc =
+generateTextLLM gr0 mc =
   callWithRetryTimeout gr mc $
     let request = mkRequest gr mc
      in mc.mcGateway.gwGenerateText gr.grLLMHooks request
+  where
+    gr = safeGenRequest gr0
 
 -- | Stream one model call with retries. 'mcRequestTimeout' bounds the time
 -- until the first stream event of each attempt, not the whole stream.
@@ -109,7 +115,7 @@ generateTextLLM gr mc =
 streamTextLLM :: (StreamChunk -> IO ()) -> GenRequest -> ModelConfig -> IO LLMTextResult
 streamTextLLM onChunk gr mc = do
   emittedRef <- newIORef False
-  streamTextAttempts emittedRef onChunk gr mc
+  streamTextAttempts emittedRef onChunk (safeGenRequest gr) mc
 
 -- | 'streamTextLLM' with the \"chunks emitted\" flag supplied by the caller,
 -- so it is shared across retries and model fallbacks of one model call.

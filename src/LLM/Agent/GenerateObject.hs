@@ -1,7 +1,7 @@
 module LLM.Agent.GenerateObject where
 
 import Data.Aeson (Value)
-import LLM.Agent.ToolUtils (createGenRequestNoTools)
+import LLM.Agent.ToolUtils (createGenRequestNoTools, safeRuntimeArgs)
 import LLM.Agent.Types
   ( Agent (..),
     RuntimeArgs (..),
@@ -27,7 +27,7 @@ generateObject ::
   RuntimeArgs ->
   [Turn] ->
   IO (Either GenerateErrorResult (t, Usage))
-generateObject a m r t = genObject (createGenRequestNoTools a r t) m
+generateObject a m r t = genObject (createGenRequestNoTools a (safeRuntimeArgs r) t) m
 
 -- | Generate a JSON 'Value' from the model using a caller-supplied schema.
 --
@@ -40,4 +40,4 @@ generateObjectUntyped ::
   [Turn] ->
   Value ->
   IO (Either GenerateErrorResult (Value, Usage))
-generateObjectUntyped a m r t = genObjectUntyped (createGenRequestNoTools a r t) m
+generateObjectUntyped a m r t = genObjectUntyped (createGenRequestNoTools a (safeRuntimeArgs r) t) m

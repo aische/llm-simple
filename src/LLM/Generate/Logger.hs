@@ -8,6 +8,7 @@ module LLM.Generate.Logger
     noLogger,
     stderrLogger,
     safeHooks,
+    safeLLMHooks,
     debugHooks,
     defaultDebugHooks,
   )
@@ -23,6 +24,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Time.Clock.POSIX (getPOSIXTime)
+import LLM.Core.Types (LLMHooks (..))
 import LLM.Core.Utils (trySync)
 import System.Directory (createDirectoryIfMissing)
 import System.IO (hClose, openBinaryTempFile, stderr)
@@ -132,6 +134,15 @@ safeHooks h =
       onToolCall = \p v -> void (trySync (h.onToolCall p v)),
       onToolResult = \p v -> void (trySync (h.onToolResult p v)),
       onToolError = \p v -> void (trySync (h.onToolError p v))
+    }
+
+-- | 'safeHooks' for the provider wire hooks.
+safeLLMHooks :: LLMHooks -> LLMHooks
+safeLLMHooks h =
+  LLMHooks
+    { onLLMRequest = \p v -> void (trySync (h.onLLMRequest p v)),
+      onLLMResponse = \p v -> void (trySync (h.onLLMResponse p v)),
+      onLLMResponseError = \p v -> void (trySync (h.onLLMResponseError p v))
     }
 
 debugHooks :: FilePath -> Hooks

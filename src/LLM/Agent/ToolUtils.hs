@@ -12,6 +12,7 @@ module LLM.Agent.ToolUtils
     createGenRequest,
     createGenRequestNoTools,
     embedTextTool,
+    safeRuntimeArgs,
   )
 where
 
@@ -43,7 +44,7 @@ import LLM.Core.Types
   )
 import LLM.Core.Usage (Usage)
 import LLM.Core.Utils (interruptOnAbort, toolResult, trySync)
-import LLM.Generate.Logger (Hooks (..))
+import LLM.Generate.Logger (Hooks (..), safeHooks, safeLLMHooks)
 import LLM.Generate.Types (GenRequest (..))
 import LLM.Tools.FsConfig (SandboxViolation, formatSandboxViolation)
 import GHC.IO.Exception (IOException (ioe_filename))
@@ -249,3 +250,14 @@ formatToolException e
   | Just (ioe :: IOException) <- fromException e =
       T.pack (show ioe {ioe_filename = mfilter isRelative (ioe_filename ioe)})
   | otherwise = T.pack (show e)
+
+-- | The runtime arguments with their hooks wrapped by 'safeHooks' and
+-- 'safeLLMHooks', so an exception thrown by a hook cannot fail a run whose
+-- side effects (a tool call, say) already happened. Applied by the agent
+-- entry points.
+safeRuntimeArgs :: RuntimeArgs -> RuntimeArgs
+safeRuntimeArgs rt =
+  rt
+    { rtHooks = safeHooks rt.rtHooks,
+      rtLLMHooks = safeLLMHooks rt.rtLLMHooks
+    }

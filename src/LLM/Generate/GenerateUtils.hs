@@ -8,6 +8,7 @@ module LLM.Generate.GenerateUtils
     withModelFallbacksRotated,
     validateModelCapabilities,
     llmHooks,
+    safeGenRequest,
   )
 where
 
@@ -32,7 +33,7 @@ import LLM.Core.Types
   )
 import LLM.Core.Usage (Usage (..), estimateCost)
 import LLM.Core.Utils (interruptOnAbort, withRetry, withTimeout)
-import LLM.Generate.Logger (Hooks (..), LogLevel (..))
+import LLM.Generate.Logger (Hooks (..), LogLevel (..), safeHooks, safeLLMHooks)
 import LLM.Generate.ModelConfig
   ( ModelCapabilities (..),
     ModelConfig (..),
@@ -279,4 +280,14 @@ llmHooks hooks =
     { onLLMRequest = hooks.onRequest,
       onLLMResponse = hooks.onResponse,
       onLLMResponseError = hooks.onResponseError
+    }
+
+-- | The request with its hooks wrapped by 'safeHooks' and 'safeLLMHooks',
+-- so an exception thrown by a hook cannot fail a call whose side effects
+-- already happened. Applied by every public generation entry point.
+safeGenRequest :: GenRequest -> GenRequest
+safeGenRequest gr =
+  gr
+    { grHooks = safeHooks gr.grHooks,
+      grLLMHooks = safeLLMHooks gr.grLLMHooks
     }

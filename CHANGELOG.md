@@ -16,9 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LLM.Core.ProviderUtils.readResponseBody` reads a non-streaming response
   with the size limits below, for `sendRequest` in custom providers
   (`reqBr POST url body opts readResponseBody`).
+- `LLM.Generate.Logger.safeLLMHooks` (also in `LLM.Generate`): `safeHooks`
+  for `LLMHooks`. `LLM.Generate.GenerateUtils.safeGenRequest` and
+  `LLM.Agent.ToolUtils.safeRuntimeArgs` apply both to a request.
 
 ### Fixed
 
+- An exception thrown by a hook no longer fails a run whose side effects
+  (a tool call, a paid model call) already happened. **Behaviour change:**
+  every entry point (`generateTextLLM`, `streamTextLLM`, the
+  `*WithFallbacks` functions, `genObject`, `genObjectUntyped`, and the
+  agent's `generateText`, `streamText` and `generateObject*`) now wraps
+  `Hooks` with `safeHooks` and `LLMHooks` with `safeLLMHooks`, which drop
+  synchronous exceptions. A hook that throws to stop a run no longer stops
+  it; use an `AbortSignal`. Asynchronous exceptions still propagate.
 - An `HttpException` thrown by the caller's own stream callback (for
   example from an HTTP call it makes) is no longer reported as the
   provider's `NetworkError` and retried, which repeated the callback's

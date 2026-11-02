@@ -14,6 +14,7 @@ import LLM.Agent.ToolUtils
     executeToolsWithAbort,
     ToolRoundOutcome (..),
     getResolvedTools,
+    safeRuntimeArgs,
   )
 import LLM.Agent.Types
   ( Agent (agMaxToolRounds),
@@ -100,10 +101,11 @@ agentLoop ::
   RuntimeArgs ->
   [Turn] ->
   IO (Either GenerateErrorResult GenerateTextResult)
-agentLoop call agent models toolMap rt initialTurns = do
+agentLoop call agent models toolMap rt0 initialTurns = do
   emitEvent rt GenerationStarted
   go models initialTurns [] emptyUsage 0
   where
+    rt = safeRuntimeArgs rt0
     go :: ModelWithFallbacks -> [Turn] -> [Turn] -> Usage -> Int -> IO (Either GenerateErrorResult GenerateTextResult)
     go chain currentTurns newTurnsAcc currentUsage loopCount = do
       aborted <- isAbortedMaybe rt.rtAbortSignal

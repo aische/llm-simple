@@ -132,9 +132,9 @@ execute cfg args = do
             else do
               files <-
                 if isFile
-                  then pure [resolved]
-                  else collectFiles resolved 0 exts
-              (matches, scanned, truncated) <- searchFiles resolved files pat ci cap
+                  then pure [(resolved, takeFileName resolved)]
+                  else collectFiles resolved "" 0 exts
+              (matches, scanned, truncated) <- searchFiles files pat ci cap
               pure $ renderResults args._grepPath pat matches scanned truncated
 
 -- | Lowercase and strip leading dots so callers can pass "hs" or ".hs".
@@ -143,18 +143,21 @@ normalizeExtensions = map (T.toLower . T.dropWhile (== '.'))
 
 -- | Recursively collect candidate files under a directory, respecting
 -- depth, hidden-file, extension, and size limits. Order is stable
--- (directories sorted) so output is deterministic.
-collectFiles :: FilePath -> Int -> [Text] -> IO [FilePath]
-collectFiles _ depth _ | depth > maxDepth = pure []
-collectFiles dir depth exts = do
+-- (directories sorted) so output is deterministic. Each file comes with
+-- its path relative to the search root, built from the names walked, so
+-- no host path is shown.
+collectFiles :: FilePath -> FilePath -> Int -> [Text] -> IO [(FilePath, FilePath)]
+collectFiles _ _ depth _ | depth > maxDepth = pure []
+collectFiles dir display depth exts = do
   entries <- sort <$> safeListDirectory dir
   let visible = filter (not . isFileHidden) entries
-  results <- mapM (visit dir depth exts) visible
+  results <- mapM (visit dir display depth exts) visible
   pure (concat results)
 
-visit :: FilePath -> Int -> [Text] -> FilePath -> IO [FilePath]
-visit parent depth exts name = do
+visit :: FilePath -> FilePath -> Int -> [Text] -> FilePath -> IO [(FilePath, FilePath)]
+visit parent display depth exts name = do
   let full = parent </> name
+      fullDisplay = display </> name
   -- Skip symlinks to prevent traversal out of the sandbox.
   isLink <- isSymlink full
   if isLink
@@ -162,13 +165,13 @@ visit parent depth exts name = do
     else do
       isDir <- doesDirectoryExist full
       if isDir
-        then collectFiles full (depth + 1) exts
+        then collectFiles full fullDisplay (depth + 1) exts
         else do
           isFile <- doesFileExist full
           if isFile && extensionAllowed exts name
             then do
               ok <- isSizeOk full
-              pure [full | ok]
+              pure [(full, fullDisplay) | ok]
             else pure []
 
 extensionAllowed :: [Text] -> FilePath -> Bool
@@ -199,17 +202,16 @@ safeListDirectory path = do
 -- 'scanned' count reflects the full sweep. Returns (matches, files scanned,
 -- truncated?).
 searchFiles ::
-  FilePath ->
-  [FilePath] ->
+  [(FilePath, FilePath)] ->
   Text ->
   Bool ->
   Int ->
   IO ([Match], Int, Bool)
-searchFiles root files pat ci cap = go files [] 0 False
+searchFiles files pat ci cap = go files [] 0 False
   where
     needle = if ci then T.toLower pat else pat
     go [] acc scanned truncated = pure (reverse acc, scanned, truncated)
-    go (f : rest) acc scanned truncated
+    go ((f, display) : rest) acc scanned truncated
       | length acc >= cap = go rest acc (scanned + 1) True
       | otherwise = do
           -- Binary and unreadable files are skipped.
@@ -218,7 +220,7 @@ searchFiles root files pat ci cap = go files [] 0 False
               IO (Either IOException (Maybe Text))
           case r of
             Right (Just content) -> do
-              let ms = matchLines (relativeTo root f) content needle ci
+              let ms = matchLines display content needle ci
                   remaining = cap - length acc
                   taken = take remaining ms
                   truncated' = truncated || length ms > remaining
@@ -243,22 +245,6 @@ truncateLine :: Text -> Text
 truncateLine t
   | T.length t <= maxLineLength = t
   | otherwise = T.take maxLineLength t <> "…"
-
--- | Make 'full' relative to 'root' for display. Falls back to 'full' if
--- it isn't actually under 'root' (shouldn't happen post-sandbox).
-relativeTo :: FilePath -> FilePath -> FilePath
-relativeTo root full =
-  let rootSlash = if null root || last root == '/' then root else root ++ "/"
-   in case stripPrefixList rootSlash full of
-        Just rel -> if null rel then takeFileName full else rel
-        Nothing -> full
-
-stripPrefixList :: String -> String -> Maybe String
-stripPrefixList [] ys = Just ys
-stripPrefixList _ [] = Nothing
-stripPrefixList (x : xs) (y : ys)
-  | x == y = stripPrefixList xs ys
-  | otherwise = Nothing
 
 renderResults :: Text -> Text -> [Match] -> Int -> Bool -> Text
 renderResults rootDisplay pat matches scanned truncated =

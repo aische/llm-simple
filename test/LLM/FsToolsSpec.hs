@@ -99,6 +99,17 @@ spec = describe "FsTools" $ do
           )
       T.unpack result `shouldContain` "main.hs"
 
+    it "shows paths relative to the search root, never host paths" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      runTool_ tm "writefile" (object ["path" .= ("src/app/main.hs" :: Text), "content" .= ("needle\n" :: Text)])
+      fromRoot <- runTool tm "grep" (object ["pattern" .= ("needle" :: Text)])
+      T.lines fromRoot `shouldContain` [T.pack ("src" </> "app" </> "main.hs") <> ":1: needle"]
+      fromSub <- runTool tm "grep" (object ["pattern" .= ("needle" :: Text), "path" .= ("src" :: Text)])
+      T.lines fromSub `shouldContain` [T.pack ("app" </> "main.hs") <> ":1: needle"]
+      oneFile <- runTool tm "grep" (object ["pattern" .= ("needle" :: Text), "path" .= ("src/app/main.hs" :: Text)])
+      T.lines oneFile `shouldContain` ["main.hs:1: needle"]
+      T.unpack (fromRoot <> fromSub <> oneFile) `shouldNotContain` sb
+
   describe "find_files" $ do
     it "matches a glob pattern" $ withSandbox $ \sb -> do
       tm <- fsTools sb

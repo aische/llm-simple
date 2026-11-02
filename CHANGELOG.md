@@ -27,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     now a `ParseError`.
   - An in-band provider error event (for example Claude's `overloaded_error`)
     still takes precedence over these checks.
+- API keys are no longer sent over plain HTTP. A provider that sends a key
+  with a base URL (or `*_BASE_URL` override) of `http://` to a non-loopback
+  host is now unavailable, with `InvalidBaseUrl` saying the URL is insecure;
+  `loadGatewaysFromCatalogOrThrow` throws for it. `http://` to `localhost`,
+  `127.0.0.0/8` or `::1` is still allowed, as is any `http://` host for
+  Ollama and other keyless providers. **Behaviour change:** a catalog that
+  pointed a keyed provider at a remote `http://` proxy no longer loads that
+  provider; use `https://`.
 
 ## [0.4.0.1] - 2026-10-27
 

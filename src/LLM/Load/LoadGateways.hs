@@ -18,6 +18,7 @@ import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Exception (SomeException, catch, throwIO)
 import Data.Map qualified as Map
 import Data.ByteString.Char8 qualified as B
+import Data.Char (isDigit)
 import Data.Text (Text)
 import Data.Text qualified as T
 import LLM.Core.Types (LLMGateway)
@@ -130,6 +131,11 @@ describeProviderUnavailable = \case
 
 -- | Build the gateway for a provider, or say why it is unavailable. Never
 -- throws.
+--
+-- A provider that sends an API key must use @https://@, or @http://@ to a
+-- loopback host (@localhost@, @127.0.0.0/8@, @::1@); otherwise the key would
+-- cross the network unencrypted. Such a base URL is reported as
+-- 'InvalidBaseUrl'.
 resolveGateway :: ProviderCatalogItem -> IO (Either ProviderUnavailable LLMGateway)
 resolveGateway item = do
   apiKey <- case item.apiKeyEnv of
@@ -139,7 +145,37 @@ resolveGateway item = do
   pure $ do
     key <- apiKey
     baseUrl <- either (Left . InvalidBaseUrl) Right (parseProviderBaseUrl baseUrlText)
+    either (Left . InvalidBaseUrl) Right (checkKeyTransport item key baseUrlText)
     pure (buildGateway item baseUrl key)
+
+-- | Refuse a plain-HTTP base URL to a non-loopback host for a provider that
+-- sends a non-empty API key. Ollama gateways never send a key.
+checkKeyTransport :: ProviderCatalogItem -> Text -> Text -> Either Text ()
+checkKeyTransport item key urlText
+  | item.protocol == OllamaProtocol || T.null key = Right ()
+  | otherwise = case HC.parseRequest (T.unpack urlText) of
+      Right req
+        | not (HC.secure req) && not (isLoopbackHost (HC.host req)) ->
+            Left $
+              "insecure baseUrl: "
+                <> urlText
+                <> " would send the API key unencrypted; use https, or http only to a loopback host"
+      _ -> Right ()
+
+-- | @localhost@, an IPv4 address in @127.0.0.0/8@, or @::1@.
+isLoopbackHost :: B.ByteString -> Bool
+isLoopbackHost raw =
+  host `elem` ["localhost", "[::1]", "::1"] || isIPv4Loopback
+  where
+    host = T.toLower (T.dropWhileEnd (== '.') (T.pack (B.unpack raw)))
+    isIPv4Loopback = case T.splitOn "." host of
+      [a, b, c, d] -> a == "127" && all isOctet [b, c, d]
+      _ -> False
+    isOctet t =
+      not (T.null t)
+        && T.length t <= 3
+        && T.all isDigit t
+        && (read (T.unpack t) :: Int) <= 255
 
 -- | Resolve every provider in the catalog. See 'resolveGateway'.
 resolveGateways :: ProviderCatalogMap -> IO (Map.Map Text (Either ProviderUnavailable LLMGateway))

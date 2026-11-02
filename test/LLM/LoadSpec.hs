@@ -1,6 +1,7 @@
 module LLM.LoadSpec (spec) where
 
 import Control.Exception (IOException, SomeException, catch, displayException, fromException, try)
+import Control.Monad (forM_)
 import Control.Monad.Except (runExceptT)
 import Data.Aeson (Value (Array), eitherDecodeFileStrict')
 import Data.ByteString qualified as BS
@@ -11,7 +12,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import LLM.Core.Types (LLMGateway (..))
 import LLM.Generate.ModelConfig (ModelCapabilities (..), ModelConfig (..), defaultModelCapabilities)
-import LLM.Load.LoadGateways (buildGateway, loadGateways, loadGatewaysFromCatalog, parseProviderBaseUrl)
+import LLM.Load.LoadGateways (ProviderUnavailable (..), buildGateway, loadGateways, loadGatewaysFromCatalog, loadGatewaysFromCatalogOrThrow, parseProviderBaseUrl, resolveGateway)
 import LLM.Load.LoadModels (loadModelOrThrow, loadModelOrThrow_, loadModelsOrThrow)
 import LLM.Load.ModelCatalog (ModelCatalogItem (..))
 import LLM.Load.ProviderCatalog
@@ -23,6 +24,7 @@ import LLM.Load.ProviderCatalog
   )
 import LLM.Load.Types (LoadConfigError (..))
 import LLM.Load.Utils (getSystemPrompt)
+import System.Environment (setEnv)
 import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
@@ -172,6 +174,52 @@ spec = describe "Load" $ do
       let gateway = buildGateway item baseUrl "test-key"
           LLMGateway {gwName = name} = gateway
       name `shouldBe` "gemini"
+
+    describe "plain-HTTP base URLs" $ do
+      let item proto url =
+            ProviderCatalogItem
+              { providerName = "custom",
+                protocol = proto,
+                baseUrl = url,
+                apiKeyEnv = Just "LLM_SIMPLE_TEST_HTTP_KEY",
+                baseUrlEnv = Nothing
+              }
+          resolve i = do
+            setEnv "LLM_SIMPLE_TEST_HTTP_KEY" "secret"
+            either Left (const (Right ())) <$> resolveGateway i
+          isInsecure = \case
+            Left (InvalidBaseUrl msg) -> "insecure baseUrl" `T.isInfixOf` msg
+            _ -> False
+
+      it "rejects a remote http:// base URL for a provider that sends a key" $ do
+        forM_ [OpenAIProtocol, ClaudeProtocol, GeminiProtocol, DeepSeekProtocol] $ \proto -> do
+          r <- resolve (item proto "http://proxy.example.com")
+          r `shouldSatisfy` isInsecure
+        r <- resolve (item OpenAIProtocol "http://127.example.com")
+        r `shouldSatisfy` isInsecure
+
+      it "accepts http:// to a loopback host" $ do
+        forM_ ["http://localhost:8080", "http://LOCALHOST.", "http://127.0.0.1:8080/api", "http://127.9.8.7", "http://[::1]:8080"] $ \url -> do
+          r <- resolve (item OpenAIProtocol url)
+          (url, r) `shouldBe` (url, Right ())
+
+      it "accepts https:// to a remote host" $ do
+        r <- resolve (item ClaudeProtocol "https://proxy.example.com")
+        r `shouldBe` Right ()
+
+      it "accepts a remote http:// base URL when no key is sent" $ do
+        r <- resolve (item OllamaProtocol "http://gpu-box.lan:11434")
+        r `shouldBe` Right ()
+        r' <- resolve (item OpenAIProtocol "http://gpu-box.lan:8000") {apiKeyEnv = Nothing}
+        r' `shouldBe` Right ()
+
+      it "makes loadGatewaysFromCatalogOrThrow throw" $ do
+        setEnv "LLM_SIMPLE_TEST_HTTP_KEY" "secret"
+        r <- try (loadGatewaysFromCatalogOrThrow (Map.singleton "custom" (item OpenAIProtocol "http://proxy.example.com")))
+        case r of
+          Left (LoadModelConfigError msg) -> T.unpack msg `shouldContain` "insecure baseUrl"
+          Left other -> expectationFailure ("unexpected error: " <> show other)
+          Right _ -> expectationFailure "expected LoadModelConfigError"
 
     it "loads gateways from a provider catalog file" $ do
       result <- runExceptT $ loadProviderCatalog providersOllamaOnly

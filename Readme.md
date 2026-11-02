@@ -142,6 +142,11 @@ Optional base URL overrides for built-in providers: `OPENAI_BASE_URL`,
 `CLAUDE_BASE_URL`, `GEMINI_BASE_URL`, `DEEPSEEK_BASE_URL`, `OLLAMA_BASE_URL`.
 Do not include the protocol path (`/v1/...` or `/v1beta/...`) in `baseUrl`; the
 library appends it.
+A provider that sends an API key must use an `https://` base URL, or `http://`
+to a loopback host (`localhost`, `127.0.0.0/8`, `::1`); any other `http://`
+base URL makes the provider unavailable, so the key is never sent unencrypted.
+Keyless providers (Ollama, or entries without `apiKeyEnv`) may use any
+`http://` host.
 `loadGateways` and `loadGatewaysWithDotenv` always use built-in provider defaults.
 Custom providers from a co-located `providers.json` apply when loading models via
 `loadModelOrThrow` or `loadModelsOrThrow`.

@@ -6,13 +6,14 @@ module LLM.Core.LLMProvider
   )
 where
 
-import Control.Exception (try)
+import Control.Exception (Handler (..), catches)
 import Data.Aeson (Value, eitherDecodeStrict')
 import Data.ByteString (ByteString)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
+import LLM.Core.Internal.Body (ResponseTooLarge, responseTooLargeMessage)
 import LLM.Core.Types
   ( ChatRequest (reqTools),
     LLMError (HttpError, NetworkError, ParseError),
@@ -61,11 +62,9 @@ genericStreamText :: LLMProvider -> LLMHooks -> ChatRequest -> (StreamEvent -> I
 genericStreamText p hooks r callback = do
   let body = p.buildBody True r
   hooks.onLLMRequest p.providerName body
-  result <- try (p.openStream body (\readChunk -> p.parseStream body readChunk callback))
+  result <- providerCall p hooks (p.openStream body (\readChunk -> p.parseStream body readChunk callback))
   case result of
-    Left e -> do
-      hooks.onLLMResponseError p.providerName (T.pack (show (e :: HttpException)))
-      pure $ Left $ NetworkError (T.pack (show (e :: HttpException)))
+    Left e -> pure (Left e)
     Right r' -> do
       case r' of
         Right resp -> do
@@ -80,11 +79,9 @@ genericGenerateText :: LLMProvider -> LLMHooks -> ChatRequest -> IO LLMTextResul
 genericGenerateText p hooks r = do
   let body = p.buildBody False r
   hooks.onLLMRequest p.providerName body
-  result <- try (p.sendRequest body)
+  result <- providerCall p hooks (p.sendRequest body)
   case result of
-    Left e -> do
-      hooks.onLLMResponseError p.providerName (T.pack (show (e :: HttpException)))
-      pure $ Left $ NetworkError (T.pack (show (e :: HttpException)))
+    Left e -> pure (Left e)
     Right resp -> handleResponse p hooks p.parseResponse resp
 
 -- | Generic object generation via the LLMProvider.
@@ -92,12 +89,29 @@ genericGenerateObject :: LLMProvider -> LLMHooks -> Value -> ChatRequest -> IO L
 genericGenerateObject p hooks schema r = do
   let body = p.buildObjectBody r {reqTools = []} schema
   hooks.onLLMRequest p.providerName body
-  result <- try (p.sendObjectRequest body)
+  result <- providerCall p hooks (p.sendObjectRequest body)
   case result of
-    Left e -> do
-      hooks.onLLMResponseError p.providerName (T.pack (show (e :: HttpException)))
-      pure $ Left $ NetworkError (T.pack (show (e :: HttpException)))
+    Left e -> pure (Left e)
     Right resp -> handleResponse p hooks p.parseObjectResponse resp
+
+-- | Run a provider's HTTP call. An 'HttpException' becomes a 'NetworkError'
+-- and a response body over the size cap a 'ParseError'; both are reported
+-- to 'onLLMResponseError'. Other exceptions propagate.
+providerCall :: LLMProvider -> LLMHooks -> IO a -> IO (Either LLMError a)
+providerCall p hooks act = do
+  r <-
+    (Right <$> act)
+      `catches` [ Handler $ \(e :: HttpException) ->
+                    pure (Left (T.pack (show e), NetworkError (T.pack (show e)))),
+                  Handler $ \(e :: ResponseTooLarge) ->
+                    let msg = responseTooLargeMessage e
+                     in pure (Left (msg, ParseError msg))
+                ]
+  case r of
+    Right a -> pure (Right a)
+    Left (msg, err) -> do
+      hooks.onLLMResponseError p.providerName msg
+      pure (Left err)
 
 -- | Turn a non-streaming (status, raw body) into a result. A non-200 status
 -- is an 'HttpError' carrying the body as text, whether or not it is JSON

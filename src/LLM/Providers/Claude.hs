@@ -40,7 +40,7 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, unexpectedResponse)
+import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, readResponseBody, unexpectedResponse)
 import LLM.Core.SSE (SSEEvent (sseData, sseEvent), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( commonImageMediaTypes,
@@ -86,11 +86,7 @@ import Network.HTTP.Req
     Url,
     header,
     https,
-    bsResponse,
-    req,
     reqBr,
-    responseBody,
-    responseStatusCode,
     runReq,
     (/:),
   )
@@ -159,8 +155,7 @@ claudeProviderWith baseUrl baseOpts apiKey =
       runReq lenientConfig $ do
         let url = baseUrl /: "v1" /: "messages"
             opts = baseOpts <> claudeAuthOpts apiKey
-        resp <- req POST url (ReqBodyJson body) bsResponse opts
-        pure (responseStatusCode resp, responseBody resp)
+        reqBr POST url (ReqBodyJson body) opts readResponseBody
 
 claudeAuthOpts :: Text -> Option scheme
 claudeAuthOpts apiKey =

@@ -139,6 +139,7 @@ library
         LLM.Load.FsTools
 
     other-modules:
+        LLM.Core.Internal.Body
         LLM.Core.SSE
         LLM.Tools.Internal.PathLock
         LLM.Tools.Internal.TextFile

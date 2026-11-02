@@ -45,7 +45,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, normalizeSchemaOpenAI, unexpectedResponse)
+import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, normalizeSchemaOpenAI, readResponseBody, unexpectedResponse)
 import LLM.Core.SSE (SSEEvent (sseData), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( commonImageMediaTypes,
@@ -91,11 +91,7 @@ import Network.HTTP.Req
     Url,
     header,
     https,
-    bsResponse,
-    req,
     reqBr,
-    responseBody,
-    responseStatusCode,
     runReq,
     (/:),
   )
@@ -160,8 +156,7 @@ openAIProviderWithName name baseUrl baseOpts apiKey =
       runReq lenientConfig $ do
         let url = baseUrl /: "v1" /: "chat" /: "completions"
             opts = baseOpts <> authHeader apiKey
-        resp <- req POST url (ReqBodyJson body) bsResponse opts
-        pure (responseStatusCode resp, responseBody resp)
+        reqBr POST url (ReqBodyJson body) opts readResponseBody
 
 authHeader :: Text -> Option scheme
 authHeader apiKey

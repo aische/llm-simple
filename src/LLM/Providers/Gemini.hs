@@ -36,7 +36,7 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.UUID.Types (UUID)
 import Data.UUID.Types qualified as UUID
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (decodeObjectText, handleStreamResponse, lenientConfig, stripBoundsAndComments)
+import LLM.Core.ProviderUtils (decodeObjectText, handleStreamResponse, lenientConfig, readResponseBody, stripBoundsAndComments)
 import LLM.Core.SSE (SSEEvent (sseData), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( supportedImageMediaTypes,
@@ -80,11 +80,7 @@ import Network.HTTP.Req
     Url,
     header,
     https,
-    bsResponse,
-    req,
     reqBr,
-    responseBody,
-    responseStatusCode,
     runReq,
     (/:),
     (=:),
@@ -165,8 +161,7 @@ geminiProviderWith baseUrl baseOpts apiKey =
                 /: "models"
                 /: (model <> ":generateContent")
             opts = baseOpts <> geminiAuthOpts apiKey
-        resp <- req POST url (ReqBodyJson (stripModel body)) bsResponse opts
-        pure (responseStatusCode resp, responseBody resp)
+        reqBr POST url (ReqBodyJson (stripModel body)) opts readResponseBody
 
 geminiAuthOpts :: Text -> Option scheme
 geminiAuthOpts apiKey = header "x-goog-api-key" (encodeUtf8 apiKey)

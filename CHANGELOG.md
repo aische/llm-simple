@@ -13,9 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   temporary file in the same directory and renaming it over the target.
 - `LLM.Tools.FsLimits.maxVisitedEntries` (20,000) and `maxOutputBytes`
   (100 KiB): the work and output bounds of the filesystem tools.
+- `LLM.Core.ProviderUtils.readResponseBody` reads a non-streaming response
+  with the size limits below, for `sendRequest` in custom providers
+  (`reqBr POST url body opts readResponseBody`).
 
 ### Fixed
 
+- Provider response bodies are now bounded. **Behaviour change:**
+  - An error body (non-200) is read up to 64 KiB and cut there, with `...`
+    appended, for both streaming and non-streaming calls. `readAll` does
+    the same.
+  - A 200 body of a non-streaming call larger than 32 MiB is a
+    `ParseError "response body exceeds 33554432 bytes"`, as is a single
+    stream event (or line) larger than 8 MiB. Before, either was read
+    into memory in full.
+  - The bundled providers read bodies with `readResponseBody`. Custom
+    providers that read with `bsResponse` keep working, unbounded.
 - `writefile`, `replace_in_file` and `multi_replace_in_file` no longer
   leave a partial or empty file when a write fails, and two edits of one
   file at the same time no longer lose one of them. **Behaviour change:**

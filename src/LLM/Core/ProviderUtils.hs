@@ -2,6 +2,7 @@ module LLM.Core.ProviderUtils
   ( lenientConfig,
     mkLenientConfig,
     readAll,
+    readResponseBody,
     handleStreamResponse,
     normalizeSchemaOpenAI,
     stripJsonFences,
@@ -13,6 +14,7 @@ module LLM.Core.ProviderUtils
   )
 where
 
+import Control.Exception (throwIO)
 import Control.Retry (limitRetries)
 import Data.Aeson (ToJSON (toJSON), Value (..), decodeStrict', eitherDecodeStrict', encode, object)
 import Data.Aeson.KeyMap qualified as KM
@@ -23,6 +25,12 @@ import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Encoding qualified as TLE
+import LLM.Core.Internal.Body
+  ( ResponseTooLarge (..),
+    maxResponseBodyBytes,
+    readBodyPrefix,
+    readErrorBody,
+  )
 import LLM.Core.Types (LLMError (EmptyResponse, HttpError, ParseError), LLMResult, LLMTextResult)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Client.TLS (tlsManagerSettings)
@@ -58,11 +66,32 @@ sharedManager =
     HC.newManager tlsManagerSettings {HC.managerResponseTimeout = HC.responseTimeoutNone}
 {-# NOINLINE sharedManager #-}
 
--- | Accumulate all chunks from a BodyReader for error messages
+-- | Read an error body for its message: at most 64 KiB, with @...@ as a
+-- last chunk when the body went on. Reading stops there, so an endless
+-- error body cannot exhaust memory.
 readAll :: HC.BodyReader -> IO [BS.ByteString]
-readAll br = do
-  chunk <- HC.brRead br
-  if BS.null chunk then pure [] else (chunk :) <$> readAll br
+readAll br = pure <$> readErrorBody (HC.brRead br)
+
+-- | Read a non-streaming response as @(status, body)@, for
+-- 'LLM.Core.LLMProvider.sendRequest'. Use it with req's @reqBr@ instead of
+-- @bsResponse@:
+--
+-- > reqBr POST url (ReqBodyJson body) opts readResponseBody
+--
+-- A non-200 body is cut to 64 KiB (see 'readAll'). A 200 body over 32 MiB
+-- throws an exception that the @generic*@ functions in
+-- "LLM.Core.LLMProvider" turn into a 'ParseError'.
+readResponseBody :: HC.Response HC.BodyReader -> IO (Int, BS.ByteString)
+readResponseBody resp = do
+  let status = statusCode (HC.responseStatus resp)
+      br = HC.responseBody resp
+  if status /= 200
+    then (status,) <$> readErrorBody (HC.brRead br)
+    else do
+      (bs, cut) <- readBodyPrefix maxResponseBodyBytes (HC.brRead br)
+      if cut
+        then throwIO (ResponseTooLarge maxResponseBodyBytes)
+        else pure (status, bs)
 
 -- | Decode tool-call arguments sent as a JSON string. Empty input means the
 -- tool takes no arguments. 'Nothing' if the text is not valid JSON (for

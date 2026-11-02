@@ -265,10 +265,13 @@ Use `fsTools'` to map tool results through a custom embedding function.
 
 Filesystem tools enforce **workspace-relative path containment**: `..` escapes, absolute paths outside the workspace, and symlinks pointing outside are rejected. A symlink is judged by where it points, including when its target does not exist yet: writing through a dangling link that leads out of the workspace is refused and does not create the target. A link that resolves inside the workspace is followed, and the operation lands on its target. Recursive tools skip symlinks rather than following them.
 
+**Threat model.** The sandbox keeps the *model* inside the workspace. Through the tools, a model can only reach paths inside it: `..`, absolute paths and symlinks are checked as described above. The tools cannot create symlinks, and an agent runs its tool calls one at a time, so a model cannot change the workspace while a check it relies on is in progress.
+
+The sandbox does **not** protect against *other processes* that write to the workspace while the agent runs. A path is checked and then opened. A process that swaps a directory for a symlink between those two steps (a time-of-check/time-of-use race) can make a tool read or write outside the workspace. Hard links to files outside the workspace are not detected either. Such a process usually runs as the same user and can reach those files directly, so this only matters if it has less access than the agent. If a less-trusted process can write to the workspace, isolate the agent at the OS level (a container, or a separate user).
+
 **Limitations (0.1.x):**
 
 - The sandbox is **path-scoped**, not kernel-level isolation. Use a dedicated, disposable workspace directory — not your home directory or a production tree.
-- A **time-of-check/time-of-use (TOCTOU)** window exists between path validation and file open; a concurrent process inside the workspace could theoretically plant a symlink between those steps.
 - There is no denylist for sensitive in-workspace files (`.env`, `.git/config`, etc.). Anything inside the workspace is accessible to tools the model can call.
 - Read tools enforce byte caps: whole-file and edit tools use a 1 MiB limit; `read_file_paginated` accepts source files up to 10 MiB.
 - `rtReadonly` omits mutating tools from the model schema and blocks them at execution time if they are invoked anyway.

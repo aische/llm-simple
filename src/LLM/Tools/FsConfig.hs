@@ -83,9 +83,9 @@ sandboxPath cfg relPath = do
       -- 'canonical' and refuse any symlink encountered: since the
       -- canonical chain should not contain symlinks by construction, any
       -- symlink found here is a fresh injection. Note: this narrows but
-      -- does not fully close the TOCTOU window; a complete fix requires
-      -- fd-relative ('openat') APIs not available in the portable
-      -- 'directory' package.
+      -- does not close the TOCTOU window. That is accepted: the tools
+      -- cannot create symlinks, so only another process writing to the
+      -- workspace can exploit it (see the threat model in the README).
       verifyNoSymlinksInChain base (joinPath baseComps) tailComps
       pure canonical
 

@@ -21,6 +21,8 @@ module LLM.Tools.FsLimits
     maxReadBytes,
     maxPaginatedFileBytes,
     maxTreeEntries,
+    maxVisitedEntries,
+    maxOutputBytes,
     binarySniffBytes,
     detectBinary,
     readBoundedTextFile,
@@ -79,6 +81,19 @@ maxPaginatedFileBytes = 10 * 1024 * 1024 -- 10 MiB
 -- emit. Output is truncated past this point with a marker in the header.
 maxTreeEntries :: Int
 maxTreeEntries = 2000
+
+-- | Budget of directory entries one call of a walking tool (@find_files@,
+-- @grep@, @directory_tree@) may look at, counted as directories are
+-- listed. A walk that runs out stops and says so in its output, so a large
+-- tree costs a bounded amount of work even when nothing matches.
+maxVisitedEntries :: Int
+maxVisitedEntries = 20000
+
+-- | Cap on the bytes of text one filesystem tool result returns (a page of
+-- @read_file_paginated@, the lines of a listing or search). Output past it
+-- is cut and the cut is reported.
+maxOutputBytes :: Int
+maxOutputBytes = 100 * 1024 -- 100 KiB
 
 -- | A NUL byte in the first 'binarySniffBytes' is a robust, cheap binary
 -- heuristic. On I/O failure the file is treated as binary (the caller

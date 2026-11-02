@@ -14,11 +14,10 @@ import Data.Text.Encoding.Error (lenientDecode)
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath, withWorkspacePaths)
-import LLM.Tools.FsLimits (maxPaginatedFileBytes)
+import LLM.Tools.FsLimits (maxOutputBytes, maxPaginatedFileBytes)
 import LLM.Tools.Internal.TextFile (withTextHandle)
 import System.IO
-  ( Handle,
-    IOMode (ReadMode),
+  ( IOMode (ReadMode),
     hFileSize,
     withBinaryFile,
   )
@@ -66,7 +65,9 @@ readFilePaginatedToolTyped cfg =
           <> "Use 'offset' (1-based line number, default 1) and 'limit' (default 200, max 2000) "
           <> "to walk through large files one page at a time. Source files larger than "
           <> T.pack (show maxPaginatedFileBytes)
-          <> " bytes are refused. The response header reports the "
+          <> " bytes are refused. A page holds at most "
+          <> T.pack (show maxOutputBytes)
+          <> " bytes of text; a longer line is cut and marked. The response header reports the "
           <> "file's byte size, the line range returned, and whether more lines remain along "
           <> "with the next offset to use. The tool is stateless: pass the next offset on the "
           <> "following call. Binary files are refused.",
@@ -79,39 +80,101 @@ execute cfg args = do
   let rel = T.unpack args._rfpPath
       offset = max 1 args._rfpOffset
       limit = max 1 (min maxLimit args._rfpLimit)
+      path = args._rfpPath
+      capText = T.pack (show maxPaginatedFileBytes)
   resolved <- sandboxPath cfg rel
   result <- withTextHandle (withBinaryFile resolved ReadMode) $ \h -> do
     size <- hFileSize h
     if size > maxPaginatedFileBytes
-      then pure (Left size)
+      then
+        pure . Left $
+          path
+            <> " is "
+            <> T.pack (show size)
+            <> " bytes, which exceeds the "
+            <> capText
+            <> "-byte cap for read_file_paginated."
       else do
-        (lns, hasMore) <- readPage h offset limit
-        pure (Right (size, lns, hasMore))
+        -- Read one byte past the cap, so a file that grew past it since
+        -- the size check is reported instead of looking like it ended.
+        bytes <- BS.hGet h (fromIntegral maxPaginatedFileBytes + 1)
+        pure $
+          if fromIntegral (BS.length bytes) > maxPaginatedFileBytes
+            then
+              Left $
+                path
+                  <> " grew past the "
+                  <> capText
+                  <> "-byte cap for read_file_paginated during the read."
+            else
+              let (lns, hasMore) = takePage offset limit bytes
+               in Right (size, lns, hasMore)
   pure $ case result of
     Nothing ->
       "Error: "
-        <> args._rfpPath
+        <> path
         <> " appears to be a binary file; read_file_paginated only supports text files."
-    Just (Left size) ->
-      "Error: "
-        <> args._rfpPath
-        <> " is "
-        <> T.pack (show size)
-        <> " bytes, which exceeds the "
-        <> T.pack (show maxPaginatedFileBytes)
-        <> "-byte cap for read_file_paginated."
+    Just (Left err) -> "Error: " <> err
     Just (Right (size, lns, hasMore)) ->
-      renderPage args._rfpPath size offset lns hasMore
+      renderPage path size offset lns hasMore
 
 -- | Take up to @limit@ lines starting at line @offset@, and report whether
--- more lines follow. Reads at most 'maxPaginatedFileBytes' (the file may
--- have grown since the size check) and decodes leniently, so invalid UTF-8
--- bytes show as U+FFFD instead of failing the read.
-readPage :: Handle -> Int -> Int -> IO ([Text], Bool)
-readPage h offset limit = do
-  bytes <- BS.hGet h (fromIntegral maxPaginatedFileBytes)
-  let rest = drop (offset - 1) (T.lines (decodeUtf8With lenientDecode bytes))
-  pure (take limit rest, not (null (drop limit rest)))
+-- more lines follow.
+--
+-- Lines are found on the raw bytes (a newline byte never occurs inside a
+-- UTF-8 sequence), so the lines before @offset@ are skipped without being
+-- decoded. Only the page is decoded, leniently: invalid UTF-8 bytes show
+-- as U+FFFD instead of failing the read.
+--
+-- The page holds at most 'maxOutputBytes' bytes of line text. It ends
+-- before a line that would go over, unless that line is the first one;
+-- then it is cut and marked, and the next page starts at the next line.
+takePage :: Int -> Int -> BS.ByteString -> ([Text], Bool)
+takePage offset limit = go 0 0 [] . dropLines (offset - 1)
+  where
+    go :: Int -> Int -> [Text] -> BS.ByteString -> ([Text], Bool)
+    go n used acc bs
+      | BS.null bs = (reverse acc, False)
+      | n >= limit = (reverse acc, True)
+      | used + len > maxOutputBytes =
+          if null acc
+            then ([cutLine line], not (BS.null rest))
+            else (reverse acc, True)
+      | otherwise = go (n + 1) (used + len) (decode line : acc) rest
+      where
+        (line, rest0) = BS.break (== newline) bs
+        rest = BS.drop 1 rest0
+        len = BS.length line
+
+    dropLines :: Int -> BS.ByteString -> BS.ByteString
+    dropLines k bs
+      | k <= 0 = bs
+      | otherwise = case BS.elemIndex newline bs of
+          Nothing -> BS.empty
+          Just i -> dropLines (k - 1) (BS.drop (i + 1) bs)
+
+    cutLine line =
+      decode (utf8Prefix maxOutputBytes line)
+        <> " [line cut: "
+        <> T.pack (show (BS.length line))
+        <> " bytes, first "
+        <> T.pack (show maxOutputBytes)
+        <> " shown]"
+
+    decode = decodeUtf8With lenientDecode
+    newline = 10
+
+-- | At most @n@ bytes from the start, without splitting a UTF-8 sequence.
+utf8Prefix :: Int -> BS.ByteString -> BS.ByteString
+utf8Prefix n bs
+  | BS.length bs <= n = bs
+  | otherwise = BS.take (boundary n) bs
+  where
+    -- Back up while the byte at the cut is a continuation byte (10xxxxxx),
+    -- so the cut falls before the lead byte of its sequence.
+    boundary i
+      | i > 0 && BS.index bs i >= 0x80 && BS.index bs i < 0xC0 = boundary (i - 1)
+      | otherwise = i
 
 renderPage :: Text -> Integer -> Int -> [Text] -> Bool -> Text
 renderPage path size offset lns hasMore =

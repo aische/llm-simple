@@ -19,6 +19,7 @@ import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
 import LLM.Load.FsTools (fsTools)
 import LLM.Tools.FsConfig (SandboxViolation (..))
+import LLM.Tools.FsLimits (maxOutputBytes, maxTreeEntries, maxVisitedEntries)
 import System.Directory
   ( createDirectory,
     createDirectoryLink,
@@ -35,6 +36,7 @@ import GHC.Clock (getMonotonicTime)
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
   ( Spec,
+    aroundAll,
     describe,
     expectationFailure,
     it,
@@ -373,6 +375,84 @@ spec = describe "FsTools" $ do
       T.unpack result `shouldContain` "0 match(es)"
       (t1 - t0) `shouldSatisfy` (< 1)
 
+  describe "work bounds" $ aroundAll withBigTree $ do
+    it "find_files stops at the entry budget when nothing matches" $ \sb -> do
+      tm <- fsTools sb
+      result <- runTool tm "find_files" (object ["pattern" .= ("**/*.nomatch" :: Text)])
+      T.unpack result `shouldContain` "0 match(es)"
+      T.unpack result `shouldContain` ("stopped after visiting " <> show maxVisitedEntries <> " entries")
+
+    it "grep stops at the entry budget when nothing matches" $ \sb -> do
+      tm <- fsTools sb
+      result <- runTool tm "grep" (object ["pattern" .= ("needle" :: Text)])
+      T.unpack result `shouldContain` "0 match(es)"
+      T.unpack result `shouldContain` ("stopped after visiting " <> show maxVisitedEntries <> " entries")
+
+    it "directory_tree stops at the entry budget" $ \sb -> do
+      tm <- fsTools sb
+      result <- runTool tm "directory_tree" (object ["path" .= ("." :: Text)])
+      T.unpack result `shouldContain` ("stopped after visiting " <> show maxVisitedEntries <> " entries")
+
+    it "readdir lists at most maxTreeEntries entries and says how many there are" $ \sb -> do
+      tm <- fsTools sb
+      result <- runTool tm "readdir" (object ["path" .= ("." :: Text)])
+      length (T.lines result) `shouldBe` maxTreeEntries + 1
+      last (T.lines result) `shouldBe` "[showing 2000 of 20001 entries; use find_files to search the rest]"
+
+  describe "work bounds (small trees)" $ do
+    it "grep stops at maxResults and reports a lower bound on files" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      mapM_ (\i -> BS.writeFile (sb </> ("f" <> show i <> ".txt")) "needle\n") [1 .. 5 :: Int]
+      result <- runTool tm "grep" (object ["pattern" .= ("needle" :: Text), "maxResults" .= (2 :: Int)])
+      T.unpack result `shouldContain` "2 match(es) across 2+ file(s)"
+      T.unpack result `shouldContain` "stopped at maxResults"
+
+    it "grep reports an exact file count when it searched everything" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      mapM_ (\i -> BS.writeFile (sb </> ("f" <> show i <> ".txt")) "needle\n") [1 .. 3 :: Int]
+      result <- runTool tm "grep" (object ["pattern" .= ("needle" :: Text)])
+      T.unpack result `shouldContain` "3 match(es) across 3 file(s) ==="
+
+    it "find_files cuts output at maxOutputBytes" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      -- 1500 names of ~100 bytes is ~150 KB of output, over the cap.
+      let name i = replicate 90 'x' <> show (i :: Int) <> ".txt"
+      mapM_ (\i -> BS.writeFile (sb </> name i) "") [1000 .. 2499]
+      result <- runTool tm "find_files" (object ["pattern" .= ("*.txt" :: Text), "maxResults" .= (2000 :: Int)])
+      BS.length (encodeUtf8 result) `shouldSatisfy` (< maxOutputBytes + 1000)
+      T.unpack result `shouldContain` "output truncated at"
+
+    it "read_file_paginated cuts a line longer than a page and marks it" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "long.txt") ("short\n" <> BS.replicate (maxOutputBytes * 3) 0x61 <> "\nlast\n")
+      result <- runTool tm "read_file_paginated" (object ["path" .= ("long.txt" :: Text), "offset" .= (2 :: Int)])
+      BS.length (encodeUtf8 result) `shouldSatisfy` (< maxOutputBytes + 1000)
+      T.unpack result `shouldContain` ("[line cut: " <> show (maxOutputBytes * 3) <> " bytes")
+      T.unpack result `shouldContain` "next offset: 3"
+
+    it "read_file_paginated ends a page before the byte cap" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      let line = BS.replicate (maxOutputBytes `div` 2 + 10) 0x62
+      BS.writeFile (sb </> "two.txt") (line <> "\n" <> line <> "\n")
+      result <- runTool tm "read_file_paginated" (object ["path" .= ("two.txt" :: Text)])
+      T.unpack result `shouldContain` "lines 1-1"
+      T.unpack result `shouldContain` "next offset: 2"
+      T.unpack result `shouldNotContain` "line cut"
+
+    it "read_file_paginated does not split a UTF-8 character when cutting" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      -- "ä" is two bytes; an odd prefix byte puts the cap inside one.
+      BS.writeFile (sb </> "u.txt") ("x" <> encodeUtf8 (T.replicate maxOutputBytes "ä"))
+      result <- runTool tm "read_file_paginated" (object ["path" .= ("u.txt" :: Text)])
+      T.unpack result `shouldNotContain` "\xFFFD"
+
+    it "read_file_paginated skips lines before the offset" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "n.txt") (BS.concat [encodeUtf8 (T.pack ("l" <> show i <> "\n")) | i <- [1 .. 10 :: Int]])
+      result <- runTool tm "read_file_paginated" (object ["path" .= ("n.txt" :: Text), "offset" .= (9 :: Int)])
+      filter (not . T.isPrefixOf "===") (T.lines result) `shouldBe` ["     9| l9", "    10| l10"]
+      T.unpack result `shouldContain` "end of file"
+
   describe "workspace root guard" $ do
     let rootPaths = [".", "", "./", "sub/.."] :: [Text]
     it "remove_directory refuses the workspace root" $ withSandbox $ \sb -> do
@@ -422,6 +502,12 @@ withLocaleEncoding :: TextEncoding -> IO a -> IO a
 withLocaleEncoding enc act = do
   old <- getLocaleEncoding
   bracket_ (setLocaleEncoding enc) (setLocaleEncoding old) act
+
+-- | A sandbox with one more entry than 'maxVisitedEntries', none matching.
+withBigTree :: (FilePath -> IO ()) -> IO ()
+withBigTree act = withSandbox $ \sb -> do
+  mapM_ (\i -> BS.writeFile (sb </> ("e" <> show i)) "") [0 .. maxVisitedEntries]
+  act sb
 
 withSandbox :: (FilePath -> IO a) -> IO a
 withSandbox act = withSystemTempDirectory "llm-simple-fstools" $ \root -> do

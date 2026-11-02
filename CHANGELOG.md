@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `LLM.Tools.FsLimits.atomicWriteWith` replaces a file by writing a
   temporary file in the same directory and renaming it over the target.
+- `LLM.Tools.FsLimits.maxVisitedEntries` (20,000) and `maxOutputBytes`
+  (100 KiB): the work and output bounds of the filesystem tools.
 
 ### Fixed
 
@@ -28,6 +30,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The edit tools hold a per-file lock from the read to the write. It
     covers threads of the same process only; edits from other processes
     can still be lost.
+- The search and listing tools now bound their total work, not just their
+  output. **Behaviour change:**
+  - `find_files`, `grep` and `directory_tree` look at no more than
+    `maxVisitedEntries` directory entries per call. A walk that runs out
+    stops and says so in its header ("stopped after visiting 20000
+    entries; narrow the path or pattern"). Before, a large tree with no
+    match was walked in full.
+  - `grep` searches files as it walks and stops at `maxResults`, instead of
+    collecting every candidate first and reading on to count files. When it
+    stops early, the header shows the file count as `N+`, and "stopped at
+    maxResults" replaces "truncated".
+  - `readdir` lists at most 2,000 entries and ends with a line saying how
+    many there are. `find_files`, `grep`, `readdir` and `directory_tree`
+    cut their output at `maxOutputBytes` and say so.
+  - `file_info` stops counting a directory's entries at its 10,000 cap.
+  - A `read_file_paginated` page holds at most `maxOutputBytes` of text. A
+    page ends before a line that would go over; a single longer line is cut
+    and marked. Lines before `offset` are skipped without being decoded.
+  - `read_file_paginated` no longer reports a file that grew past its
+    10 MiB cap during the read as ending at the cap; it returns an error.
 
 ## [0.4.1.0] - 2026-11-02
 

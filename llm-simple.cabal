@@ -142,6 +142,7 @@ library
         LLM.Core.SSE
         LLM.Tools.Internal.PathLock
         LLM.Tools.Internal.TextFile
+        LLM.Tools.Internal.WalkBudget
     hs-source-dirs:     src
     build-depends:
         aeson          >=2.0   && <2.3,

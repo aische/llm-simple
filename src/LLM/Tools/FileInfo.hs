@@ -141,9 +141,11 @@ renderDirInfo ::
   Maybe Text ->
   IO Text
 renderDirInfo rel resolved isLink perms mtime = do
+  -- Listing the directory is unavoidable (streaming it needs a POSIX-only
+  -- API), but counting stops at the cap.
   entries <- safeListDirectory resolved
-  let total = length entries
-      visible = length (filter (not . isHidden) entries)
+  let total = length (take maxDirEntriesCounted entries)
+      visible = length (take maxDirEntriesCounted (filter (not . isHidden) entries))
       countText n
         | n >= maxDirEntriesCounted = T.pack (show maxDirEntriesCounted) <> "+"
         | otherwise = T.pack (show n)

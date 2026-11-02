@@ -6,6 +6,8 @@ where
 
 import Autodocodec qualified as AC
 import Control.Exception (IOException, try)
+import Control.Monad (unless)
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Aeson (FromJSON)
 import Data.List (sort)
 import Data.Text (Text)
@@ -13,8 +15,9 @@ import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath, withWorkspacePaths)
-import LLM.Tools.FsLimits (expensiveWalkDepth)
+import LLM.Tools.FsLimits (expensiveWalkDepth, maxOutputBytes, maxVisitedEntries)
 import LLM.Tools.Internal.TextFile (readLenient, withTextHandle)
+import LLM.Tools.Internal.WalkBudget (WalkBudget, budgetExhausted, budgetNote, capLines, newWalkBudget, takeEntries)
 import System.Directory
   ( doesDirectoryExist,
     doesFileExist,
@@ -98,7 +101,10 @@ grepToolTyped cfg =
           <> "Skips hidden files, binary files, and files larger than 1 MB. "
           <> "Use 'extensions' to restrict by file type (e.g. [\"hs\"]). "
           <> "Output is capped at 'maxResults' lines (default 50, hard cap 500); "
-          <> "the header reports whether results were truncated and how many files were scanned.",
+          <> "the header reports whether results were truncated and how many files were scanned. "
+          <> "A search looks at most "
+          <> T.pack (show maxVisitedEntries)
+          <> " entries and stops at maxResults; then the file count is shown as 'N+'.",
       ttoolReadonly = True,
       ttoolExecute = const (withWorkspacePaths cfg . execute cfg)
     }
@@ -130,49 +136,73 @@ execute cfg args = do
                   <> T.pack (show maxFileSizeBytes)
                   <> "-byte cap for grep."
             else do
-              files <-
-                if isFile
-                  then pure [(resolved, takeFileName resolved)]
-                  else collectFiles resolved "" 0 exts
-              (matches, scanned, truncated) <- searchFiles files pat ci cap
-              pure $ renderResults args._grepPath pat matches scanned truncated
+              budget <- newWalkBudget maxVisitedEntries
+              st <- newIORef (GrepState [] 0 0 False)
+              let search = searchFile st pat ci cap
+              if isFile
+                then search resolved (takeFileName resolved)
+                else walkDir budget st search exts resolved "" 0
+              GrepState matches _ scanned capHit <- readIORef st
+              stopped <- budgetExhausted budget
+              pure $
+                renderResults
+                  args._grepPath
+                  pat
+                  (reverse matches)
+                  scanned
+                  ((capHit && not isFile) || stopped)
+                  capHit
+                  (if stopped then Just (budgetNote budget) else Nothing)
 
 -- | Lowercase and strip leading dots so callers can pass "hs" or ".hs".
 normalizeExtensions :: [Text] -> [Text]
 normalizeExtensions = map (T.toLower . T.dropWhile (== '.'))
 
--- | Recursively collect candidate files under a directory, respecting
--- depth, hidden-file, extension, and size limits. Order is stable
--- (directories sorted) so output is deterministic. Each file comes with
--- its path relative to the search root, built from the names walked, so
--- no host path is shown.
-collectFiles :: FilePath -> FilePath -> Int -> [Text] -> IO [(FilePath, FilePath)]
-collectFiles _ _ depth _ | depth > maxDepth = pure []
-collectFiles dir display depth exts = do
-  entries <- sort <$> safeListDirectory dir
-  let visible = filter (not . isFileHidden) entries
-  results <- mapM (visit dir display depth exts) visible
-  pure (concat results)
+-- | Matches so far (newest first), their count, files searched, and
+-- whether the walk stopped because 'maxResults' was reached.
+data GrepState = GrepState [Match] Int Int Bool
 
-visit :: FilePath -> FilePath -> Int -> [Text] -> FilePath -> IO [(FilePath, FilePath)]
-visit parent display depth exts name = do
-  let full = parent </> name
-      fullDisplay = display </> name
-  -- Skip symlinks to prevent traversal out of the sandbox.
-  isLink <- isSymlink full
-  if isLink
-    then pure []
-    else do
-      isDir <- doesDirectoryExist full
-      if isDir
-        then collectFiles full fullDisplay (depth + 1) exts
-        else do
-          isFile <- doesFileExist full
-          if isFile && extensionAllowed exts name
-            then do
-              ok <- isSizeOk full
-              pure [(full, fullDisplay) | ok]
-            else pure []
+-- | Walk a directory and search each candidate file as it is found,
+-- respecting depth, hidden-file, extension and size limits and the entry
+-- budget. Stops once 'maxResults' is reached. Order is stable (entries
+-- sorted) so output is deterministic. Each file is shown by its path
+-- relative to the search root, built from the names walked, so no host
+-- path is shown.
+walkDir ::
+  WalkBudget ->
+  IORef GrepState ->
+  (FilePath -> FilePath -> IO ()) ->
+  [Text] ->
+  FilePath ->
+  FilePath ->
+  Int ->
+  IO ()
+walkDir budget st search exts = go
+  where
+    go dir display depth
+      | depth > maxDepth = pure ()
+      | otherwise = do
+          entries <- sort <$> safeListDirectory dir
+          allowed <- takeEntries budget (filter (not . isFileHidden) entries)
+          mapM_ (visit dir display depth) allowed
+    visit parent display depth name = do
+      GrepState _ _ _ capHit <- readIORef st
+      unless capHit $ do
+        let full = parent </> name
+            fullDisplay = display </> name
+        -- Skip symlinks to prevent traversal out of the sandbox.
+        isLink <- isSymlink full
+        unless isLink $ do
+          isDir <- doesDirectoryExist full
+          if isDir
+            then go full fullDisplay (depth + 1)
+            else do
+              isFile <- doesFileExist full
+              ok <-
+                if isFile && extensionAllowed exts name
+                  then isSizeOk full
+                  else pure False
+              if ok then search full fullDisplay else pure ()
 
 extensionAllowed :: [Text] -> FilePath -> Bool
 extensionAllowed [] _ = True
@@ -197,35 +227,23 @@ safeListDirectory path = do
     Right xs -> pure xs
     Left _ -> pure []
 
--- | Search the given files for a literal pattern. Stops collecting matches
--- once the cap is reached but keeps scanning the remaining files so the
--- 'scanned' count reflects the full sweep. Returns (matches, files scanned,
--- truncated?).
-searchFiles ::
-  [(FilePath, FilePath)] ->
-  Text ->
-  Bool ->
-  Int ->
-  IO ([Match], Int, Bool)
-searchFiles files pat ci cap = go files [] 0 False
+-- | Search one file and add its matches, up to the cap. Binary and
+-- unreadable files count as searched but give no matches.
+searchFile :: IORef GrepState -> Text -> Bool -> Int -> FilePath -> FilePath -> IO ()
+searchFile st pat ci cap f display = do
+  r <-
+    try (withTextHandle (withBinaryFile f ReadMode) readLenient) ::
+      IO (Either IOException (Maybe Text))
+  let ms = case r of
+        Right (Just content) -> matchLines display content needle ci
+        _ -> []
+  modifyIORef' st $ \(GrepState acc n scanned _) ->
+    let remaining = cap - n
+        taken = take remaining ms
+        n' = n + length taken
+     in GrepState (reverse taken ++ acc) n' (scanned + 1) (n' >= cap)
   where
     needle = if ci then T.toLower pat else pat
-    go [] acc scanned truncated = pure (reverse acc, scanned, truncated)
-    go ((f, display) : rest) acc scanned truncated
-      | length acc >= cap = go rest acc (scanned + 1) True
-      | otherwise = do
-          -- Binary and unreadable files are skipped.
-          r <-
-            try (withTextHandle (withBinaryFile f ReadMode) readLenient) ::
-              IO (Either IOException (Maybe Text))
-          case r of
-            Right (Just content) -> do
-              let ms = matchLines display content needle ci
-                  remaining = cap - length acc
-                  taken = take remaining ms
-                  truncated' = truncated || length ms > remaining
-              go rest (reverse taken ++ acc) (scanned + 1) truncated'
-            _ -> go rest acc (scanned + 1) truncated
 
 data Match = Match
   { mPath :: FilePath,
@@ -246,21 +264,28 @@ truncateLine t
   | T.length t <= maxLineLength = t
   | otherwise = T.take maxLineLength t <> "…"
 
-renderResults :: Text -> Text -> [Match] -> Int -> Bool -> Text
-renderResults rootDisplay pat matches scanned truncated =
-  let header =
+-- | Render the results. @partial@: the walk stopped early, so the file
+-- count is a lower bound. @capHit@: 'maxResults' was reached.
+renderResults :: Text -> Text -> [Match] -> Int -> Bool -> Bool -> Maybe Text -> Text
+renderResults rootDisplay pat allMatches scanned partial capHit note =
+  let (body, cut) = capLines maxOutputBytes (map fmtMatch allMatches)
+      header =
         "=== grep "
           <> T.pack (show pat)
           <> " in "
           <> rootDisplay
           <> " | "
-          <> T.pack (show (length matches))
+          <> T.pack (show (length body))
           <> " match(es) across "
           <> T.pack (show scanned)
+          <> (if partial then "+" else "")
           <> " file(s)"
-          <> (if truncated then " | truncated (raise maxResults to see more)" else "")
+          <> ( if cut
+                 then " | output truncated at " <> T.pack (show maxOutputBytes) <> " bytes"
+                 else if capHit then " | stopped at maxResults (raise it to see more)" else ""
+             )
+          <> maybe "" (" | " <>) note
           <> " ==="
-      body = map fmtMatch matches
    in T.unlines (header : body)
   where
     fmtMatch m =

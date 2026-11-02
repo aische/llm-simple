@@ -14,7 +14,8 @@ import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath, withWorkspacePaths)
-import LLM.Tools.FsLimits (cheapWalkDepth)
+import LLM.Tools.FsLimits (cheapWalkDepth, maxOutputBytes, maxVisitedEntries)
+import LLM.Tools.Internal.WalkBudget (WalkBudget, budgetExhausted, budgetNote, capLines, newWalkBudget, takeEntries)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath ((</>))
 
@@ -94,7 +95,10 @@ findFilesToolTyped cfg =
           <> "Skips hidden entries unless 'includeHidden' is true. "
           <> "Use 'type' to restrict to files or directories. "
           <> "Output is capped at 'maxResults' (default 200, hard cap 2000); "
-          <> "the header reports whether results were truncated and how many entries were scanned.",
+          <> "the header reports whether results were truncated and how many entries were scanned. "
+          <> "A search looks at most "
+          <> T.pack (show maxVisitedEntries)
+          <> " entries and says so if it stopped there.",
       ttoolReadonly = True,
       ttoolExecute = const (withWorkspacePaths cfg . execute cfg)
     }
@@ -115,8 +119,11 @@ execute cfg args = do
         then pure $ "Error: path is not a directory: " <> args._ffPath
         else do
           let segs = splitGlob pat
-          (matches, scanned, truncated) <- walk resolved includeHidden kind segs cap
-          pure $ renderResults args._ffPath pat matches scanned truncated
+          budget <- newWalkBudget maxVisitedEntries
+          (matches, scanned, truncated) <- walk budget resolved includeHidden kind segs cap
+          stopped <- budgetExhausted budget
+          let note = if stopped then Just (budgetNote budget) else Nothing
+          pure $ renderResults args._ffPath pat matches scanned truncated note
 
 -- ---------------------------------------------------------------------------
 -- Filesystem walk
@@ -125,13 +132,14 @@ execute cfg args = do
 -- | Result of the walk: matched relative paths (sorted within each directory),
 -- count of entries inspected, and whether the cap truncated the output.
 walk ::
+  WalkBudget ->
   FilePath ->
   Bool ->
   EntryFilter ->
   [Text] ->
   Int ->
   IO ([FilePath], Int, Bool)
-walk root includeHidden kind pat cap = do
+walk budget root includeHidden kind pat cap = do
   WalkState acc _ scanned truncated <- go root [] 0 (WalkState [] 0 0 False)
   pure (reverse acc, scanned, truncated)
   where
@@ -146,7 +154,8 @@ walk root includeHidden kind pat cap = do
                 if includeHidden
                   then entries
                   else filter (not . isFileHidden) entries
-          step visible dir relSegs depth st
+          allowed <- takeEntries budget visible
+          step allowed dir relSegs depth st
 
     step [] _ _ _ st = pure st
     step (name : rest) dir relSegs depth (WalkState acc n scanned truncated)
@@ -234,9 +243,12 @@ matchSegment pat0 str0 = go pat0 str0 Nothing
 -- Rendering
 -- ---------------------------------------------------------------------------
 
-renderResults :: Text -> Text -> [FilePath] -> Int -> Bool -> Text
-renderResults rootDisplay pat matches scanned truncated =
-  let header =
+renderResults :: Text -> Text -> [FilePath] -> Int -> Bool -> Maybe Text -> Text
+renderResults rootDisplay pat allMatches scanned truncated0 note =
+  let (body, cut) = capLines maxOutputBytes (map T.pack allMatches)
+      matches = body
+      truncated = truncated0 || cut
+      header =
         "=== find_files "
           <> T.pack (show pat)
           <> " in "
@@ -247,7 +259,10 @@ renderResults rootDisplay pat matches scanned truncated =
           <> T.pack (show scanned)
           <> " entr"
           <> (if scanned == 1 then "y" else "ies")
-          <> (if truncated then " | truncated (raise maxResults to see more)" else "")
+          <> ( if cut
+                 then " | output truncated at " <> T.pack (show maxOutputBytes) <> " bytes"
+                 else if truncated then " | truncated (raise maxResults to see more)" else ""
+             )
+          <> maybe "" (" | " <>) note
           <> " ==="
-      body = map T.pack matches
    in T.unlines (header : body)

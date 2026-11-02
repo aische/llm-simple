@@ -141,6 +141,9 @@ imageSources turns =
 -- | Run one model call with the model's throttle delay and retry policy.
 -- @attempt@ is run once per try; any per-attempt timeout must be inside it.
 --
+-- 'mcThrottleDelay' is slept before every try, retries included. Before a
+-- retry it comes after the retry backoff, so the two delays add up.
+--
 -- When 'grAbortSignal' fires, the call is interrupted wherever it is (in an
 -- attempt, or in the throttle or backoff sleep) and returns 'Aborted'. An
 -- interrupted attempt is cancelled, which closes its HTTP connection.
@@ -152,8 +155,10 @@ callWithRetry ::
 callWithRetry gr mc attempt =
   fmap (fromMaybe (Left Aborted)) $
     interruptOnAbort gr.grAbortSignal $
-      maybeThrottle mc.mcThrottleDelay $
-        withRetry (modelRetryPolicy mc) (gr.grHooks.onLog Warn) (unlessAborted gr attempt)
+      withRetry
+        (modelRetryPolicy mc)
+        (gr.grHooks.onLog Warn)
+        (maybeThrottle mc.mcThrottleDelay (unlessAborted gr attempt))
 
 -- | Run @act@ unless 'grAbortSignal' has fired, else return 'Aborted'
 -- (which is not retried). Checked before every attempt, so also after

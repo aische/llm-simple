@@ -9,6 +9,7 @@ import Control.Retry (RetryPolicyM (getRetryPolicyM), RetryStatus (rsIterNumber)
 import Data.Aeson (object, (.=))
 import Data.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Text (Text)
+import GHC.Clock (getMonotonicTime)
 import LLM.Core.Abort (AbortSignal, abort, newAbortSignal)
 import LLM.Core.Types
   ( ChatResponse (..),
@@ -218,6 +219,25 @@ spec = describe "Streaming" $ do
       r <- timeout 5_000_000 $ generateTextWithFallbacks (testGenRequest []) {grAbortSignal = Just sig} (ModelWithFallbacks mc [])
       fmap (fmap (.respText)) r `shouldBe` Just (Left GErrAborted)
       readIORef calls `shouldReturn` 0
+
+  describe "throttle" $ do
+    it "sleeps the throttle delay before every attempt, retries included" $ do
+      stamps <- newIORef []
+      let gw =
+            (streamGateway [] (ChatResponse "" [] Nothing Nothing))
+              { gwGenerateText = \_ _ -> do
+                  t <- getMonotonicTime
+                  modifyIORef' stamps (t :)
+                  pure (Left (HttpError 503 "overloaded"))
+              }
+          mc = (testModelConfig gw) {mcThrottleDelay = Just 100, mcRetryCount = 2}
+      start <- getMonotonicTime
+      _ <- generateTextLLM (testGenRequest []) mc
+      ts <- reverse <$> readIORef stamps
+      length ts `shouldBe` 3
+      -- Backoff is 0 here, so each gap is the throttle alone.
+      let gaps = zipWith (-) ts (start : ts)
+      all (>= 0.1) gaps `shouldBe` True
 
   describe "modelRetryPolicy" $ do
     it "caps the backoff delay at 30 s" $ do

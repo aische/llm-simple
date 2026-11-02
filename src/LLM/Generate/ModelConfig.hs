@@ -72,7 +72,8 @@ data ModelConfig = ModelConfig
     -- retry gets the full timeout; a timeout is retryable. For streaming it
     -- bounds only the time until the first stream event.
     mcRequestTimeout :: Maybe Int,
-    -- | Delay in milliseconds before each API call (rate limiting).
+    -- | Delay in milliseconds before each API call attempt, retries
+    -- included (rate limiting). Before a retry it is added to the backoff.
     mcThrottleDelay :: Maybe Int,
     -- | Number of retries on retryable 'LLMError's before giving up on this model.
     mcRetryCount :: Int,

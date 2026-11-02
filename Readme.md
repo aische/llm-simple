@@ -72,7 +72,7 @@ Models are defined in a JSON array. Each entry maps a logical config name to a p
 | `maxTokens`       | Max tokens per request                                                   |
 | `temperature`     | Sampling temperature (optional)                                          |
 | `requestTimeout`  | Timeout in ms per attempt (optional); for streaming, time until the first event; timeouts are retried |
-| `throttleDelay`   | Delay between requests in ms (optional)                                  |
+| `throttleDelay`   | Delay in ms before each request attempt, retries included; added to the retry backoff (optional) |
 | `retryCount`      | Number of retries on retryable errors (429, 500, 502, 503, 504, 529, network errors including streams that end early, timeouts) |
 | `jitterBackoff`   | Base backoff in ms between retries; full jitter, exponential, each delay capped at 30 s. `Retry-After` is not honoured, so raise this for providers that often rate-limit you |
 | `thinking`        | Extended thinking effort level (optional, provider-dependent)            |

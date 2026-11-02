@@ -58,6 +58,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Ollama and other keyless providers. **Behaviour change:** a catalog that
   pointed a keyed provider at a remote `http://` proxy no longer loads that
   provider; use `https://`.
+- `mcThrottleDelay` (`throttleDelay`) now applies before every attempt,
+  retries included. It was slept once before the first attempt, so retries
+  ran after their backoff alone and could hit the rate limit the throttle
+  was meant to avoid. Before a retry, throttle and backoff add up.
+  **Behaviour change:** a call that retries with a throttle set now takes
+  longer.
 
 ## [0.4.0.1] - 2026-10-27
 

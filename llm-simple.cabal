@@ -229,6 +229,7 @@ test-suite llm-simple-test
                         LLM.FsLimitsSpec
                         LLM.FsToolsSpec
                         LLM.LoadSpec
+                        LLM.LoggerSpec
                         LLM.StreamingSpec
                         LLM.StreamCompletenessSpec
                         LLM.HistoryToolSpec

@@ -13,18 +13,19 @@ module LLM.Generate.Logger
   )
 where
 
+import Control.Exception (bracket)
 import Control.Monad (void)
 import Data.Aeson (Value)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.ByteString.Lazy qualified as BSL
+import Data.Char (isAlphaNum, isAscii)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import LLM.Core.Utils (trySync)
 import System.Directory (createDirectoryIfMissing)
-import System.FilePath ((</>))
-import System.IO (stderr)
+import System.IO (hClose, openBinaryTempFile, stderr)
 
 -- | Log verbosity levels, ordered from most to least verbose
 data LogLevel = Debug | Info | Warn | Error
@@ -78,7 +79,13 @@ withStderrLogger :: LogLevel -> Hooks -> Hooks
 withStderrLogger minLvl h = h {onLog = stderrLogger minLvl}
 
 -- | Add JSON request/response dumping to a directory.
--- Files are named @{provider}-{request|response}-{timestamp}.json@.
+--
+-- Files are named @{provider}-{request|response}-{timestamp}-{unique}.json@,
+-- where the timestamp is in milliseconds and @{unique}@ keeps dumps written
+-- in the same millisecond apart. In the provider name, every character
+-- other than an ASCII letter, digit, @-@ or @_@ becomes @_@, so the file
+-- always lands in @dir@. Each file is created new, readable only by its
+-- owner.
 withJsonDump :: FilePath -> Hooks -> Hooks
 withJsonDump dir h =
   h
@@ -95,8 +102,22 @@ dumpJson dir provider label val = do
   createDirectoryIfMissing True dir
   ts <- getPOSIXTime
   let tsStr = show (round (ts * 1000) :: Integer)
-      name = T.unpack provider <> "-" <> T.unpack label <> "-" <> tsStr <> ".json"
-  BSL.writeFile (dir </> name) (encodePretty val)
+      template = safeFileNamePart provider <> "-" <> safeFileNamePart label <> "-" <> tsStr <> "-.json"
+  -- Creates the file exclusively under a fresh name (template plus a
+  -- unique number), so concurrent dumps never overwrite each other.
+  bracket (openBinaryTempFile dir template) (hClose . snd) $ \(_, h) ->
+    BSL.hPut h (encodePretty val)
+
+-- | Keep ASCII letters, digits, @-@ and @_@; replace everything else
+-- (path separators, dots, spaces, ...) with @_@.
+safeFileNamePart :: Text -> FilePath
+safeFileNamePart t
+  | T.null t = "_"
+  | otherwise = map safeChar (T.unpack t)
+  where
+    safeChar c
+      | isAscii c && (isAlphaNum c || c == '-' || c == '_') = c
+      | otherwise = '_'
 
 -- | Wrap all hook callbacks so synchronous exceptions are silently caught.
 -- Hooks are observability-only and should never abort control flow.

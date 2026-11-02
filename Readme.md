@@ -220,7 +220,7 @@ main = do
 
 Set `rtReadonly = True` to omit mutating tools from the schema sent to the model and to block them at execution time.
 
-For local debugging, `defaultDebugHooks` enables stderr logging and writes request/response JSON to `./dumps` — avoid that in production or shared environments.
+For local debugging, `defaultDebugHooks` enables stderr logging and writes request/response JSON to `./dumps` — avoid that in production or shared environments. Each dump is a new file readable only by its owner; dumps hold prompts, tool arguments and results, and model output, and are never deleted by the library.
 
 ### Single request (no agent loop)
 

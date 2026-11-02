@@ -71,6 +71,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   example executables and the README examples do the same.
   **Behaviour change:** a `.env` that dotenv cannot parse used to be ignored
   silently; its parse error is now thrown.
+- JSON dumps (`withJsonDump`, `debugHooks`, `defaultDebugHooks`) stay in
+  their directory and no longer overwrite each other. The provider name,
+  which for a custom provider comes from `providers.json`, was used in the
+  file name as is, so a name like `../leak` wrote outside the dump
+  directory. Dumps written in the same millisecond had the same name, and
+  the later one replaced the earlier. In the provider name, every character
+  other than an ASCII letter, digit, `-` or `_` now becomes `_`, and each
+  dump is created as a new file with a unique suffix:
+  `{provider}-{request|response}-{timestamp}-{unique}.json`. **Behaviour
+  change:** dump file names have the extra suffix, and dump files are now
+  readable only by their owner (mode 0600).
 
 ## [0.4.0.1] - 2026-10-27
 

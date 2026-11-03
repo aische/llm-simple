@@ -27,6 +27,7 @@ module LLM.Agent
     toTool,
     createGenRequest,
     createGenRequestNoTools,
+    validateAgent,
     toolBudgetUsedUpPrompt,
   )
 where

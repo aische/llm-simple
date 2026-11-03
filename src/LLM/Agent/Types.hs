@@ -32,6 +32,8 @@ data Agent = Agent
     agSystemPrompt :: Maybe Text,
     -- | Tool names from the 'ToolMap' that may be sent to the model.
     -- Only these names are exposed; the map may contain additional tools.
+    -- A repeated name is sent once; a name missing from the map is not sent
+    -- and logged as a warning at the start of the run.
     agTools :: [Text],
     -- | Maximum number of model→tool rounds. Once that many rounds have
     -- run, the agent makes one final model call with the tools still
@@ -45,7 +47,9 @@ data Agent = Agent
     agMaxToolRounds :: Int,
     -- | When 'Just', only the last @n@ user messages (and their follow-on
     -- turns) are sent to the provider. Older turns remain in 'ToolContext' and
-    -- can be retrieved via the auto-injected @get_history@ tool.
+    -- can be retrieved via the auto-injected @get_history@ tool, which
+    -- replaces a caller tool of that name. @'Just' n@ with @n <= 0@ means no
+    -- windowing (as 'Nothing'), with a warning at the start of the run.
     agContextWindow :: Maybe Int
   }
 

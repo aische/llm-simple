@@ -33,6 +33,10 @@ spec = describe "HistoryTool" $ do
     it "returns 0 when the conversation has fewer user messages than N" $ do
       windowOffset (Just 5) [UserTurn "only"] `shouldBe` 0
 
+    it "returns 0 for a non-positive window (no windowing)" $ do
+      windowOffset (Just 0) sampleConversation `shouldBe` 0
+      windowOffset (Just (-1)) sampleConversation `shouldBe` 0
+
   describe "get_history" $ do
     it "reports no earlier history when nothing is hidden" $ do
       result <- runHistory noWindowAgent sampleConversation 0

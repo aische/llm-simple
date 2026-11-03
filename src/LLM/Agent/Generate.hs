@@ -16,6 +16,7 @@ import LLM.Agent.ToolUtils
     ToolRoundOutcome (..),
     getResolvedTools,
     safeRuntimeArgs,
+    validateAgent,
   )
 import LLM.Agent.Types
   ( Agent (agMaxToolRounds, agSystemPrompt),
@@ -34,6 +35,7 @@ import LLM.Generate.Generate
   ( generateTextWithFallbacksRotated,
     streamTextWithFallbacksRotated,
   )
+import LLM.Generate.Logger (Hooks (..), LogLevel (Warn))
 import LLM.Generate.ModelConfig
   ( ModelWithFallbacks (..),
   )
@@ -53,6 +55,9 @@ import LLM.Generate.Types
 -- 'Agent.agMaxToolRounds' rounds have run. Then one final model call asks
 -- for a text answer ('toolBudgetUsedUpPrompt'); tool calls in that reply
 -- are not run, and the run ends with 'GErrToolExceeded'.
+--
+-- The warnings of 'LLM.Agent.ToolUtils.validateAgent' go to 'onLog' at
+-- the start of the run.
 generateText ::
   Agent ->
   ModelWithFallbacks ->
@@ -115,6 +120,7 @@ agentLoop ::
   [Turn] ->
   IO (Either GenerateErrorResult GenerateTextResult)
 agentLoop call agent models toolMap rt0 initialTurns = do
+  mapM_ (rt.rtHooks.onLog Warn) (validateAgent agent toolMap)
   emitEvent rt GenerationStarted
   go models initialTurns [] emptyUsage 0
   where

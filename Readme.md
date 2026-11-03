@@ -175,6 +175,8 @@ main = do
 
 An agent runs a loop: the model may call tools, results are fed back, and the loop continues until the model finishes or `agMaxToolRounds` is reached. After the last allowed round, the agent makes one more model call that asks for a text answer; if the model still calls tools, they are not run and the result is `GErrToolExceeded`.
 
+Configuration mistakes are logged as warnings (`onLog`) at the start of a run instead of failing it: a name in `agTools` that the tool map lacks, a repeated name, a tool named `get_history` while `agContextWindow` is set (the built-in one wins), or a non-positive `agContextWindow` (no windowing). `validateAgent` returns the same warnings.
+
 ```haskell
 import Configuration.Dotenv (defaultConfig, loadFile)
 import Control.Exception (IOException, catch)

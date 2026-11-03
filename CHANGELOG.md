@@ -21,9 +21,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `LLM.Agent.ToolUtils.safeRuntimeArgs` apply both to a request.
 - `LLM.Agent.Generate.toolBudgetUsedUpPrompt` (also in `LLM.Agent`): the
   system-prompt line of the agent's final call after the last tool round.
+- `LLM.Agent.ToolUtils.validateAgent` (also in `LLM.Agent`) lists the
+  warnings the agent loop logs about an agent configuration.
 
 ### Fixed
 
+- The agent checks its tool configuration. **Behaviour change:**
+  - A name repeated in `agTools` is sent to the model once. Before, each
+    copy was sent, a duplicate tool definition.
+  - A name in `agTools` that the tool map lacks is logged as a warning
+    (`onLog Warn`) once at the start of the run, as is a repeated name. It
+    was dropped silently.
+  - While `agContextWindow` is set, a caller tool named `get_history` is
+    dropped with a warning, and only the built-in one is sent. Before, both
+    were sent under one name.
+  - A model call to an unknown tool fires `onToolError` (it already got
+    the result "Unknown tool: <name>").
+  - `agContextWindow = Just n` with `n <= 0` means no windowing, with a
+    warning. A negative `n` sent an empty message list, and `windowOffset`
+    returned the length of the conversation; it now returns 0.
 - After the last allowed tool round, the agent makes one more model call
   instead of returning `GErrToolExceeded` with tool results the model never
   saw. **Behaviour change:** runs that ended in `GErrToolExceeded` mostly

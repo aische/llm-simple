@@ -12,6 +12,7 @@ import Data.Text qualified as T
 import Heptapod (generate)
 import LLM.Agent.Events (noEventObserver)
 import LLM.Agent.Generate (generateText, streamText, toolBudgetUsedUpPrompt)
+import LLM.Agent.ToolUtils (validateAgent)
 import LLM.Agent.Types
   ( Agent (..),
     RuntimeArgs (..),
@@ -44,7 +45,7 @@ import LLM.Core.Utils (getToolCalls)
 import LLM.Core.Usage (PricingInfo (..), defaultPricingInfo, mkUsage)
 import LLM.Generate.Generate (generateTextWithFallbacks)
 import LLM.Generate.GenerateUtils (llmHooks)
-import LLM.Generate.Logger (Hooks (..), noHooks)
+import LLM.Generate.Logger (Hooks (..), LogLevel (..), noHooks)
 import LLM.Generate.ModelConfig
   ( ModelCapabilities (..),
     ModelConfig (..),
@@ -63,6 +64,7 @@ import Test.Hspec
     expectationFailure,
     it,
     shouldBe,
+    shouldContain,
     shouldReturn,
     shouldSatisfy,
   )
@@ -340,6 +342,19 @@ everyCallAnswered turns = and (zipWith answered turns (drop 1 turns ++ [UserTurn
             ToolTurn rs -> map (.trCallId) rs == ids
             _ -> False
     answered _ _ = True
+
+-- | A runtime whose hooks record log lines and tool errors.
+recordingRuntime :: IO (RuntimeArgs, IORef [(LogLevel, Text)], IORef [(Text, Text)])
+recordingRuntime = do
+  logs <- newIORef []
+  toolErrors <- newIORef []
+  rt0 <- mkRuntime Nothing
+  let hooks =
+        noHooks
+          { onLog = \lvl msg -> modifyIORef' logs (++ [(lvl, msg)]),
+            onToolError = \name msg -> modifyIORef' toolErrors (++ [(name, msg)])
+          }
+  pure (rt0 {rtHooks = hooks}, logs, toolErrors)
 
 -- | Shared sticky-fallback checks, run for both 'runGenerate' and 'runStreamGenerate'.
 stickyFallbackSpec ::
@@ -750,3 +765,82 @@ spec = describe "Chat" $ do
       readIORef ran `shouldReturn` 1
       map isFinalCall <$> readIORef reqs `shouldReturn` [False, True]
       fmap (const ()) result `shouldSatisfy` either (\e -> e.gerError == GErrToolExceeded) (const False)
+
+  describe "agent configuration checks" $ do
+    let warnings logs = [m | (Warn, m) <- logs]
+
+    it "sends a tool listed twice once, with a warning" $ do
+      reqs <- newIORef []
+      (rt, logs, _) <- recordingRuntime
+      let agent = defaultAgent {agTools = ["get_weather", "get_weather"]}
+      _ <- generateText agent (ModelWithFallbacks (mockModel (recordingGateway reqs toolThenText)) []) toolMap rt [UserTurn "go"]
+      sent <- readIORef reqs
+      map (map (.toolName) . (.reqTools)) sent `shouldBe` [["get_weather"], ["get_weather"]]
+      ws <- warnings <$> readIORef logs
+      length (filter ("more than once" `T.isInfixOf`) ws) `shouldBe` 1
+
+    it "logs an unknown tool name once per run, not once per round" $ do
+      reqs <- newIORef []
+      (rt, logs, _) <- recordingRuntime
+      let agent = defaultAgent {agTools = ["no_such_tool", "get_weather"]}
+      result <- generateText agent (ModelWithFallbacks (mockModel (recordingGateway reqs toolThenText)) []) toolMap rt [UserTurn "go"]
+      fmap (.gtrText) result `shouldBe` Right "The weather is sunny."
+      length <$> readIORef reqs `shouldReturn` 2
+      ws <- warnings <$> readIORef logs
+      filter ("no_such_tool" `T.isInfixOf`) ws
+        `shouldBe` ["agTools lists no_such_tool, which is not in the tool map; it is not sent to the model"]
+
+    it "uses the built-in get_history over a caller tool of that name when windowing is on" $ do
+      reqs <- newIORef []
+      (rt, logs, _) <- recordingRuntime
+      let callerHistory = constTool "get_history" (pure "caller history")
+          tm = Map.insert "get_history" callerHistory toolMap
+          agent = defaultAgent {agTools = ["get_weather", "get_history"], agContextWindow = Just 2}
+          gw = mockGateway (ChatResponse "ok" [textPart "ok"] Nothing Nothing)
+      _ <- generateText agent (ModelWithFallbacks (mockModel (recordingGateway reqs (gw.gwGenerateText (llmHooks noHooks)))) []) tm rt [UserTurn "go"]
+      [req] <- readIORef reqs
+      let histories = [d | d <- req.reqTools, d.toolName == "get_history"]
+      map (.toolDescription) histories `shouldSatisfy` \ds -> length ds == 1 && ds /= ["test tool"]
+      ws <- warnings <$> readIORef logs
+      length (filter ("get_history" `T.isInfixOf`) ws) `shouldBe` 1
+
+    it "keeps a caller tool named get_history when windowing is off" $ do
+      reqs <- newIORef []
+      (rt, logs, _) <- recordingRuntime
+      let tm = Map.insert "get_history" (constTool "get_history" (pure "caller history")) toolMap
+          agent = defaultAgent {agTools = ["get_history"]}
+          gw = mockGateway (ChatResponse "ok" [textPart "ok"] Nothing Nothing)
+      _ <- generateText agent (ModelWithFallbacks (mockModel (recordingGateway reqs (gw.gwGenerateText (llmHooks noHooks)))) []) tm rt [UserTurn "go"]
+      [req] <- readIORef reqs
+      map (.toolDescription) req.reqTools `shouldBe` ["test tool"]
+      warnings <$> readIORef logs `shouldReturn` []
+
+    it "fires onToolError for a call to an unknown tool" $ do
+      (rt, _, toolErrors) <- recordingRuntime
+      let gw = twoToolCallGateway "no_such_tool"
+          agent = defaultAgent {agMaxToolRounds = 1}
+      _ <- generateText agent (ModelWithFallbacks (mockModel gw) []) toolMap rt [UserTurn "go"]
+      errs <- readIORef toolErrors
+      errs `shouldContain` [("no_such_tool", "Unknown tool: no_such_tool")]
+      length errs `shouldBe` 2
+
+    it "treats a non-positive context window as no windowing, with one warning" $ do
+      let conv = [UserTurn "one", AssistantMessage [textPart "a"], UserTurn "two"]
+      mapM_
+        ( \n -> do
+            reqs <- newIORef []
+            (rt, logs, _) <- recordingRuntime
+            let agent = defaultAgent {agTools = ["get_weather"], agContextWindow = Just n}
+            _ <- generateText agent (ModelWithFallbacks (mockModel (recordingGateway reqs toolThenText)) []) toolMap rt conv
+            sent <- readIORef reqs
+            -- The whole conversation is sent and no get_history is added.
+            map (take 3 . (.reqConversation)) sent `shouldBe` replicate (length sent) conv
+            map (map (.toolName) . (.reqTools)) sent `shouldBe` replicate (length sent) ["get_weather"]
+            ws <- warnings <$> readIORef logs
+            filter ("agContextWindow" `T.isInfixOf`) ws
+              `shouldBe` ["agContextWindow = Just " <> T.pack (show n) <> " is not positive; the whole conversation is sent"]
+        )
+        [0, -1]
+
+    it "validateAgent reports nothing for a valid agent" $ do
+      validateAgent defaultAgent {agTools = ["get_weather"], agContextWindow = Just 3} toolMap `shouldBe` []

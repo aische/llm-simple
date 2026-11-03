@@ -18,6 +18,8 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Agent.Types (ToolContext (..))
+import LLM.Tools.FsLimits (maxOutputBytes)
+import LLM.Tools.Internal.WalkBudget (textPrefixBytes, utf8Length)
 import LLM.Core.Types
   ( ToolCall (tcName),
     ToolResult (trContent, trName),
@@ -53,7 +55,7 @@ getHistoryExecTyped ctx args = do
           chunks = chunkBackward nUserMessages hidden
       if chunkIdx < 0 || chunkIdx >= length chunks
         then pure "(no more history)"
-        else pure $ formatChunk (chunks !! chunkIdx)
+        else pure $ formatChunkWithin maxOutputBytes (chunks !! chunkIdx)
 
 historyToolTyped :: TypedTool ToolContext HistoryToolArgs
 historyToolTyped =
@@ -63,7 +65,10 @@ historyToolTyped =
         "Retrieve earlier conversation history that is not in your current context window. "
           <> "Pass chunk=0 for the most recent hidden history, chunk=1 for the one before that, etc. "
           <> "Returns \"(no earlier history)\" when nothing is hidden, and \"(no more history)\" "
-          <> "when the chunk index is out of range.",
+          <> "when the chunk index is out of range. A page is at most "
+          <> T.pack (show maxOutputBytes)
+          <> " bytes: past that its oldest turns are left out (the last line says how many), "
+          <> "and a single turn over the cap is cut and marked.",
       ttoolReadonly = True,
       ttoolExecute = getHistoryExecTyped
     }
@@ -124,6 +129,45 @@ slice start end = take (end - start) . drop start
 -- | Format a chunk of conversation turns as readable text.
 formatChunk :: [Turn] -> Text
 formatChunk = T.intercalate "\n" . map formatTurn
+
+-- | 'formatChunk' within @cap@ UTF-8 bytes. A page over the cap keeps
+-- its newest turns and ends with a line saying how many older turns of
+-- the page were left out. If the newest turn alone is over the cap, its
+-- text is cut and marked instead, so the page is never empty.
+formatChunkWithin :: Int -> [Turn] -> Text
+formatChunkWithin cap turns
+  | utf8Length full <= cap = full
+  | otherwise = T.intercalate "\n" (reverse keptNewestFirst ++ note)
+  where
+    full = formatChunk turns
+    rendered = map formatTurn turns
+    -- Room for the note and the cut marker.
+    budget = max 0 (cap - 256)
+    keptNewestFirst = case keepNewest 0 (reverse rendered) of
+      [] -> [cutTurn (last rendered)]
+      kept -> kept
+    dropped = length turns - length keptNewestFirst
+    note =
+      [ "["
+          <> T.pack (show dropped)
+          <> " earlier turn(s) of this page left out: the page is over "
+          <> T.pack (show cap)
+          <> " bytes]"
+        | dropped > 0
+      ]
+    keepNewest _ [] = []
+    keepNewest used (l : ls)
+      | used + size > budget = []
+      | otherwise = l : keepNewest (used + size) ls
+      where
+        size = utf8Length l + 1
+    cutTurn l =
+      textPrefixBytes budget l
+        <> " [turn cut: "
+        <> T.pack (show (utf8Length l))
+        <> " bytes, first "
+        <> T.pack (show budget)
+        <> " shown]"
 
 formatTurn :: Turn -> Text
 formatTurn (UserMessage parts) =

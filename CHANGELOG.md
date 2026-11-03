@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1 MiB, about 20 GiB, in one call. Each file is now read only up to the
   size charged for it, so a file that grows during the search is not read
   past the cap. **Behaviour change** for searches over more than 64 MiB.
+- A `get_history` page is at most `maxOutputBytes` (100 KiB). Before,
+  user and assistant text was rendered in full, so one page could be
+  larger than the context window that `agContextWindow` protects. A page
+  over the cap keeps its newest turns and ends with a line saying how many
+  older turns were left out; a newest turn that is over the cap on its own
+  is cut and marked (`[turn cut: N bytes, first M shown]`). The paging is
+  unchanged: the turns left out are not moved to the next chunk.
+  **Behaviour change** for pages over 100 KiB.
 
 - The source distribution (the Hackage tarball) includes the test
   fixtures (`test/fixtures/*.json`, `test/fixtures/*.sse`). Before, the

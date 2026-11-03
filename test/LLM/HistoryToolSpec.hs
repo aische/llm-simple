@@ -4,7 +4,9 @@ module LLM.HistoryToolSpec (spec) where
 
 import Data.Aeson (object, (.=))
 import Data.Text (Text)
+import Data.ByteString qualified as BS
 import Data.Text qualified as T
+import Data.Text.Encoding (encodeUtf8)
 import Heptapod (generate)
 import LLM.Agent.ToolUtils (toTool, windowOffset)
 import LLM.Agent.Tools.HistoryTool (historyToolTyped)
@@ -12,6 +14,7 @@ import LLM.Agent.Types (Agent (..), RuntimeArgs (..), Tool (..), ToolContext (..
 import LLM.Core.Types (Turn (..), assistantTurn, pattern UserTurn)
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
+import LLM.Tools.FsLimits (maxOutputBytes)
 import Test.Hspec
   ( Spec,
     describe,
@@ -19,6 +22,7 @@ import Test.Hspec
     shouldBe,
     shouldContain,
     shouldNotContain,
+    shouldSatisfy,
   )
 
 spec :: Spec
@@ -72,6 +76,39 @@ spec = describe "HistoryTool" $ do
       T.unpack result `shouldContain` "[User] hidden question"
       T.unpack result `shouldContain` "[Assistant] hidden answer"
 
+  describe "get_history page size" $ do
+    it "leaves out the oldest turns of a page over maxOutputBytes and says how many" $ do
+      let answer i = assistantTurn ("answer-" <> T.pack (show i) <> " " <> T.replicate 5000 "x") Nothing []
+          conv =
+            [UserTurn "old question"]
+              ++ map answer [0 .. 39 :: Int]
+              ++ [UserTurn "visible question"]
+      result <- runHistory windowedAgent conv 0
+      utf8Size result `shouldSatisfy` (<= maxOutputBytes)
+      T.unpack result `shouldContain` "answer-39 "
+      T.unpack result `shouldNotContain` "answer-0 "
+      T.unpack result `shouldNotContain` "old question"
+      let keptAnswers = length (filter ("[Assistant] answer-" `T.isPrefixOf`) (T.lines result))
+      last (T.lines result)
+        `shouldBe` "["
+        <> T.pack (show (41 - keptAnswers))
+        <> " earlier turn(s) of this page left out: the page is over "
+        <> T.pack (show maxOutputBytes)
+        <> " bytes]"
+
+    it "cuts the newest turn when it alone is over maxOutputBytes" $ do
+      let conv =
+            [ UserTurn "old question",
+              assistantTurn ("huge " <> T.replicate 200000 "y") Nothing [],
+              UserTurn "visible question"
+            ]
+      result <- runHistory windowedAgent conv 0
+      utf8Size result `shouldSatisfy` (<= maxOutputBytes)
+      T.unpack result `shouldContain` "[Assistant] huge yyy"
+      T.unpack result `shouldContain` "[turn cut: "
+      T.unpack result `shouldNotContain` "old question"
+      T.unpack result `shouldContain` "[1 earlier turn(s) of this page left out"
+
 sampleConversation :: [Turn]
 sampleConversation =
   [ UserTurn "first question",
@@ -118,3 +155,6 @@ runHistoryAtOffset offset conv chunk = do
           }
       tool = toTool historyToolTyped
   tool.toolExecute ctx (object ["chunk" .= chunk])
+
+utf8Size :: Text -> Int
+utf8Size = BS.length . encodeUtf8

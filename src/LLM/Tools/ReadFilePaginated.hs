@@ -16,6 +16,7 @@ import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath, withWorkspacePaths)
 import LLM.Tools.FsLimits (maxOutputBytes, maxPaginatedFileBytes)
 import LLM.Tools.Internal.TextFile (withTextHandle)
+import LLM.Tools.Internal.WalkBudget (utf8Prefix)
 import System.IO
   ( IOMode (ReadMode),
     hFileSize,
@@ -168,18 +169,6 @@ takePage offset limit = go 0 0 [] . dropLines (offset - 1)
 
     decode = decodeUtf8With lenientDecode
     newline = 10
-
--- | At most @n@ bytes from the start, without splitting a UTF-8 sequence.
-utf8Prefix :: Int -> BS.ByteString -> BS.ByteString
-utf8Prefix n bs
-  | BS.length bs <= n = bs
-  | otherwise = BS.take (boundary n) bs
-  where
-    -- Back up while the byte at the cut is a continuation byte (10xxxxxx),
-    -- so the cut falls before the lead byte of its sequence.
-    boundary i
-      | i > 0 && BS.index bs i >= 0x80 && BS.index bs i < 0xC0 = boundary (i - 1)
-      | otherwise = i
 
 renderPage :: Text -> Integer -> Int -> [Text] -> Bool -> Text
 renderPage path size offset lns hasMore =

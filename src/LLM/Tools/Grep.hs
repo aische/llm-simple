@@ -7,16 +7,20 @@ where
 import Autodocodec qualified as AC
 import Control.Exception (IOException, try)
 import Control.Monad (unless)
-import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
+import Data.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef)
 import Data.Aeson (FromJSON)
 import Data.List (sort)
 import Data.Text (Text)
+import Data.ByteString qualified as BS
+import Data.Maybe (catMaybes)
 import Data.Text qualified as T
+import Data.Text.Encoding (decodeUtf8With)
+import Data.Text.Encoding.Error (lenientDecode)
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath, withWorkspacePaths)
-import LLM.Tools.FsLimits (expensiveWalkDepth, maxOutputBytes, maxVisitedEntries)
-import LLM.Tools.Internal.TextFile (readLenient, withTextHandle)
+import LLM.Tools.FsLimits (expensiveWalkDepth, maxOutputBytes, maxSearchBytes, maxVisitedEntries)
+import LLM.Tools.Internal.TextFile (withTextHandle)
 import LLM.Tools.Internal.WalkBudget (WalkBudget, budgetExhausted, budgetNote, capLines, newWalkBudget, takeEntries)
 import System.Directory
   ( doesDirectoryExist,
@@ -27,6 +31,7 @@ import System.Directory
 import System.FilePath (takeExtension, takeFileName, (</>))
 import System.IO
   ( IOMode (ReadMode),
+    hFileSize,
     withBinaryFile,
   )
 
@@ -104,7 +109,9 @@ grepToolTyped cfg =
           <> "the header reports whether results were truncated and how many files were scanned. "
           <> "A search looks at most "
           <> T.pack (show maxVisitedEntries)
-          <> " entries and stops at maxResults; then the file count is shown as 'N+'.",
+          <> " entries, reads at most "
+          <> T.pack (show (maxSearchBytes `div` (1024 * 1024)))
+          <> " MiB of files, and stops at maxResults; then the file count is shown as 'N+'.",
       ttoolReadonly = True,
       ttoolExecute = const (withWorkspacePaths cfg . execute cfg)
     }
@@ -139,34 +146,49 @@ execute cfg args = do
                   <> "-byte cap for grep."
             else do
               budget <- newWalkBudget maxVisitedEntries
-              st <- newIORef (GrepState [] 0 0 False)
+              st <- newIORef (GrepState [] 0 0 False 0 False)
               let search = searchFile st pat ci cap
               if isFile
                 then search resolved (takeFileName resolved)
                 else walkDir budget st search exts resolved "" 0
-              GrepState matches _ scanned capHit <- readIORef st
+              GrepState matches _ scanned capHit bytesRead bytesOut <- readIORef st
               stopped <- budgetExhausted budget
+              let notes =
+                    catMaybes
+                      [ if stopped then Just (budgetNote budget) else Nothing,
+                        if bytesOut then Just (bytesNote bytesRead) else Nothing
+                      ]
               pure $
                 renderResults
                   args._grepPath
                   pat
                   (reverse matches)
                   scanned
-                  ((capHit && not isFile) || stopped)
+                  ((capHit && not isFile) || stopped || bytesOut)
                   capHit
-                  (if stopped then Just (budgetNote budget) else Nothing)
+                  (if null notes then Nothing else Just (T.intercalate " | " notes))
 
 -- | Lowercase and strip leading dots so callers can pass "hs" or ".hs".
 normalizeExtensions :: [Text] -> [Text]
 normalizeExtensions = map (T.toLower . T.dropWhile (== '.'))
 
--- | Matches so far (newest first), their count, files searched, and
--- whether the walk stopped because 'maxResults' was reached.
-data GrepState = GrepState [Match] Int Int Bool
+-- | Matches so far (newest first), their count, files searched, whether
+-- the walk stopped because 'maxResults' was reached, the file bytes read,
+-- and whether the walk stopped because 'maxSearchBytes' ran out.
+data GrepState = GrepState [Match] Int Int Bool Int Bool
+
+-- | True once the search should look at no more files.
+searchDone :: GrepState -> Bool
+searchDone (GrepState _ _ _ capHit _ bytesOut) = capHit || bytesOut
+
+-- | The note added to the output when 'maxSearchBytes' ran out.
+bytesNote :: Int -> Text
+bytesNote n = "stopped after reading " <> T.pack (show n) <> " bytes; narrow the path or pattern"
 
 -- | Walk a directory and search each candidate file as it is found,
 -- respecting depth, hidden-file, extension and size limits and the entry
--- budget. Stops once 'maxResults' is reached. Order is stable (entries
+-- budget. Stops once 'maxResults' is reached or 'maxSearchBytes' runs
+-- out. Order is stable (entries
 -- sorted) so output is deterministic. Each file is shown by its path
 -- relative to the search root, built from the names walked, so no host
 -- path is shown.
@@ -188,8 +210,8 @@ walkDir budget st search exts = go
           allowed <- takeEntries budget (filter (not . isFileHidden) entries)
           mapM_ (visit dir display depth) allowed
     visit parent display depth name = do
-      GrepState _ _ _ capHit <- readIORef st
-      unless capHit $ do
+      done <- searchDone <$> readIORef st
+      unless done $ do
         let full = parent </> name
             fullDisplay = display </> name
         -- Skip symlinks to prevent traversal out of the sandbox.
@@ -230,22 +252,40 @@ safeListDirectory path = do
     Left _ -> pure []
 
 -- | Search one file and add its matches, up to the cap. Binary and
--- unreadable files count as searched but give no matches.
+-- unreadable files count as searched but give no matches. A text file is
+-- charged to 'maxSearchBytes' before it is read; a file that does not fit
+-- is not read or counted, and ends the search.
 searchFile :: IORef GrepState -> Text -> Bool -> Int -> FilePath -> FilePath -> IO ()
 searchFile st pat ci cap f display = do
   r <-
-    try (withTextHandle (withBinaryFile f ReadMode) readLenient) ::
-      IO (Either IOException (Maybe Text))
-  let ms = case r of
-        Right (Just content) -> matchLines display content needle ci
-        _ -> []
-  modifyIORef' st $ \(GrepState acc n scanned _) ->
-    let remaining = cap - n
-        taken = take remaining ms
-        n' = n + length taken
-     in GrepState (reverse taken ++ acc) n' (scanned + 1) (n' >= cap)
+    try (withTextHandle (withBinaryFile f ReadMode) readCharged) ::
+      IO (Either IOException (Maybe (Maybe Text)))
+  case r of
+    Right (Just Nothing) -> pure ()
+    _ -> do
+      let ms = case r of
+            Right (Just (Just content)) -> matchLines display content needle ci
+            _ -> []
+      modifyIORef' st $ \(GrepState acc n scanned _ used out) ->
+        let remaining = cap - n
+            taken = take remaining ms
+            n' = n + length taken
+         in GrepState (reverse taken ++ acc) n' (scanned + 1) (n' >= cap) used out
   where
     needle = if ci then T.toLower pat else pat
+    -- Charge the file's size (at most the per-file cap) and read that
+    -- many bytes, or refuse it when the budget cannot cover it.
+    readCharged h = do
+      sz <- min maxFileSizeBytes <$> hFileSize h
+      let n = fromIntegral sz
+      fits <- charge n
+      if fits
+        then Just . decodeUtf8With lenientDecode <$> BS.hGet h n
+        else pure Nothing
+    charge n = atomicModifyIORef' st $ \(GrepState acc k scanned capHit used out) ->
+      if used + n <= maxSearchBytes
+        then (GrepState acc k scanned capHit (used + n) out, True)
+        else (GrepState acc k scanned capHit used True, False)
 
 data Match = Match
   { mPath :: FilePath,

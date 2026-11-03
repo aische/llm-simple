@@ -19,7 +19,7 @@ import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
 import LLM.Load.FsTools (fsTools)
 import LLM.Tools.FsConfig (SandboxViolation (..))
-import LLM.Tools.FsLimits (maxOutputBytes, maxTreeEntries, maxVisitedEntries)
+import LLM.Tools.FsLimits (maxOutputBytes, maxSearchBytes, maxTreeEntries, maxVisitedEntries)
 import System.Directory
   ( createDirectory,
     createDirectoryLink,
@@ -463,6 +463,25 @@ spec = describe "FsTools" $ do
       result <- runTool tm "grep" (object ["pattern" .= ("needle" :: Text), "maxResults" .= (2 :: Int)])
       T.unpack result `shouldContain` "2 match(es) across 2+ file(s)"
       T.unpack result `shouldContain` "stopped at maxResults"
+
+    it "grep stops before the file that would exceed maxSearchBytes" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      let mib = 1024 * 1024
+          perFile = mib -- the per-file cap, so each file is searched
+          filesInBudget = maxSearchBytes `div` perFile
+          name i = sb </> ("t" <> replicate (3 - length (show i)) '0' <> show i <> ".txt")
+          withNeedle = BS.replicate (perFile - 7) 0x61 <> "needle\n"
+      -- A binary file is not read, so it does not count against the budget.
+      BS.writeFile (sb </> "a-binary.bin") (BS.cons 0 (BS.replicate (perFile - 1) 0x61))
+      mapM_ (\i -> BS.writeFile (name i) (BS.replicate perFile 0x61)) [1 .. filesInBudget - 1]
+      -- The last file that fits, and one past the budget.
+      BS.writeFile (name filesInBudget) withNeedle
+      BS.writeFile (name (filesInBudget + 1)) withNeedle
+      result <- runTool tm "grep" (object ["pattern" .= ("needle" :: Text)])
+      T.unpack result `shouldContain` ("1 match(es) across " <> show (filesInBudget + 1) <> "+ file(s)")
+      T.unpack result `shouldContain` ("stopped after reading " <> show maxSearchBytes <> " bytes")
+      T.unpack result `shouldContain` (drop (length sb + 1) (name filesInBudget) <> ":1:")
+      T.unpack result `shouldNotContain` drop (length sb + 1) (name (filesInBudget + 1))
 
     it "grep reports an exact file count when it searched everything" $ withSandbox $ \sb -> do
       tm <- fsTools sb

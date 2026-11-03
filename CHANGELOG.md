@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `LLM.Tools.FsLimits.maxSearchBytes` (64 MiB): the file bytes one `grep`
+  call may read.
+
 ### Fixed
+
+- `grep` reads at most `maxSearchBytes` (64 MiB) of files per call. Only
+  the text files it searches count; binary files and files over the 1 MiB
+  per-file cap are not read and do not count. A search that runs out
+  stops before the next file and says so in the header ("stopped after
+  reading N bytes; narrow the path or pattern"), with the file count shown
+  as `N+`. Before, a search with few matches could read 20,000 files of
+  1 MiB, about 20 GiB, in one call. Each file is now read only up to the
+  size charged for it, so a file that grows during the search is not read
+  past the cap. **Behaviour change** for searches over more than 64 MiB.
 
 - The source distribution (the Hackage tarball) includes the test
   fixtures (`test/fixtures/*.json`, `test/fixtures/*.sse`). Before, the

@@ -225,6 +225,8 @@ main = do
 
 Set `rtReadonly = True` to omit mutating tools from the schema sent to the model and to block them at execution time.
 
+Every request's messages are checked with `validateTurn` (for example, no tool-call parts in a user turn); an invalid turn is logged as a warning and the request is still sent. From 0.5 it will be an error.
+
 Hooks are for observation only. An exception a hook throws is caught and dropped (asynchronous exceptions still propagate), so a hook cannot stop a run.
 
 For local debugging, `defaultDebugHooks` enables stderr logging and writes request/response JSON to `./dumps` — avoid that in production or shared environments. Each dump is a new file readable only by its owner; dumps hold prompts, tool arguments and results, and model output, and are never deleted by the library.

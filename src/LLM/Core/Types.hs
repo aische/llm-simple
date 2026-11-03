@@ -27,6 +27,7 @@ module LLM.Core.Types
     conversationHasImages,
     coalesceAdjacentTextParts,
     validateTurn,
+    validateTurns,
     opaqueForProvider,
     stripForeignOpaque,
 
@@ -467,6 +468,10 @@ conversationHasImages = any turnHasImage
 -- User messages may contain text and image parts; assistant messages may
 -- contain text, thinking, and tool-call parts. Returns 'Left' with an error
 -- message when the combination is invalid. Cache hints do not affect validity.
+--
+-- Every generation entry point checks the request's messages with
+-- 'validateTurns' and logs each invalid turn as a warning, then sends the
+-- request unchanged. From 0.5 an invalid turn will be an error instead.
 validateTurn :: Turn -> Either Text ()
 validateTurn (UserMessage parts) =
   mapM_ userPart parts
@@ -486,6 +491,11 @@ validateTurn (AssistantMessage parts) =
     assistantPart (ContentPart (ImagePart _) _) =
       Left "assistant messages may not contain image parts"
 validateTurn (ToolTurn _) = Right ()
+
+-- | The invalid turns of a conversation ('validateTurn'), as (index from 0,
+-- reason). Empty when every turn is valid.
+validateTurns :: [Turn] -> [(Int, Text)]
+validateTurns turns = [(i, reason) | (i, turn) <- zip [0 ..] turns, Left reason <- [validateTurn turn]]
 
 -- | Keep opaque metadata only when it belongs to @provider@.
 opaqueForProvider :: Text -> Maybe ProviderOpaque -> Maybe ProviderOpaque

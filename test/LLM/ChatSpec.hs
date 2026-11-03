@@ -43,7 +43,7 @@ import LLM.Core.Types
   )
 import LLM.Core.Utils (getToolCalls)
 import LLM.Core.Usage (PricingInfo (..), defaultPricingInfo, mkUsage)
-import LLM.Generate.Generate (generateTextWithFallbacks)
+import LLM.Generate.Generate (generateTextWithFallbacks, streamTextWithFallbacks)
 import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (Hooks (..), LogLevel (..), noHooks)
 import LLM.Generate.ModelConfig
@@ -844,3 +844,45 @@ spec = describe "Chat" $ do
 
     it "validateAgent reports nothing for a valid agent" $ do
       validateAgent defaultAgent {agTools = ["get_weather"], agContextWindow = Just 3} toolMap `shouldBe` []
+
+  describe "turn validation (warning only)" $ do
+    let invalidHistory =
+          [ UserTurn "look at this",
+            AssistantMessage [textPart "here"],
+            UserMessage [textPart "and now?", toolCallPart (mkToolCall "c1" "get_weather" (object []))]
+          ]
+        request logs turns =
+          GenRequest
+            { grSystemPrompt = Nothing,
+              grMessages = turns,
+              grTools = [],
+              grAbortSignal = Nothing,
+              grLLMHooks = llmHooks noHooks,
+              grHooks = noHooks {onLog = \lvl msg -> modifyIORef' logs (++ [(lvl, msg)])}
+            }
+        answer _ = pure $ Right (ChatResponse "ok" [textPart "ok"] Nothing Nothing)
+
+    it "logs one warning per invalid turn and still sends the request" $ do
+      logs <- newIORef []
+      calls <- newIORef []
+      result <- generateTextWithFallbacks (request logs invalidHistory) (ModelWithFallbacks (mockModel (loggingGateway calls "m" answer)) [])
+      fmap (.respText) result `shouldBe` Right "ok"
+      readIORef calls `shouldReturn` ["m"]
+      ws <- (\ls -> [m | (Warn, m) <- ls]) <$> readIORef logs
+      ws `shouldBe` ["turn 2: user messages may not contain tool-call parts"]
+
+    it "logs once per request, not once per fallback model" $ do
+      logs <- newIORef []
+      calls <- newIORef []
+      let models = ModelWithFallbacks (mockModel (loggingGateway calls "a" alwaysFail)) [mockModel (loggingGateway calls "b" answer)]
+      _ <- streamTextWithFallbacks (\_ -> pure ()) (request logs invalidHistory) models
+      readIORef calls `shouldReturn` ["a", "b"]
+      ws <- (\ls -> [m | (Warn, m) <- ls, "turn " `T.isPrefixOf` m]) <$> readIORef logs
+      ws `shouldBe` ["turn 2: user messages may not contain tool-call parts"]
+
+    it "logs nothing for a valid history" $ do
+      logs <- newIORef []
+      calls <- newIORef []
+      _ <- generateTextWithFallbacks (request logs [UserTurn "hi", AssistantMessage [textPart "hello"], UserTurn "bye"]) (ModelWithFallbacks (mockModel (loggingGateway calls "m" answer)) [])
+      ws <- (\ls -> [m | (Warn, m) <- ls]) <$> readIORef logs
+      ws `shouldBe` []

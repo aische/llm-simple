@@ -23,9 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   system-prompt line of the agent's final call after the last tool round.
 - `LLM.Agent.ToolUtils.validateAgent` (also in `LLM.Agent`) lists the
   warnings the agent loop logs about an agent configuration.
+- `LLM.Core.Types.validateTurns` (also in `LLM.Core`): the invalid turns
+  of a conversation, by index, with `validateTurn`'s reason.
 
 ### Fixed
 
+- `validateTurn` is now applied: every generation entry point checks the
+  request's messages once, before trying the first model, and logs each
+  invalid turn (a user turn with a thinking or tool-call part, an
+  assistant turn with an image) as `onLog Warn "turn <n>: <reason>"`, `n`
+  counting from 0 in `grMessages`. The request is still sent unchanged.
+  In an agent run the check runs once per model call. **0.5 will reject
+  such a request** with an error instead.
 - Loading the configuration rejects ambiguous or invalid values.
   **Behaviour change:** a catalog that loaded before can now fail to load.
   - `loadModelCatalog` (and every model loader) fails with

@@ -5,32 +5,43 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.2.0] - 2026-11-03
 
 ### Added
 
-- `LLM.Tools` exports `readFilePaginatedToolTyped`, the file reader that
-  `fsTools` registers (`read_file_paginated`).
-- `LLM.Tools.FsLimits.atomicWriteWith` replaces a file by writing a
-  temporary file in the same directory and renaming it over the target.
-- `LLM.Tools.FsLimits.maxVisitedEntries` (20,000) and `maxOutputBytes`
-  (100 KiB): the work and output bounds of the filesystem tools.
+- `LLM.Core.Types.validateTurns` (also in `LLM.Core`): the invalid turns
+  of a conversation, by index, with `validateTurn`'s reason.
+- `LLM.Core.LLMProvider.withoutRoutingFields` removes the `_model`
+  routing key from a request body (see below).
 - `LLM.Core.ProviderUtils.readResponseBody` reads a non-streaming response
   with the size limits below, for `sendRequest` in custom providers
   (`reqBr POST url body opts readResponseBody`).
 - `LLM.Generate.Logger.safeLLMHooks` (also in `LLM.Generate`): `safeHooks`
   for `LLMHooks`. `LLM.Generate.GenerateUtils.safeGenRequest` and
   `LLM.Agent.ToolUtils.safeRuntimeArgs` apply both to a request.
-- `LLM.Agent.ToolUtils.agentRuntimeArgs`: the runtime arguments the agent
-  entry points use (`safeRuntimeArgs` plus the `agName` log prefix).
 - `LLM.Agent.Generate.toolBudgetUsedUpPrompt` (also in `LLM.Agent`): the
   system-prompt line of the agent's final call after the last tool round.
 - `LLM.Agent.ToolUtils.validateAgent` (also in `LLM.Agent`) lists the
   warnings the agent loop logs about an agent configuration.
-- `LLM.Core.LLMProvider.withoutRoutingFields` removes the `_model`
-  routing key from a request body (see below).
-- `LLM.Core.Types.validateTurns` (also in `LLM.Core`): the invalid turns
-  of a conversation, by index, with `validateTurn`'s reason.
+- `LLM.Agent.ToolUtils.agentRuntimeArgs`: the runtime arguments the agent
+  entry points use (`safeRuntimeArgs` plus the `agName` log prefix).
+- `LLM.Tools` exports `readFilePaginatedToolTyped`, the file reader that
+  `fsTools` registers (`read_file_paginated`).
+- `LLM.Tools.FsLimits.atomicWriteWith` replaces a file by writing a
+  temporary file in the same directory and renaming it over the target.
+- `LLM.Tools.FsLimits.maxVisitedEntries` (20,000) and `maxOutputBytes`
+  (100 KiB): the work and output bounds of the filesystem tools.
+
+### Changed
+
+- `agName` is now used: the agent entry points (`generateText`,
+  `streamText`, `generateObject`, `generateObjectUntyped`) prefix every
+  `onLog` message of a run with `[<agName>] `. An empty name adds no
+  prefix. **Behaviour change** for log output.
+- `LLM.Agent.GenerateObject`, `LLM.Agent.Tools.HistoryTool`,
+  `LLM.Load.FsTools`, `LLM.Load.ModelCatalog`, `LLM.Load.Types` and
+  `LLM.Load.Utils` have explicit export lists. They export the same names
+  as before; new helpers in them no longer become public by accident.
 
 ### Deprecated
 
@@ -44,17 +55,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MessageUpdated` (`GenerateEventDetail`): the agent loop never emits it.
   It is removed in 0.5; streamed text arrives through the `streamText`
   callback.
-
-### Changed
-
-- `agName` is now used: the agent entry points (`generateText`,
-  `streamText`, `generateObject`, `generateObjectUntyped`) prefix every
-  `onLog` message of a run with `[<agName>] `. An empty name adds no
-  prefix. **Behaviour change** for log output.
-- `LLM.Agent.GenerateObject`, `LLM.Agent.Tools.HistoryTool`,
-  `LLM.Load.FsTools`, `LLM.Load.ModelCatalog`, `LLM.Load.Types` and
-  `LLM.Load.Utils` have explicit export lists. They export the same names
-  as before; new helpers in them no longer become public by accident.
 
 ### Fixed
 
@@ -740,6 +740,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   DeepSeek), single-shot generation with fallbacks, agent tool loops, structured
   output, JSON model catalog loading, and workspace-scoped filesystem tools.
 
+[0.4.2.0]: https://github.com/aische/llm-simple/compare/v0.4.1.0...v0.4.2.0
 [0.4.1.0]: https://github.com/aische/llm-simple/compare/v0.4.0.1...v0.4.1.0
 [0.4.0.1]: https://github.com/aische/llm-simple/compare/v0.4.0.0...v0.4.0.1
 [0.4.0.0]: https://github.com/aische/llm-simple/compare/v0.3.0.0...v0.4.0.0

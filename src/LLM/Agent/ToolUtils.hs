@@ -29,7 +29,7 @@ import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import LLM.Agent.Tools.HistoryTool (historyToolTyped)
+import LLM.Agent.Tools.HistoryTool (findNthUserBack, historyToolTyped)
 import LLM.Agent.Types
   ( Agent (..),
     RuntimeArgs (..),
@@ -176,14 +176,7 @@ windowOffset (Just n) conv = findNthUserFromEnd n conv
 findNthUserFromEnd :: Int -> [Turn] -> Int
 findNthUserFromEnd n conv
   | n <= 0 = 0
-  | otherwise = go (length conv - 1) n
-  where
-    go idx remaining
-      | idx < 0 = 0
-      | remaining <= 0 = idx + 1
-      | otherwise = case conv !! idx of
-          UserMessage _ -> go (idx - 1) (remaining - 1)
-          _ -> go (idx - 1) remaining
+  | otherwise = findNthUserBack n conv
 
 -- | Build a 'GenRequest' from agent configuration and runtime state.
 --

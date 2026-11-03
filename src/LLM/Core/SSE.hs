@@ -52,20 +52,35 @@ readSSEEvents readChunk callback = do
             writeIORef bufRef (BS.drop 1 rest)
             pure (Just line')
           Nothing -> do
-            chunk <- readChunk
-            if BS.null chunk
+            -- Read until a chunk holds a newline (or the stream ends), then
+            -- concatenate once, so a line split into many chunks is copied
+            -- once rather than once per chunk.
+            (pending, ended) <- readUntilNewline [buf] (BS.length buf)
+            let buf' = BS.concat (reverse pending)
+            if ended
               then
-                if BS.null buf
+                if BS.null buf'
                   then pure Nothing
                   else do
                     writeIORef bufRef BS.empty
-                    pure (Just buf)
+                    pure (Just buf')
               else do
-                let buf' = buf <> chunk
-                when (BS.length buf' > maxStreamEventBytes) $
-                  throwIO (ResponseTooLarge maxStreamEventBytes)
                 writeIORef bufRef buf'
                 readLine
+
+      -- Chunks read so far (newest first) and whether the stream ended.
+      readUntilNewline :: [ByteString] -> Int -> IO ([ByteString], Bool)
+      readUntilNewline acc size = do
+        chunk <- readChunk
+        if BS.null chunk
+          then pure (acc, True)
+          else do
+            let size' = size + BS.length chunk
+            when (size' > maxStreamEventBytes) $
+              throwIO (ResponseTooLarge maxStreamEventBytes)
+            if BC.elem '\n' chunk
+              then pure (chunk : acc, False)
+              else readUntilNewline (chunk : acc) size'
 
       -- dataSize: bytes of data collected for the current event.
       loop :: Maybe ByteString -> [ByteString] -> Int -> IO ()

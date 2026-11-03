@@ -130,20 +130,21 @@ agentLoop call agent models toolMap rt0 initialTurns = do
         { agSystemPrompt =
             Just (maybe toolBudgetUsedUpPrompt (<> "\n\n" <> toolBudgetUsedUpPrompt) agent.agSystemPrompt)
         }
-    failWith err turns usage = do
-      let errResult = GenerateErrorResult err turns usage
+    -- New turns are collected newest first and reversed once at the end.
+    failWith err newRev usage = do
+      let errResult = GenerateErrorResult err (reverse newRev) usage
       emitEvent rt (GenerationFailed err errResult)
       pure $ Left errResult
     go :: ModelWithFallbacks -> [Turn] -> [Turn] -> Usage -> Int -> IO (Either GenerateErrorResult GenerateTextResult)
-    go chain currentTurns newTurnsAcc currentUsage loopCount = do
+    go chain currentTurns newRev currentUsage loopCount = do
       aborted <- isAbortedMaybe rt.rtAbortSignal
       let finalCall = loopCount >= agent.agMaxToolRounds
       if aborted
-        then failWith GErrAborted newTurnsAcc currentUsage
+        then failWith GErrAborted newRev currentUsage
         else do
           result <- call (if finalCall then finalAgent else agent) chain rt currentTurns
           case result of
-            Left err -> failWith err newTurnsAcc currentUsage
+            Left err -> failWith err newRev currentUsage
             Right (nextChain, resp) -> do
               let txt = resp.respText
                   toolCalls = getToolCalls resp
@@ -154,7 +155,7 @@ agentLoop call agent models toolMap rt0 initialTurns = do
 
               case toolCalls of
                 [] -> do
-                  let finalTurnsAcc = newTurnsAcc ++ [assistantMsg]
+                  let finalTurnsAcc = reverse (assistantMsg : newRev)
                       successResult = GenerateTextResult rt.rtGenerationId finalTurnsAcc txt newUsage
                   emitEvent rt (MessageFinalized assistantMsg)
                   emitEvent rt (GenerationFinished successResult)
@@ -166,7 +167,7 @@ agentLoop call agent models toolMap rt0 initialTurns = do
                       let toolTurn = ToolTurn (map (`toolResult` toolNotRunText) toolCalls)
                       emitEvent rt (MessageCreated assistantMsg)
                       emitEvent rt (MessageCreated toolTurn)
-                      failWith GErrToolExceeded (newTurnsAcc ++ [assistantMsg, toolTurn]) newUsage
+                      failWith GErrToolExceeded (toolTurn : assistantMsg : newRev) newUsage
                   | otherwise -> do
                       let toolContext = createToolContext agent currentTurns newUsage rt
                           tools = getResolvedTools id agent toolMap rt
@@ -183,10 +184,10 @@ agentLoop call agent models toolMap rt0 initialTurns = do
                           -- placeholder for the rest.
                           let toolTurn = ToolTurn (done ++ map (`toolResult` "Aborted before execution") notRun)
                           emitEvent rt (MessageCreated toolTurn)
-                          failWith GErrAborted (newTurnsAcc ++ [assistantMsg, toolTurn]) newUsage
+                          failWith GErrAborted (toolTurn : assistantMsg : newRev) newUsage
                         ToolRoundCompleted toolResults -> do
                           let toolTurn = ToolTurn toolResults
                           emitEvent rt (MessageCreated toolTurn)
                           emitEvent rt (ToolRoundFinished loopCount)
                           let turnsToAdd = [assistantMsg, toolTurn]
-                          go nextChain (currentTurns ++ turnsToAdd) (newTurnsAcc ++ turnsToAdd) newUsage (loopCount + 1)
+                          go nextChain (currentTurns ++ turnsToAdd) (toolTurn : assistantMsg : newRev) newUsage (loopCount + 1)

@@ -242,6 +242,7 @@ test-suite llm-simple-test
                         LLM.GenerateObjectSpec
                         LLM.ToolUtilsSpec
                         LLM.CrossProviderSpec
+                        LLM.ScaleSpec
                         LLM.TestKit
                         LLM.WeatherTool
     hs-source-dirs:     test

@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Stream assembly, history paging and context windowing take linear time.
+  Before, a stream split into many small reads or many fragments (one
+  long SSE line, streamed tool arguments or reasoning for Claude and
+  OpenAI-compatible providers, Gemini parts), and a long conversation in
+  `windowOffset` or `get_history`, took quadratic time. No change in
+  results.
 - The example executable (`cabal run llm-simple`) loads only the model it
   uses (`deepseek4flash`), so it needs only `DEEPSEEK_API_KEY`. It loaded
   six models, and so needed every cloud provider's key.

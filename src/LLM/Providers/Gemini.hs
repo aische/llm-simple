@@ -171,7 +171,7 @@ extractModel v = fromMaybe "gemini-2.0-flash" (parseMaybe (withObject "body" (.:
 
 parseGeminiStream :: HC.BodyReader -> (StreamEvent -> IO ()) -> IO LLMTextResult
 parseGeminiStream reader callback = do
-  partsRef <- newIORef ([] :: [ContentPart])
+  partsRef <- newIORef ([] :: [ContentPart]) -- newest first
   usageRef <- newIORef Nothing
   errorRef <- newIORef (Nothing :: Maybe LLMError)
   stopRef <- newIORef (Nothing :: Maybe GeminiStop)
@@ -191,12 +191,12 @@ parseGeminiStream reader callback = do
         case parseMaybe (parseChunkParts modelVer) v of
           Just parts -> do
             newParts <- mapM (assignToolId callback) parts
-            modifyIORef' partsRef (++ newParts)
+            modifyIORef' partsRef (reverse newParts ++)
           Nothing -> pure ()
         case parseMaybe parseUsageMetadata v of
           Just u -> writeIORef usageRef (Just u)
           Nothing -> pure ()
-  parts <- readIORef partsRef
+  parts <- reverse <$> readIORef partsRef
   usage <- readIORef usageRef
   mError <- readIORef errorRef
   stop <- readIORef stopRef

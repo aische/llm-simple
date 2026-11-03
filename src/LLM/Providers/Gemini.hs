@@ -35,7 +35,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.UUID.Types (UUID)
 import Data.UUID.Types qualified as UUID
-import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
+import LLM.Core.LLMProvider (LLMProvider (..), toGateway, withoutRoutingFields)
 import LLM.Core.ProviderUtils (decodeObjectText, handleStreamResponse, lenientConfig, readResponseBody, stripBoundsAndComments)
 import LLM.Core.SSE (SSEEvent (sseData), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
@@ -122,7 +122,7 @@ geminiProviderWith baseUrl baseOpts apiKey =
                   /: "models"
                   /: (model <> ":streamGenerateContent")
               opts = baseOpts <> geminiAuthOpts apiKey <> "alt" =: ("sse" :: Text)
-          reqBr POST url (ReqBodyJson (stripModel body)) opts $ \resp ->
+          reqBr POST url (ReqBodyJson (withoutRoutingFields body)) opts $ \resp ->
             handleStreamResponse resp k,
       parseStream = const parseGeminiStream,
       parseResponse = parseGeminiResponse,
@@ -161,17 +161,13 @@ geminiProviderWith baseUrl baseOpts apiKey =
                 /: "models"
                 /: (model <> ":generateContent")
             opts = baseOpts <> geminiAuthOpts apiKey
-        reqBr POST url (ReqBodyJson (stripModel body)) opts readResponseBody
+        reqBr POST url (ReqBodyJson (withoutRoutingFields body)) opts readResponseBody
 
 geminiAuthOpts :: Text -> Option scheme
 geminiAuthOpts apiKey = header "x-goog-api-key" (encodeUtf8 apiKey)
 
 extractModel :: Value -> Text
 extractModel v = fromMaybe "gemini-2.0-flash" (parseMaybe (withObject "body" (.: "_model")) v)
-
-stripModel :: Value -> Value
-stripModel (Object o) = Object (KM.delete "_model" o)
-stripModel v = v
 
 parseGeminiStream :: HC.BodyReader -> (StreamEvent -> IO ()) -> IO LLMTextResult
 parseGeminiStream reader callback = do

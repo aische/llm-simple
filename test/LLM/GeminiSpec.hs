@@ -7,14 +7,14 @@ import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString qualified as BS
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
-import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.UUID.Types qualified as UUID
 import Data.Vector qualified as V
-import LLM.Core.LLMProvider (LLMProvider (..))
+import LLM.Core.LLMProvider (LLMProvider (..), genericGenerateText)
 import LLM.Core.ProviderUtils (normalizeSchemaOpenAI, stripBoundsAndComments)
 import LLM.Core.Types
   ( ChatRequest (..),
@@ -33,6 +33,8 @@ import LLM.Core.Types
     imageUrlPart,
     imageBase64Part,
     cacheEphemeral,
+    LLMHooks (..),
+    pattern UserTurn,
   )
 import LLM.Core.Usage (Usage (..), mkUsage)
 import LLM.Core.Utils (getToolCalls, hasToolCalls)
@@ -109,6 +111,31 @@ spec = describe "Gemini" $ do
             "additionalProperties" .= False,
             "required" .= (["type"] :: [Text])
           ]
+
+  describe "request hook" $ do
+    it "sees the body as sent, without the _model routing key" $ do
+      hooked <- newIORef []
+      sent <- newIORef []
+      okBody <- BS.readFile "test/fixtures/gemini-text.json"
+      let provider = (geminiProvider "") {sendRequest = \b -> modifyIORef' sent (++ [b]) >> pure (200, okBody)}
+          hooks =
+            LLMHooks
+              { onLLMRequest = \_ b -> modifyIORef' hooked (++ [b]),
+                onLLMResponse = \_ _ -> pure (),
+                onLLMResponseError = \_ _ -> pure ()
+              }
+          req = ChatRequest "gemini-2.5-flash" [UserTurn "hi"] Nothing 100 Nothing [] Nothing
+      result <- genericGenerateText provider hooks req
+      fmap (.respText) result `shouldBe` Right "Hello! How can I help you today?"
+      [hookBody] <- readIORef hooked
+      [sendBody] <- readIORef sent
+      let keys = \case
+            Object o -> map K.toText (KM.keys o)
+            _ -> []
+      keys hookBody `shouldSatisfy` notElem "_model"
+      keys hookBody `shouldSatisfy` elem "contents"
+      -- sendRequest still gets the model, for the URL.
+      keys sendBody `shouldSatisfy` elem "_model"
 
   describe "request body schema stripping" $ do
     it "strips bounds from tool parameters but not from conversation content" $ do

@@ -3,11 +3,13 @@ module LLM.Core.LLMProvider
     toGateway,
     genericGenerateText,
     genericStreamText,
+    withoutRoutingFields,
   )
 where
 
 import Control.Exception (Exception, Handler (..), SomeAsyncException, SomeException, catch, catches, fromException, throwIO, try)
-import Data.Aeson (Value, eitherDecodeStrict')
+import Data.Aeson (Value (Object), eitherDecodeStrict')
+import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString (ByteString)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -34,7 +36,12 @@ data LLMProvider = LLMProvider
     providerImageMediaTypes :: [Text],
     -- | Whether the provider accepts URL images (see 'gwImageUrlSupport').
     providerImageUrlSupport :: Bool,
-    -- | Build the JSON request body. Bool indicates whether streaming is requested.
+    -- | Build the JSON request body. Bool indicates whether streaming is
+    -- requested. A top-level @_model@ key is routing data for
+    -- 'sendRequest' and 'openStream' (the Gemini provider puts the model
+    -- name there, since its URL contains it); they must remove it before
+    -- sending, and 'onLLMRequest' sees the body without it
+    -- ('withoutRoutingFields').
     buildBody :: Bool -> ChatRequest -> Value,
     -- | Make a non-streaming HTTP call, returning (status code, raw response
     -- body). Must not throw on a non-2xx status.
@@ -65,7 +72,7 @@ data LLMProvider = LLMProvider
 genericStreamText :: LLMProvider -> LLMHooks -> ChatRequest -> (StreamEvent -> IO ()) -> IO LLMTextResult
 genericStreamText p hooks r callback = do
   let body = p.buildBody True r
-  hooks.onLLMRequest p.providerName body
+  hooks.onLLMRequest p.providerName (withoutRoutingFields body)
   result <-
     unwrapCallbackFailure $
       providerCall p hooks (p.openStream body (\readChunk -> p.parseStream body readChunk (wrapCallback callback)))
@@ -84,7 +91,7 @@ genericStreamText p hooks r callback = do
 genericGenerateText :: LLMProvider -> LLMHooks -> ChatRequest -> IO LLMTextResult
 genericGenerateText p hooks r = do
   let body = p.buildBody False r
-  hooks.onLLMRequest p.providerName body
+  hooks.onLLMRequest p.providerName (withoutRoutingFields body)
   result <- providerCall p hooks (p.sendRequest body)
   case result of
     Left e -> pure (Left e)
@@ -94,11 +101,17 @@ genericGenerateText p hooks r = do
 genericGenerateObject :: LLMProvider -> LLMHooks -> Value -> ChatRequest -> IO LLMObjectResult
 genericGenerateObject p hooks schema r = do
   let body = p.buildObjectBody r {reqTools = []} schema
-  hooks.onLLMRequest p.providerName body
+  hooks.onLLMRequest p.providerName (withoutRoutingFields body)
   result <- providerCall p hooks (p.sendObjectRequest body)
   case result of
     Left e -> pure (Left e)
     Right resp -> handleResponse p hooks p.parseObjectResponse resp
+
+-- | The request body as it is sent: without the top-level @_model@ routing
+-- key (see 'buildBody'). Other values are returned unchanged.
+withoutRoutingFields :: Value -> Value
+withoutRoutingFields (Object o) = Object (KM.delete "_model" o)
+withoutRoutingFields v = v
 
 -- | An exception thrown by the caller's stream callback, carried past the
 -- provider's exception handlers.

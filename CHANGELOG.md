@@ -23,11 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   system-prompt line of the agent's final call after the last tool round.
 - `LLM.Agent.ToolUtils.validateAgent` (also in `LLM.Agent`) lists the
   warnings the agent loop logs about an agent configuration.
+- `LLM.Core.LLMProvider.withoutRoutingFields` removes the `_model`
+  routing key from a request body (see below).
 - `LLM.Core.Types.validateTurns` (also in `LLM.Core`): the invalid turns
   of a conversation, by index, with `validateTurn`'s reason.
 
 ### Fixed
 
+- `onLLMRequest` (and so `onRequest` and the JSON dumps) now sees a Gemini
+  request body as it is sent. It included the `_model` key that the
+  provider uses to build the URL and removes before sending. A top-level
+  `_model` key is now documented as routing data for any `LLMProvider`,
+  and the request hooks never see it.
 - `imageBase64Part` and `mkImageBase64` reject `=` anywhere but in the
   last one or two characters (`====`, `A===` and `ab=c` were accepted).
   **Behaviour change** for malformed input only.

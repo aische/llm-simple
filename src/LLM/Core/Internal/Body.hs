@@ -1,7 +1,8 @@
 -- | Bounded reading of provider response bodies.
 --
--- A 200 body larger than 'maxResponseBodyBytes' (or a stream event larger
--- than 'maxStreamEventBytes') is signalled with 'ResponseTooLarge', which
+-- A 200 body larger than 'maxResponseBodyBytes' (a stream larger than it
+-- in total, or a stream event larger than 'maxStreamEventBytes') is
+-- signalled with 'ResponseTooLarge', which
 -- is not exported from any public module. The @generic*@ functions in
 -- 'LLM.Core.LLMProvider' catch it and return a 'ParseError'; the type of
 -- 'LLM.Core.LLMProvider.sendRequest' stays unchanged.
@@ -37,7 +38,8 @@ responseTooLargeMessage (ResponseTooLarge n) =
 maxErrorBodyBytes :: Int
 maxErrorBodyBytes = 64 * 1024
 
--- | Largest 200 body a non-streaming call accepts.
+-- | Largest 200 body a non-streaming call accepts, and the largest total
+-- size of a stream.
 maxResponseBodyBytes :: Int
 maxResponseBodyBytes = 32 * 1024 * 1024
 

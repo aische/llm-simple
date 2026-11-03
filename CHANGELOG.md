@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is cut and marked (`[turn cut: N bytes, first M shown]`). The paging is
   unchanged: the turns left out are not moved to the next chunk.
   **Behaviour change** for pages over 100 KiB.
+- A streamed response is at most 32 MiB in total, the same cap as a
+  non-streaming body. Before, only one event (8 MiB) was bounded, so an
+  endpoint sending small events forever kept the call reading, and the
+  parsers keeping every delta, without end. Past the cap the stream ends
+  with `ParseError "response body exceeds 33554432 bytes"`, as for an
+  oversized event. **Behaviour change** for streams over 32 MiB.
 
 - The source distribution (the Hackage tarball) includes the test
   fixtures (`test/fixtures/*.json`, `test/fixtures/*.sse`). Before, the

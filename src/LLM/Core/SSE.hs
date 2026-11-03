@@ -16,7 +16,7 @@ import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import LLM.Core.Internal.Body (ResponseTooLarge (..), maxStreamEventBytes)
+import LLM.Core.Internal.Body (ResponseTooLarge (..), maxResponseBodyBytes, maxStreamEventBytes)
 import LLM.Core.Types (LLMError (..))
 
 data SSEEvent = SSEEvent
@@ -32,13 +32,24 @@ data SSEEvent = SSEEvent
 -- continues so the caller can still tell whether the stream ended properly.
 -- The result describes the first such event, if any.
 --
--- An event (or a line) larger than 'maxStreamEventBytes' throws
--- 'ResponseTooLarge', which the @generic*@ functions turn into a
--- 'ParseError'.
+-- An event (or a line) larger than 'maxStreamEventBytes', or a stream
+-- longer than 'maxResponseBodyBytes' in total, throws 'ResponseTooLarge',
+-- which the @generic*@ functions turn into a 'ParseError'.
 readSSEEvents :: IO ByteString -> (SSEEvent -> IO ()) -> IO (Maybe Text)
-readSSEEvents readChunk callback = do
+readSSEEvents readRaw callback = do
   bufRef <- newIORef BS.empty
   badRef <- newIORef Nothing
+  totalRef <- newIORef (0 :: Int)
+  let -- Count every byte read, so a stream of small events cannot go on
+      -- forever.
+      readChunk :: IO ByteString
+      readChunk = do
+        chunk <- readRaw
+        total <- (+ BS.length chunk) <$> readIORef totalRef
+        when (total > maxResponseBodyBytes) $
+          throwIO (ResponseTooLarge maxResponseBodyBytes)
+        writeIORef totalRef total
+        pure chunk
   let readLine :: IO (Maybe ByteString)
       readLine = do
         buf <- readIORef bufRef

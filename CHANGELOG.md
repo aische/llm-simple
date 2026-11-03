@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LLM.Core.Types.validateTurns` (also in `LLM.Core`): the invalid turns
   of a conversation, by index, with `validateTurn`'s reason.
 
+### Deprecated
+
+- The `FsConfig` data constructor: build an `FsConfig` with `mkFsConfig`,
+  which canonicalizes the base path. From 0.5 the constructor is not
+  exported (the type and `fsBasePath` stay). GHC 9.10 and later warn about
+  uses of the constructor; GHC 9.6 and 9.8 cannot deprecate a constructor
+  without also deprecating the type of the same name, so they do not.
+
 ### Changed
 
 - `LLM.Agent.GenerateObject`, `LLM.Agent.Tools.HistoryTool`,

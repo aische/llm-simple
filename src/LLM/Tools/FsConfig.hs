@@ -1,3 +1,6 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+
 module LLM.Tools.FsConfig
   ( FsConfig (..),
     SandboxViolation (..),
@@ -26,10 +29,19 @@ import System.FilePath (addTrailingPathSeparator, dropTrailingPathSeparator, equ
 
 -- | Configuration for file-system tools.
 -- 'fsBasePath' must be a canonical absolute path (use 'mkFsConfig').
+--
+-- The @FsConfig@ data constructor is deprecated: build the configuration
+-- with 'mkFsConfig', which canonicalizes the path. From 0.5 the constructor
+-- is no longer exported. GHC 9.10 and later warn about its use; the type
+-- itself is not deprecated.
 newtype FsConfig = FsConfig
   { fsBasePath :: FilePath
   }
   deriving (Show)
+
+#if __GLASGOW_HASKELL__ >= 910
+{-# DEPRECATED data FsConfig "Use mkFsConfig, which canonicalizes the base path. The FsConfig constructor is not exported from 0.5 on." #-}
+#endif
 
 data SandboxViolation = SandboxViolation
   { svAttempted :: FilePath,

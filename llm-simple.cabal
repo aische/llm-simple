@@ -142,6 +142,7 @@ library
 
     other-modules:
         LLM.Core.Internal.Body
+        LLM.Core.Internal.Transport
         LLM.Core.SSE
         LLM.Generate.Internal.Generate
         LLM.Generate.Internal.GenerateUtils

@@ -17,8 +17,8 @@ import Data.Aeson.Types (Pair)
 import Data.Text (Text)
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Encoding qualified as TLE
+import LLM.Core.Internal.Transport (postJson, postJsonStream)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, readResponseBody)
 import LLM.Core.Types
   ( commonImageMediaTypes,
     ChatRequest
@@ -45,12 +45,8 @@ import LLM.Providers.OpenAI
   )
 import Network.HTTP.Req
   ( Option,
-    POST (POST),
-    ReqBodyJson (ReqBodyJson),
     Url,
     https,
-    reqBr,
-    runReq,
     (/:),
   )
 
@@ -75,12 +71,7 @@ deepSeekProviderWith baseUrl baseOpts apiKey =
       providerImageUrlSupport = True,
       buildBody = deepSeekBuildBody,
       sendRequest = sendRequest,
-      openStream = \body k ->
-        runReq lenientConfig $ do
-          let url = baseUrl /: "v1" /: "chat" /: "completions"
-              opts = baseOpts <> authHeader apiKey
-          reqBr POST url (ReqBodyJson body) opts $ \resp ->
-            handleStreamResponse resp k,
+      openStream = postJsonStream url opts,
       parseStream = const parseOpenAIStream,
       parseResponse = pure . parseOpenAIResponse,
       buildObjectBody = \r schema ->
@@ -97,11 +88,9 @@ deepSeekProviderWith baseUrl baseOpts apiKey =
       parseObjectResponse = pure . parseOpenAIObjectResponse
     }
   where
-    sendRequest body =
-      runReq lenientConfig $ do
-        let url = baseUrl /: "v1" /: "chat" /: "completions"
-            opts = baseOpts <> authHeader apiKey
-        reqBr POST url (ReqBodyJson body) opts readResponseBody
+    sendRequest = postJson url opts
+    url = baseUrl /: "v1" /: "chat" /: "completions"
+    opts = baseOpts <> authHeader apiKey
 
 -- | OpenAI-compatible body; DeepSeek uses @max_tokens@ (not @max_completion_tokens@).
 deepSeekBuildBody :: Bool -> ChatRequest -> Value

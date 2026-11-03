@@ -44,8 +44,9 @@ import Data.Char (isSpace)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import LLM.Core.Internal.Transport (postJson, postJsonStream)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, normalizeSchemaOpenAI, readResponseBody, unexpectedResponse)
+import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, invalidToolArgumentsError, normalizeSchemaOpenAI, unexpectedResponse)
 import LLM.Core.SSE (SSEEvent (sseData), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( commonImageMediaTypes,
@@ -86,13 +87,9 @@ import LLM.Core.Usage (Usage (..))
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Req
   ( Option,
-    POST (POST),
-    ReqBodyJson (ReqBodyJson),
     Url,
     header,
     https,
-    reqBr,
-    runReq,
     (/:),
   )
 
@@ -126,12 +123,7 @@ openAIProviderWithName name baseUrl baseOpts apiKey =
       providerImageUrlSupport = True,
       buildBody = openAIBuildBody,
       sendRequest = sendRequest,
-      openStream = \body k ->
-        runReq lenientConfig $ do
-          let url = baseUrl /: "v1" /: "chat" /: "completions"
-              opts = baseOpts <> authHeader apiKey
-          reqBr POST url (ReqBodyJson body) opts $ \resp ->
-            handleStreamResponse resp k,
+      openStream = postJsonStream url opts,
       parseStream = const parseOpenAIStream,
       parseResponse = pure . parseOpenAIResponse,
       buildObjectBody = \r schema ->
@@ -152,11 +144,9 @@ openAIProviderWithName name baseUrl baseOpts apiKey =
       parseObjectResponse = pure . parseOpenAIObjectResponse
     }
   where
-    sendRequest body =
-      runReq lenientConfig $ do
-        let url = baseUrl /: "v1" /: "chat" /: "completions"
-            opts = baseOpts <> authHeader apiKey
-        reqBr POST url (ReqBodyJson body) opts readResponseBody
+    sendRequest = postJson url opts
+    url = baseUrl /: "v1" /: "chat" /: "completions"
+    opts = baseOpts <> authHeader apiKey
 
 authHeader :: Text -> Option scheme
 authHeader apiKey

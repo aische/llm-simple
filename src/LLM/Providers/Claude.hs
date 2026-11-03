@@ -39,8 +39,9 @@ import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Encoding (decodeUtf8)
+import LLM.Core.Internal.Transport (postJson, postJsonStream)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, readResponseBody, unexpectedResponse)
+import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, invalidToolArgumentsError, unexpectedResponse)
 import LLM.Core.SSE (SSEEvent (sseData, sseEvent), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( commonImageMediaTypes,
@@ -78,16 +79,11 @@ import LLM.Core.Types
     pattern UserTurn,
   )
 import LLM.Core.Usage (Usage (..), emptyUsage)
-import Network.HTTP.Client qualified as HC
 import Network.HTTP.Req
   ( Option,
-    POST (POST),
-    ReqBodyJson (ReqBodyJson),
     Url,
     header,
     https,
-    reqBr,
-    runReq,
     (/:),
   )
 
@@ -132,12 +128,7 @@ claudeProviderWith baseUrl baseOpts apiKey =
       providerImageUrlSupport = True,
       buildBody = claudeBuildBody,
       sendRequest = sendRequest,
-      openStream = \body k ->
-        runReq lenientConfig $ do
-          let url = baseUrl /: "v1" /: "messages"
-              opts = baseOpts <> claudeAuthOpts apiKey
-          reqBr POST url (ReqBodyJson body) opts $ \resp ->
-            handleStreamResponse resp (k . HC.brRead),
+      openStream = postJsonStream url opts,
       parseStream = \body readChunk callback ->
         let modelHint = fromMaybe "" (parseMaybe (withObject "body" (.: "model")) body)
          in parseClaudeStream modelHint readChunk callback,
@@ -151,11 +142,9 @@ claudeProviderWith baseUrl baseOpts apiKey =
       parseObjectResponse = parseClaudeObjectResponse
     }
   where
-    sendRequest body =
-      runReq lenientConfig $ do
-        let url = baseUrl /: "v1" /: "messages"
-            opts = baseOpts <> claudeAuthOpts apiKey
-        reqBr POST url (ReqBodyJson body) opts readResponseBody
+    sendRequest = postJson url opts
+    url = baseUrl /: "v1" /: "messages"
+    opts = baseOpts <> claudeAuthOpts apiKey
 
 claudeAuthOpts :: Text -> Option scheme
 claudeAuthOpts apiKey =

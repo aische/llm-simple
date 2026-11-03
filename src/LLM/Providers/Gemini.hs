@@ -35,8 +35,9 @@ import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.UUID.Types (UUID)
 import Data.UUID.Types qualified as UUID
+import LLM.Core.Internal.Transport (postJson, postJsonStream)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway, withoutRoutingFields)
-import LLM.Core.ProviderUtils (decodeObjectText, handleStreamResponse, lenientConfig, readResponseBody, stripBoundsAndComments)
+import LLM.Core.ProviderUtils (decodeObjectText, stripBoundsAndComments)
 import LLM.Core.SSE (SSEEvent (sseData), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( supportedImageMediaTypes,
@@ -75,13 +76,9 @@ import LLM.Core.Usage (Usage (..))
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Req
   ( Option,
-    POST (POST),
-    ReqBodyJson (ReqBodyJson),
     Url,
     header,
     https,
-    reqBr,
-    runReq,
     (/:),
     (=:),
   )
@@ -113,17 +110,11 @@ geminiProviderWith baseUrl baseOpts apiKey =
       providerImageUrlSupport = True,
       buildBody = const geminiBuildBody,
       sendRequest = sendRequest,
-      openStream = \body k ->
-        runReq lenientConfig $ do
-          let model = extractModel body
-              url =
-                baseUrl
-                  /: "v1beta"
-                  /: "models"
-                  /: (model <> ":streamGenerateContent")
-              opts = baseOpts <> geminiAuthOpts apiKey <> "alt" =: ("sse" :: Text)
-          reqBr POST url (ReqBodyJson (withoutRoutingFields body)) opts $ \resp ->
-            handleStreamResponse resp k,
+      openStream = \body ->
+        postJsonStream
+          (modelUrl body ":streamGenerateContent")
+          (opts <> "alt" =: ("sse" :: Text))
+          (withoutRoutingFields body),
       parseStream = const parseGeminiStream,
       parseResponse = parseGeminiResponse,
       buildObjectBody = \r schema ->
@@ -153,15 +144,10 @@ geminiProviderWith baseUrl baseOpts apiKey =
     }
   where
     sendRequest body =
-      runReq lenientConfig $ do
-        let model = extractModel body
-            url =
-              baseUrl
-                /: "v1beta"
-                /: "models"
-                /: (model <> ":generateContent")
-            opts = baseOpts <> geminiAuthOpts apiKey
-        reqBr POST url (ReqBodyJson (withoutRoutingFields body)) opts readResponseBody
+      postJson (modelUrl body ":generateContent") opts (withoutRoutingFields body)
+    -- The model is in the path, taken from the body's routing field.
+    modelUrl body method = baseUrl /: "v1beta" /: "models" /: (extractModel body <> method)
+    opts = baseOpts <> geminiAuthOpts apiKey
 
 geminiAuthOpts :: Text -> Option scheme
 geminiAuthOpts apiKey = header "x-goog-api-key" (encodeUtf8 apiKey)

@@ -24,6 +24,13 @@ decodeJsonFile filePath tag =
     either (Left . tag) Right
       <$> liftIO (eitherDecodeFileStrict filePath)
 
+-- | Resolve a configured system prompt: a value starting with @file:@ is
+-- replaced by the UTF-8 contents of the file it names, any other value is
+-- returned as is.
+--
+-- The value is trusted input, like the model catalog: the file is read with
+-- the process's permissions, from any path, outside the filesystem tools'
+-- sandbox. Do not pass it text from a model or another untrusted source.
 getSystemPrompt :: Maybe Text -> ExceptT LoadConfigError IO (Maybe Text)
 getSystemPrompt mbSystemPrompt =
   case mbSystemPrompt of

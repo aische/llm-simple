@@ -59,6 +59,8 @@ The example loads `.env`, loads one model from the catalog (`deepseek4flash`, so
 
 ## Configuration
 
+The model and provider catalogs are **trusted input**, like code: they decide where requests and API keys are sent (`baseUrl`, `baseUrlEnv`) and which environment variables are read. Do not load catalogs from an untrusted source. The same holds for `getSystemPrompt` (`LLM.Load.Utils`), which reads any file named by a `file:` value, outside any sandbox.
+
 ### Model catalog
 
 Models are defined in a JSON array. Each entry maps a logical config name to a provider and model, plus runtime settings:

@@ -20,7 +20,7 @@ instance AC.HasCodec ReadfileToolArgs where
     AC.object "read a file" $
       ReadfileToolArgs <$> AC.requiredField "path" "Relative file path to read" AC..= (._rfPath)
 
--- | Deprecated: 'fsTools' does not register this tool. Use
+-- | Deprecated: 'LLM.Load.fsTools' does not register this tool. Use
 -- 'LLM.Tools.ReadFilePaginated.readFilePaginatedToolTyped'
 -- (@read_file_paginated@), which reads large files in pages.
 readfileToolTyped :: FsConfig -> TypedTool ctx ReadfileToolArgs

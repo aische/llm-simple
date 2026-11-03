@@ -33,6 +33,7 @@ module LLM.Core
     coalesceAdjacentTextParts,
     validateTurn,
     validateTurns,
+    validateConversation,
     ToolCall (..),
     ToolResult (..),
     LLMHooks (..),

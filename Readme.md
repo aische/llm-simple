@@ -227,7 +227,7 @@ main = do
 
 Set `rtReadonly = True` to omit mutating tools from the schema sent to the model and to block them at execution time.
 
-Every request's messages are checked with `validateTurn` (for example, no tool-call parts in a user turn); an invalid turn is logged as a warning and the request is still sent. From 0.5 it will be an error.
+Every request's messages are checked with `validateTurn` (for example, no tool-call parts in a user turn) and `validateConversation` (tool results follow the assistant turn whose calls they answer, each call answered exactly once); each problem is logged as a warning and the request is still sent. From 0.5 it will be an error.
 
 Log messages of an agent run (`onLog`) start with `[<agName>] `; leave `agName` empty for no prefix.
 

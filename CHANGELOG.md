@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `LLM.Tools.FsLimits.maxSearchBytes` (64 MiB): the file bytes one `grep`
   call may read.
+- `LLM.Core.Types.validateConversation` (also in `LLM.Core`): problems in
+  the tool-call structure of a conversation, by turn index.
 
 ### Fixed
 
@@ -37,6 +39,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parsers keeping every delta, without end. Past the cap the stream ends
   with `ParseError "response body exceeds 33554432 bytes"`, as for an
   oversized event. **Behaviour change** for streams over 32 MiB.
+- Every generation entry point also checks the tool-call structure of the
+  request's messages (`validateConversation`): a tool turn that does not
+  directly follow an assistant turn with tool calls, tool calls not
+  followed by a tool turn, a call without a result, a call answered twice,
+  a result for an unknown call ID, or a call ID used twice in one turn.
+  Each problem is logged like an invalid turn
+  (`onLog Warn "turn <n>: <reason>"`, in turn order) and the request is
+  still sent. Providers rejected such histories or dropped parts of them,
+  each differently. **0.5 will reject them** with an error.
 
 - The source distribution (the Hackage tarball) includes the test
   fixtures (`test/fixtures/*.json`, `test/fixtures/*.sse`). Before, the

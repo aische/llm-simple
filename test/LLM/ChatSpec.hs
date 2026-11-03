@@ -881,6 +881,22 @@ spec = describe "Chat" $ do
       ws <- (\ls -> [m | (Warn, m) <- ls, "turn " `T.isPrefixOf` m]) <$> readIORef logs
       ws `shouldBe` ["turn 2: user messages may not contain tool-call parts"]
 
+    it "logs problems in the tool-call structure in turn order" $ do
+      logs <- newIORef []
+      calls <- newIORef []
+      let history =
+            invalidHistory
+              ++ [ ToolTurn [ToolResult "c9" "get_weather" "sunny"],
+                   AssistantMessage [textPart "done"]
+                 ]
+      _ <- generateTextWithFallbacks (request logs history) (ModelWithFallbacks (mockModel (loggingGateway calls "m" answer)) [])
+      readIORef calls `shouldReturn` ["m"]
+      ws <- (\ls -> [m | (Warn, m) <- ls]) <$> readIORef logs
+      ws
+        `shouldBe` [ "turn 2: user messages may not contain tool-call parts",
+                     "turn 3: tool results do not follow an assistant turn with tool calls"
+                   ]
+
     it "logs nothing for a valid history" $ do
       logs <- newIORef []
       calls <- newIORef []

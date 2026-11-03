@@ -28,6 +28,7 @@ module LLM.Core.Types
     coalesceAdjacentTextParts,
     validateTurn,
     validateTurns,
+    validateConversation,
     opaqueForProvider,
     stripForeignOpaque,
 
@@ -71,6 +72,7 @@ import Data.Aeson
   )
 import Data.Aeson.Types (Parser)
 import Data.Char (isSpace, isAsciiUpper, isAsciiLower, isDigit)
+import Data.List (nub, sortOn, zip4)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -498,6 +500,51 @@ validateTurn (ToolTurn _) = Right ()
 -- reason). Empty when every turn is valid.
 validateTurns :: [Turn] -> [(Int, Text)]
 validateTurns turns = [(i, reason) | (i, turn) <- zip [0 ..] turns, Left reason <- [validateTurn turn]]
+
+-- | Problems in the tool-call structure of a conversation, as (index from
+-- 0, reason), in index order. Empty when the structure is valid:
+--
+-- * a 'ToolTurn' directly follows an assistant turn with tool calls;
+-- * the call IDs of an assistant turn are distinct, and that turn is
+--   directly followed by a 'ToolTurn';
+-- * the 'ToolTurn' answers each of those calls exactly once, and answers
+--   no other call ID.
+--
+-- Providers reject such conversations or drop parts of them, each in its
+-- own way. Every generation entry point logs these problems as warnings,
+-- like 'validateTurns', and sends the request unchanged. From 0.5 they
+-- will be errors.
+--
+-- @since 0.4.3.0
+validateConversation :: [Turn] -> [(Int, Text)]
+validateConversation turns =
+  sortOn
+    fst
+    [ problem
+      | (i, prev, turn, next) <- zip4 [0 ..] (Nothing : map Just turns) turns (map Just (drop 1 turns) ++ [Nothing]),
+        problem <- check i prev turn next
+    ]
+  where
+    check :: Int -> Maybe Turn -> Turn -> Maybe Turn -> [(Int, Text)]
+    check i prev turn next = case turn of
+      ToolTurn results -> case prev of
+        Just (AssistantMessage parts)
+          | calls@(_ : _) <- turnToolCalls parts ->
+              answers i (map (.tcId) calls) (map (.trCallId) results)
+        _ -> [(i, "tool results do not follow an assistant turn with tool calls")]
+      AssistantMessage parts
+        | ids@(_ : _) <- map (.tcId) (turnToolCalls parts) ->
+            [(i, "duplicate tool call id " <> quote d) | d <- duplicates ids]
+              ++ case next of
+                Just (ToolTurn _) -> []
+                _ -> [(i, "tool calls are not followed by tool results")]
+      _ -> []
+    answers i callIds resultIds =
+      [(i, "no result for tool call " <> quote c) | c <- nub callIds, c `notElem` resultIds]
+        ++ [(i, "tool call " <> quote r <> " is answered more than once") | r <- duplicates resultIds, r `elem` callIds]
+        ++ [(i, "tool result for unknown call id " <> quote r) | r <- nub resultIds, r `notElem` callIds]
+    duplicates xs = nub [x | x <- xs, length (filter (== x) xs) > 1]
+    quote = T.pack . show
 
 -- | Keep opaque metadata only when it belongs to @provider@.
 opaqueForProvider :: Text -> Maybe ProviderOpaque -> Maybe ProviderOpaque

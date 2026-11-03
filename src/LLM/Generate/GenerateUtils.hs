@@ -16,7 +16,7 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (when)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.List (nub)
+import Data.List (nub, sortOn)
 import Data.Maybe (fromMaybe)
 import LLM.Core.Abort (isAbortedMaybe)
 import LLM.Core.Types
@@ -30,6 +30,7 @@ import LLM.Core.Types
     ThinkingMode (..),
     Turn (..),
     conversationHasImages,
+    validateConversation,
     validateTurns,
   )
 import LLM.Core.Usage (Usage (..), estimateCost)
@@ -218,8 +219,9 @@ withModelFallbacksRotated gr models invokePerModel = do
 -- the result.
 --
 -- Before the first model is tried, each invalid turn in 'grMessages'
--- ('validateTurns') is logged at 'Warn' as @turn <n>: <reason>@ (@n@
--- counts from 0). The request is sent unchanged.
+-- ('validateTurns') and each problem in its tool-call structure
+-- ('validateConversation') is logged at 'Warn' as @turn <n>: <reason>@
+-- (@n@ counts from 0), in turn order. The request is sent unchanged.
 runModelFallbacks ::
   GenRequest ->
   ModelWithFallbacks ->
@@ -228,7 +230,7 @@ runModelFallbacks ::
 runModelFallbacks gr models invokePerModel = do
   mapM_
     (\(i, reason) -> gr.grHooks.onLog Warn ("turn " <> T.pack (show i) <> ": " <> reason))
-    (validateTurns gr.grMessages)
+    (sortOn fst (validateTurns gr.grMessages ++ validateConversation gr.grMessages))
   case mfwToModelConfigs models of
     [] -> pure $ Left GErrAllModelsFailed
     modelConfigs -> loop [] modelConfigs Nothing

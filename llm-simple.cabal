@@ -41,6 +41,8 @@ extra-doc-files:
 extra-source-files:
     model-catalog.json
     providers.json
+    test/fixtures/*.json
+    test/fixtures/*.sse
 
 tested-with:
     GHC ==9.6.7

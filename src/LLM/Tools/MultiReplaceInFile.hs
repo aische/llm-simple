@@ -9,6 +9,7 @@ import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath, withWorkspacePaths)
 import LLM.Tools.FsLimits (maxReadBytes, readBoundedUtf8File, writeUtf8File)
 import LLM.Tools.Internal.PathLock (withPathLock)
+import LLM.Tools.Internal.TextEdit (countOccurrences, replaceFirst)
 
 data Replacement = Replacement
   { _repOld :: Text,
@@ -87,20 +88,3 @@ applyReplacements (Replacement {_repOld, _repNew} : rest) content =
           <> T.pack (show n)
           <> " times (must appear exactly once): "
           <> _repOld
-
--- | Count non-overlapping occurrences of needle in haystack.
-countOccurrences :: Text -> Text -> Int
-countOccurrences needle haystack
-  | T.null needle = 0
-  | otherwise = go 0 haystack
-  where
-    go !n hay = case T.breakOn needle hay of
-      (_, rest)
-        | T.null rest -> n
-        | otherwise -> go (n + 1) (T.drop (T.length needle) rest)
-
--- | Replace the first occurrence of needle with replacement.
-replaceFirst :: Text -> Text -> Text -> Text
-replaceFirst needle replacement haystack =
-  let (before, after) = T.breakOn needle haystack
-   in before <> replacement <> T.drop (T.length needle) after

@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The example executable (`cabal run llm-simple`) loads only the model it
+  uses (`deepseek4flash`), so it needs only `DEEPSEEK_API_KEY`. It loaded
+  six models, and so needed every cloud provider's key.
 - `onLLMRequest` (and so `onRequest` and the JSON dumps) now sees a Gemini
   request body as it is sent. It included the `_model` key that the
   provider uses to build the URL and removes before sending. A top-level

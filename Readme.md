@@ -55,7 +55,7 @@ Load `.env` yourself in `main` (the example executable does this), or call
 cabal run llm-simple
 ```
 
-The example loads `.env`, loads models from the catalog, wires up filesystem tools, and runs a small agent that asks about files in the workspace.
+The example loads `.env`, loads one model from the catalog (`deepseek4flash`, so only `DEEPSEEK_API_KEY` is needed; change the name in `app/Main.hs` to use another, e.g. `llama_3_2` for a local Ollama), wires up filesystem tools, and runs a small agent that asks about files in the workspace.
 
 ## Configuration
 

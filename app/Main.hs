@@ -1,5 +1,3 @@
-{-# LANGUAGE ImpredicativeTypes #-}
-
 module Main where
 
 import Configuration.Dotenv (defaultConfig, loadFile)
@@ -21,21 +19,17 @@ import LLM.Generate
   )
 import LLM.Load
   ( fsTools,
-    loadModelsOrThrow,
+    loadModelOrThrow,
   )
 
 main :: IO ()
 main = do
   loadFile defaultConfig `catch` \(_ :: IOException) -> pure ()
-  (_gpt, llama, _haiku, gemini, mistral, deepseek) <-
-    loadModelsOrThrow
-      "./model-catalog.json"
-      ("gpt_4_1", "llama_3_2", "haiku_4_5", "gemini_lite", "mistral", "deepseek4flash")
-
-  let _models1 = ModelWithFallbacks {mwfModel = llama, mwfFallbacks = []}
-      _models2 = ModelWithFallbacks {mwfModel = mistral, mwfFallbacks = []}
-      _models3 = ModelWithFallbacks {mwfModel = gemini, mwfFallbacks = []}
-      _models4 = ModelWithFallbacks {mwfModel = deepseek, mwfFallbacks = []}
+  -- Load only the model this example uses, so only its provider's API key
+  -- (here DEEPSEEK_API_KEY) must be set. Any name from model-catalog.json
+  -- works, e.g. "llama_3_2" for a local Ollama with no key.
+  model <- loadModelOrThrow "./model-catalog.json" "deepseek4flash"
+  let models = ModelWithFallbacks {mwfModel = model, mwfFallbacks = []}
 
   toolMap <-
     fsTools "./user-workspace/"
@@ -58,7 +52,7 @@ main = do
             rtReadonly = False
           }
 
-  r <- generateText agent _models4 toolMap rt [UserTurn "are there any files in the current workspace?"]
+  r <- generateText agent models toolMap rt [UserTurn "are there any files in the current workspace?"]
   case r of
     Left err -> putStrLn $ "Error: " <> show err
     Right resp -> putStrLn $ "Response: " <> show resp

@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LLM.Generate.Logger.safeLLMHooks` (also in `LLM.Generate`): `safeHooks`
   for `LLMHooks`. `LLM.Generate.GenerateUtils.safeGenRequest` and
   `LLM.Agent.ToolUtils.safeRuntimeArgs` apply both to a request.
+- `LLM.Agent.ToolUtils.agentRuntimeArgs`: the runtime arguments the agent
+  entry points use (`safeRuntimeArgs` plus the `agName` log prefix).
 - `LLM.Agent.Generate.toolBudgetUsedUpPrompt` (also in `LLM.Agent`): the
   system-prompt line of the agent's final call after the last tool round.
 - `LLM.Agent.ToolUtils.validateAgent` (also in `LLM.Agent`) lists the
@@ -39,9 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without also deprecating the type of the same name, so they do not.
 - `readfileToolTyped` (`LLM.Tools`, `LLM.Tools.Readfile`): `fsTools` does
   not register it. Use `readFilePaginatedToolTyped`. It is removed in 0.5.
+- `MessageUpdated` (`GenerateEventDetail`): the agent loop never emits it.
+  It is removed in 0.5; streamed text arrives through the `streamText`
+  callback.
 
 ### Changed
 
+- `agName` is now used: the agent entry points (`generateText`,
+  `streamText`, `generateObject`, `generateObjectUntyped`) prefix every
+  `onLog` message of a run with `[<agName>] `. An empty name adds no
+  prefix. **Behaviour change** for log output.
 - `LLM.Agent.GenerateObject`, `LLM.Agent.Tools.HistoryTool`,
   `LLM.Load.FsTools`, `LLM.Load.ModelCatalog`, `LLM.Load.Types` and
   `LLM.Load.Utils` have explicit export lists. They export the same names

@@ -13,6 +13,7 @@ module LLM.Agent.ToolUtils
     createGenRequestNoTools,
     embedTextTool,
     safeRuntimeArgs,
+    agentRuntimeArgs,
     validateAgent,
   )
 where
@@ -315,3 +316,15 @@ safeRuntimeArgs rt =
     { rtHooks = safeHooks rt.rtHooks,
       rtLLMHooks = safeLLMHooks rt.rtLLMHooks
     }
+
+-- | The runtime arguments the agent entry points ('LLM.Agent.generateText',
+-- 'LLM.Agent.streamText', 'LLM.Agent.generateObject',
+-- 'LLM.Agent.generateObjectUntyped') run with: 'safeRuntimeArgs', and every
+-- 'onLog' message prefixed with @[\<agName\>] @. An empty 'agName' adds
+-- no prefix.
+agentRuntimeArgs :: Agent -> RuntimeArgs -> RuntimeArgs
+agentRuntimeArgs agent rt = safeRuntimeArgs rt {rtHooks = named rt.rtHooks}
+  where
+    named hooks
+      | T.null agent.agName = hooks
+      | otherwise = hooks {onLog = \lvl msg -> hooks.onLog lvl ("[" <> agent.agName <> "] " <> msg)}

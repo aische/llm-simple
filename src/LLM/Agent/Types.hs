@@ -26,7 +26,9 @@ import LLM.Generate.Types (GenerateError, GenerateErrorResult, GenerateTextResul
 
 -- | Static agent configuration shared across requests.
 data Agent = Agent
-  { -- | Display name used in logs and debug hooks.
+  { -- | Name of the agent. The agent entry points prefix every 'onLog'
+    -- message of a run with @[\<agName\>] @; an empty name adds no prefix.
+    -- It is not sent to the model.
     agName :: Text,
     -- | Optional system prompt prepended to every provider request.
     agSystemPrompt :: Maybe Text,
@@ -113,7 +115,7 @@ data GenerateEventDetail
     GenerationFailed GenerateError GenerateErrorResult
   | -- | A new turn was appended (assistant tool-call round or tool results).
     MessageCreated Turn
-  | -- | Streaming update to an in-flight assistant message (unused by default loop).
+  | -- | Never emitted. Deprecated; removed in 0.5.
     MessageUpdated UUID Text
   | -- | The final assistant turn for a successful run.
     MessageFinalized Turn
@@ -122,6 +124,8 @@ data GenerateEventDetail
   | -- | Tool execution for round @n@ finished.
     ToolRoundFinished Int
   deriving (Show, Eq)
+
+{-# DEPRECATED MessageUpdated "Never emitted by the agent loop; removed in 0.5. Streamed text arrives through the streamText callback." #-}
 
 -- | Callback invoked for each 'GenerateEvent' during a run.
 type EventObserver = GenerateEvent -> IO ()

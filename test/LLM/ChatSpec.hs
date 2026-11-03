@@ -12,6 +12,7 @@ import Data.Text qualified as T
 import Heptapod (generate)
 import LLM.Agent.Events (noEventObserver)
 import LLM.Agent.Generate (generateText, streamText, toolBudgetUsedUpPrompt)
+import LLM.Agent.GenerateObject (generateObjectUntyped)
 import LLM.Agent.ToolUtils (validateAgent)
 import LLM.Agent.Types
   ( Agent (..),
@@ -788,7 +789,7 @@ spec = describe "Chat" $ do
       length <$> readIORef reqs `shouldReturn` 2
       ws <- warnings <$> readIORef logs
       filter ("no_such_tool" `T.isInfixOf`) ws
-        `shouldBe` ["agTools lists no_such_tool, which is not in the tool map; it is not sent to the model"]
+        `shouldBe` ["[test] agTools lists no_such_tool, which is not in the tool map; it is not sent to the model"]
 
     it "uses the built-in get_history over a caller tool of that name when windowing is on" $ do
       reqs <- newIORef []
@@ -838,7 +839,7 @@ spec = describe "Chat" $ do
             map (map (.toolName) . (.reqTools)) sent `shouldBe` replicate (length sent) ["get_weather"]
             ws <- warnings <$> readIORef logs
             filter ("agContextWindow" `T.isInfixOf`) ws
-              `shouldBe` ["agContextWindow = Just " <> T.pack (show n) <> " is not positive; the whole conversation is sent"]
+              `shouldBe` ["[test] agContextWindow = Just " <> T.pack (show n) <> " is not positive; the whole conversation is sent"]
         )
         [0, -1]
 
@@ -886,3 +887,26 @@ spec = describe "Chat" $ do
       _ <- generateTextWithFallbacks (request logs [UserTurn "hi", AssistantMessage [textPart "hello"], UserTurn "bye"]) (ModelWithFallbacks (mockModel (loggingGateway calls "m" answer)) [])
       ws <- (\ls -> [m | (Warn, m) <- ls]) <$> readIORef logs
       ws `shouldBe` []
+
+  describe "agent name in log messages" $ do
+    it "prefixes every onLog message of a run with [agName]" $ do
+      (rt, logs, _) <- recordingRuntime
+      let agent = defaultAgent {agName = "helper", agTools = ["get_weather", "no_such_tool"]}
+      _ <- generateText agent (ModelWithFallbacks (mockModel mockToolGateway) []) toolMap rt [UserTurn "go"]
+      msgs <- map snd <$> readIORef logs
+      msgs `shouldSatisfy` (not . null)
+      msgs `shouldSatisfy` all ("[helper] " `T.isPrefixOf`)
+      msgs `shouldSatisfy` any ("Trying model" `T.isInfixOf`)
+
+    it "prefixes the log messages of generateObjectUntyped" $ do
+      (rt, logs, _) <- recordingRuntime
+      _ <- generateObjectUntyped defaultAgent {agName = "helper"} (ModelWithFallbacks (mockModel mockToolGateway) []) rt [UserTurn "go"] (object [])
+      msgs <- map snd <$> readIORef logs
+      msgs `shouldSatisfy` (not . null)
+      msgs `shouldSatisfy` all ("[helper] " `T.isPrefixOf`)
+
+    it "adds no prefix for an empty name" $ do
+      (rt, logs, _) <- recordingRuntime
+      _ <- generateText defaultAgent {agName = ""} (ModelWithFallbacks (mockModel mockToolGateway) []) toolMap rt [UserTurn "go"]
+      msgs <- map snd <$> readIORef logs
+      msgs `shouldSatisfy` any ("Trying model" `T.isPrefixOf`)

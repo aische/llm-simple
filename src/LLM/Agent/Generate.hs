@@ -15,7 +15,7 @@ import LLM.Agent.ToolUtils
     executeToolsWithAbort,
     ToolRoundOutcome (..),
     getResolvedTools,
-    safeRuntimeArgs,
+    agentRuntimeArgs,
     validateAgent,
   )
 import LLM.Agent.Types
@@ -124,7 +124,7 @@ agentLoop call agent models toolMap rt0 initialTurns = do
   emitEvent rt GenerationStarted
   go models initialTurns [] emptyUsage 0
   where
-    rt = safeRuntimeArgs rt0
+    rt = agentRuntimeArgs agent rt0
     finalAgent =
       agent
         { agSystemPrompt =

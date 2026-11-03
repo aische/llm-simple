@@ -48,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`onLog Warn "turn <n>: <reason>"`, in turn order) and the request is
   still sent. Providers rejected such histories or dropped parts of them,
   each differently. **0.5 will reject them** with an error.
+- An agent run (`LLM.Agent.generateText`, `streamText`) checks the input
+  conversation once, at the start of the run, instead of on every model
+  call, so an invalid turn is logged once per run instead of once per
+  round. `n` in `turn <n>: <reason>` now counts in the input conversation,
+  also when `agContextWindow` sends only part of it. The turns the agent
+  adds come from providers and are not checked.
 
 - The source distribution (the Hackage tarball) includes the test
   fixtures (`test/fixtures/*.json`, `test/fixtures/*.sse`). Before, the

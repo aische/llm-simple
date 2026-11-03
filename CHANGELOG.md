@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   call may read.
 - `LLM.Core.Types.validateConversation` (also in `LLM.Core`): problems in
   the tool-call structure of a conversation, by turn index.
+- `LLM.Tools.MultiReplaceInFile.Replacement`, the type of one edit in
+  `MultiReplaceInFileToolArgs`, exported without its constructor. Before,
+  the exported field `_mrifReplacements :: [Replacement]` named a type
+  that could not be imported.
 
 ### Fixed
 

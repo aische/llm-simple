@@ -4,7 +4,7 @@ import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import Control.Exception (IOException, bracket_, evaluate, try)
 import Control.Monad (forM, forM_)
-import Data.Aeson (Value, object, (.=))
+import Data.Aeson (Result (..), Value, fromJSON, object, (.=))
 import Data.ByteString qualified as BS
 import Data.Map qualified as Map
 import Data.Text (Text)
@@ -20,6 +20,7 @@ import LLM.Generate.Logger (noHooks)
 import LLM.Load.FsTools (fsTools)
 import LLM.Tools.FsConfig (SandboxViolation (..))
 import LLM.Tools.FsLimits (maxOutputBytes, maxSearchBytes, maxTreeEntries, maxVisitedEntries)
+import LLM.Tools.MultiReplaceInFile (MultiReplaceInFileToolArgs (..), Replacement)
 import System.Directory
   ( createDirectory,
     createDirectoryLink,
@@ -217,6 +218,16 @@ spec = describe "FsTools" $ do
       T.unpack result `shouldContain` "Successfully applied 2"
       readBack <- runTool tm "read_file_paginated" (object ["path" .= ("multi.txt" :: Text)])
       T.unpack readBack `shouldContain` "AAA BBB"
+
+    it "exports the type of the replacements field" $ do
+      let args =
+            object
+              [ "path" .= ("multi.txt" :: Text),
+                "replacements" .= [object ["old" .= ("a" :: Text), "new" .= ("b" :: Text)]]
+              ]
+      case fromJSON args :: Result MultiReplaceInFileToolArgs of
+        Success decoded -> length (decoded._mrifReplacements :: [Replacement]) `shouldBe` 1
+        Error err -> expectationFailure err
 
   describe "create_directory" $ do
     it "creates nested directories" $ withSandbox $ \sb -> do

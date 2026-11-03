@@ -13,7 +13,7 @@ import Data.Aeson
 import Data.Aeson.Types (Pair)
 import Data.Text (Text)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, normalizeSchemaOpenAI)
+import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, readResponseBody, normalizeSchemaOpenAI)
 import LLM.Core.Types
   ( commonImageMediaTypes,
     ChatRequest
@@ -32,12 +32,8 @@ import Network.HTTP.Req
     ReqBodyJson (ReqBodyJson),
     Url,
     http,
-    bsResponse,
     port,
-    req,
     reqBr,
-    responseBody,
-    responseStatusCode,
     runReq,
     (/:),
   )
@@ -92,8 +88,7 @@ ollamaProviderWith baseUrl baseOpts =
     sendRequest body =
       runReq lenientConfig $ do
         let url = baseUrl /: "v1" /: "chat" /: "completions"
-        resp <- req POST url (ReqBodyJson body) bsResponse baseOpts
-        pure (responseStatusCode resp, responseBody resp)
+        reqBr POST url (ReqBodyJson body) baseOpts readResponseBody
 
 -- | Request body for Ollama's OpenAI-compatible endpoint. Like OpenAI's, but
 -- the token limit is @max_tokens@: Ollama ignores @max_completion_tokens@

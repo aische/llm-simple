@@ -34,6 +34,7 @@ module LLM.Generate
     noLogger,
     stderrLogger,
     safeHooks,
+    safeLLMHooks,
     debugHooks,
     defaultDebugHooks,
     llmHooks,

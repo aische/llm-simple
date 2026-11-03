@@ -7,7 +7,8 @@ module LLM.Core.SSE
 where
 
 import Control.Applicative ((<|>))
-import Control.Monad (unless)
+import Control.Exception (throwIO)
+import Control.Monad (unless, when)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BC
@@ -15,6 +16,7 @@ import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
+import LLM.Core.Internal.Body (ResponseTooLarge (..), maxStreamEventBytes)
 import LLM.Core.Types (LLMError (..))
 
 data SSEEvent = SSEEvent
@@ -29,6 +31,10 @@ data SSEEvent = SSEEvent
 -- An event whose name or data is not valid UTF-8 is skipped, and reading
 -- continues so the caller can still tell whether the stream ended properly.
 -- The result describes the first such event, if any.
+--
+-- An event (or a line) larger than 'maxStreamEventBytes' throws
+-- 'ResponseTooLarge', which the @generic*@ functions turn into a
+-- 'ParseError'.
 readSSEEvents :: IO ByteString -> (SSEEvent -> IO ()) -> IO (Maybe Text)
 readSSEEvents readChunk callback = do
   bufRef <- newIORef BS.empty
@@ -46,20 +52,39 @@ readSSEEvents readChunk callback = do
             writeIORef bufRef (BS.drop 1 rest)
             pure (Just line')
           Nothing -> do
-            chunk <- readChunk
-            if BS.null chunk
+            -- Read until a chunk holds a newline (or the stream ends), then
+            -- concatenate once, so a line split into many chunks is copied
+            -- once rather than once per chunk.
+            (pending, ended) <- readUntilNewline [buf] (BS.length buf)
+            let buf' = BS.concat (reverse pending)
+            if ended
               then
-                if BS.null buf
+                if BS.null buf'
                   then pure Nothing
                   else do
                     writeIORef bufRef BS.empty
-                    pure (Just buf)
+                    pure (Just buf')
               else do
-                writeIORef bufRef (buf <> chunk)
+                writeIORef bufRef buf'
                 readLine
 
-      loop :: Maybe ByteString -> [ByteString] -> IO ()
-      loop eventType dataLines = do
+      -- Chunks read so far (newest first) and whether the stream ended.
+      readUntilNewline :: [ByteString] -> Int -> IO ([ByteString], Bool)
+      readUntilNewline acc size = do
+        chunk <- readChunk
+        if BS.null chunk
+          then pure (acc, True)
+          else do
+            let size' = size + BS.length chunk
+            when (size' > maxStreamEventBytes) $
+              throwIO (ResponseTooLarge maxStreamEventBytes)
+            if BC.elem '\n' chunk
+              then pure (chunk : acc, False)
+              else readUntilNewline (chunk : acc) size'
+
+      -- dataSize: bytes of data collected for the current event.
+      loop :: Maybe ByteString -> [ByteString] -> Int -> IO ()
+      loop eventType dataLines dataSize = do
         mLine <- readLine
         case mLine of
           Nothing ->
@@ -69,15 +94,19 @@ readSSEEvents readChunk callback = do
             | BS.null line -> do
                 unless (null dataLines) $
                   fireEvent eventType dataLines
-                loop Nothing []
-            | "data:" `BS.isPrefixOf` line ->
-                loop eventType (stripField 5 line : dataLines)
+                loop Nothing [] 0
+            | "data:" `BS.isPrefixOf` line -> do
+                let d = stripField 5 line
+                    dataSize' = dataSize + BS.length d + 1
+                when (dataSize' > maxStreamEventBytes) $
+                  throwIO (ResponseTooLarge maxStreamEventBytes)
+                loop eventType (d : dataLines) dataSize'
             | "event:" `BS.isPrefixOf` line ->
-                loop (Just (stripField 6 line)) dataLines
+                loop (Just (stripField 6 line)) dataLines dataSize
             | ":" `BS.isPrefixOf` line ->
-                loop eventType dataLines -- comment, skip
+                loop eventType dataLines dataSize -- comment, skip
             | otherwise ->
-                loop eventType dataLines
+                loop eventType dataLines dataSize
 
       stripField :: Int -> ByteString -> ByteString
       stripField n bs =
@@ -95,7 +124,7 @@ readSSEEvents readChunk callback = do
         where
           invalid err =
             modifyIORef' badRef (<|> Just ("stream event is not valid UTF-8: " <> T.pack (show err)))
-  loop Nothing []
+  loop Nothing [] 0
   readIORef badRef
 
 -- | Message for a data event that should be JSON but is not, with a short

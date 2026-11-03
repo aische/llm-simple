@@ -8,6 +8,7 @@ module LLM.Generate.GenerateUtils
     withModelFallbacksRotated,
     validateModelCapabilities,
     llmHooks,
+    safeGenRequest,
   )
 where
 
@@ -29,10 +30,11 @@ import LLM.Core.Types
     ThinkingMode (..),
     Turn (..),
     conversationHasImages,
+    validateTurns,
   )
 import LLM.Core.Usage (Usage (..), estimateCost)
 import LLM.Core.Utils (interruptOnAbort, withRetry, withTimeout)
-import LLM.Generate.Logger (Hooks (..), LogLevel (..))
+import LLM.Generate.Logger (Hooks (..), LogLevel (..), safeHooks, safeLLMHooks)
 import LLM.Generate.ModelConfig
   ( ModelCapabilities (..),
     ModelConfig (..),
@@ -214,12 +216,19 @@ withModelFallbacksRotated gr models invokePerModel = do
 -- | Shared loop of 'withModelFallbacks' and 'withModelFallbacksRotated'.
 -- On success, returns whether the chain was rotated, the rotated chain and
 -- the result.
+--
+-- Before the first model is tried, each invalid turn in 'grMessages'
+-- ('validateTurns') is logged at 'Warn' as @turn <n>: <reason>@ (@n@
+-- counts from 0). The request is sent unchanged.
 runModelFallbacks ::
   GenRequest ->
   ModelWithFallbacks ->
   (ModelConfig -> IO (Either LLMError a)) ->
   IO (GenerateResult (Bool, ModelWithFallbacks, a))
-runModelFallbacks gr models invokePerModel =
+runModelFallbacks gr models invokePerModel = do
+  mapM_
+    (\(i, reason) -> gr.grHooks.onLog Warn ("turn " <> T.pack (show i) <> ": " <> reason))
+    (validateTurns gr.grMessages)
   case mfwToModelConfigs models of
     [] -> pure $ Left GErrAllModelsFailed
     modelConfigs -> loop [] modelConfigs Nothing
@@ -279,4 +288,14 @@ llmHooks hooks =
     { onLLMRequest = hooks.onRequest,
       onLLMResponse = hooks.onResponse,
       onLLMResponseError = hooks.onResponseError
+    }
+
+-- | The request with its hooks wrapped by 'safeHooks' and 'safeLLMHooks',
+-- so an exception thrown by a hook cannot fail a call whose side effects
+-- already happened. Applied by every public generation entry point.
+safeGenRequest :: GenRequest -> GenRequest
+safeGenRequest gr =
+  gr
+    { grHooks = safeHooks gr.grHooks,
+      grLLMHooks = safeLLMHooks gr.grLLMHooks
     }

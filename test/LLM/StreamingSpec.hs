@@ -3,7 +3,7 @@
 module LLM.StreamingSpec (spec) where
 
 import Control.Concurrent (MVar, forkIO, newEmptyMVar, putMVar, takeMVar, threadDelay)
-import Control.Exception (finally)
+import Control.Exception (finally, throwIO, try)
 import Control.Monad (when)
 import Control.Retry (RetryPolicyM (getRetryPolicyM), RetryStatus (rsIterNumber), defaultRetryStatus)
 import Data.Aeson (object, (.=))
@@ -11,6 +11,10 @@ import Data.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef,
 import Data.Text (Text)
 import GHC.Clock (getMonotonicTime)
 import LLM.Core.Abort (AbortSignal, abort, newAbortSignal)
+import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
+import LLM.Providers.OpenAI (openAIProvider)
+import Network.HTTP.Client qualified as HC
+import Network.HTTP.Req (HttpException (..))
 import LLM.Core.Types
   ( ChatResponse (..),
     LLMError (..),
@@ -130,6 +134,46 @@ spec = describe "Streaming" $ do
           mc = (testModelConfig gw) {mcRequestTimeout = Just 100}
       r <- streamTextLLM (\_ -> pure ()) (testGenRequest []) mc
       fmap (.respText) r `shouldBe` Left TimeoutError
+
+  describe "stream callback exceptions" $ do
+    it "rethrows the callback's own HttpException after one attempt" $ do
+      attempts <- newIORef (0 :: Int)
+      let provider =
+            (openAIProvider "key")
+              { openStream = \_ k -> do
+                  modifyIORef' attempts (+ 1)
+                  chunks <- newIORef ["data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n", "data: [DONE]\n\n"]
+                  k (atomicModifyIORef' chunks (\case [] -> ([], ""); c : cs -> (cs, c)))
+              }
+          mc = (testModelConfig (toGateway provider)) {mcRetryCount = 3}
+          callerFailure = VanillaHttpException (HC.HttpExceptionRequest HC.defaultRequest HC.ConnectionClosed)
+          -- Throw only for text, not for the 'StreamAttemptReset' a retry
+          -- would emit first, so a retry would show as a second attempt.
+          onChunk = \case
+            TextDelta _ -> throwIO callerFailure
+            _ -> pure ()
+      r <- try (streamTextLLM onChunk (testGenRequest [UserTurn "q"]) mc)
+      case r of
+        Left (VanillaHttpException (HC.HttpExceptionRequest _ HC.ConnectionClosed)) -> pure ()
+        Left e -> fail ("unexpected exception: " <> show e)
+        Right res -> fail ("expected the exception, got " <> show res)
+      readIORef attempts `shouldReturn` 1
+
+    it "still ends a provider stream with Aborted when the signal fires in the callback" $ do
+      sig <- newAbortSignal
+      let provider =
+            (openAIProvider "key")
+              { openStream = \_ k -> do
+                  chunks <-
+                    newIORef
+                      [ "data: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\n\n",
+                        "data: {\"choices\":[{\"delta\":{\"content\":\"b\"}}]}\n\n",
+                        "data: [DONE]\n\n"
+                      ]
+                  k (atomicModifyIORef' chunks (\case [] -> ([], ""); c : cs -> (cs, c)))
+              }
+      r <- streamTextLLM (\_ -> abort sig) (testGenRequest [UserTurn "q"]) {grAbortSignal = Just sig} (testModelConfig (toGateway provider))
+      fmap (.respText) r `shouldBe` Left Aborted
 
   describe "abort signal" $ do
     it "does not call the model when the signal fired before the call" $ do

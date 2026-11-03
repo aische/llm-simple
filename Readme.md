@@ -10,7 +10,7 @@ The API stays small on purpose: JSON model and provider catalogs, bundled filesy
 
 - **Providers:** OpenAI, Claude, Gemini, Ollama, DeepSeek
 - **Generate:** single-request text, streaming, and structured object generation with model fallbacks, timeouts, retries, and throttling
-- **Agent:** multi-round tool loops (`generateText`, `streamText`, `generateObject`)
+- **Agent:** multi-round tool loops (`generateText`, `streamText`), plus `generateObject` / `generateObjectUntyped` for a single structured-output call with the agent's system prompt and context window (no tools are sent or run)
 - **Tools:** filesystem tool suite with workspace path sandboxing
 - **Load:** JSON model and provider catalogs, API-key gateway initialization
 - **Observability:** hooks, logging, and generation lifecycle events
@@ -55,9 +55,11 @@ Load `.env` yourself in `main` (the example executable does this), or call
 cabal run llm-simple
 ```
 
-The example loads `.env`, loads models from the catalog, wires up filesystem tools, and runs a small agent that asks about files in the workspace.
+The example loads `.env`, loads one model from the catalog (`deepseek4flash`, so only `DEEPSEEK_API_KEY` is needed; change the name in `app/Main.hs` to use another, e.g. `llama_3_2` for a local Ollama), wires up filesystem tools, and runs a small agent that asks about files in the workspace.
 
 ## Configuration
+
+The model and provider catalogs are **trusted input**, like code: they decide where requests and API keys are sent (`baseUrl`, `baseUrlEnv`) and which environment variables are read. Do not load catalogs from an untrusted source. The same holds for `getSystemPrompt` (`LLM.Load.Utils`), which reads any file named by a `file:` value, outside any sandbox.
 
 ### Model catalog
 
@@ -78,7 +80,9 @@ Models are defined in a JSON array. Each entry maps a logical config name to a p
 | `thinking`        | Extended thinking effort level (optional, provider-dependent)            |
 | `capabilities`    | Optional object: `thinking`, `vision`, `promptCaching` (default `false`) |
 
-A provider is only available if its API key is set (except Ollama, which is always available).
+A provider is only available if its API key is set and not empty or only whitespace (except Ollama, which is always available).
+
+Each `modelConfigName` must be unique, `maxTokens` must be positive, and `requestTimeout`, `throttleDelay`, `retryCount`, `jitterBackoff` and the prices must not be negative. Otherwise loading the catalog fails with a `LoadModelCatalogError` that names the entry, whichever model you ask for.
 
 Capability flags are declarations used before each fallback candidate is
 called: image parts require `vision`; enabled thinking requires `thinking`.
@@ -126,7 +130,8 @@ Providers are defined in `providers.json` (bundled with the package as a
 reference). Built-in providers are always available. When you load a model
 catalog, the loader looks for `providers.json` in the same directory; if present,
 its entries are merged on top of the built-ins — adding new providers or
-overriding built-ins with the same `providerName`.
+overriding built-ins with the same `providerName`. Within the file, each
+`providerName` must be unique (`LoadProviderCatalogError` otherwise).
 
 | Field         | Description                                                                 |
 | ------------- | --------------------------------------------------------------------------- |
@@ -173,7 +178,9 @@ main = do
 
 ### Agent with tools
 
-An agent runs a loop: the model may call tools, results are fed back, and the loop continues until the model finishes or `agMaxToolRounds` is reached.
+An agent runs a loop: the model may call tools, results are fed back, and the loop continues until the model finishes or `agMaxToolRounds` is reached. After the last allowed round, the agent makes one more model call that asks for a text answer; if the model still calls tools, they are not run and the result is `GErrToolExceeded`.
+
+Configuration mistakes are logged as warnings (`onLog`) at the start of a run instead of failing it: a name in `agTools` that the tool map lacks, a repeated name, a tool named `get_history` while `agContextWindow` is set (the built-in one wins), or a non-positive `agContextWindow` (no windowing). `validateAgent` returns the same warnings.
 
 ```haskell
 import Configuration.Dotenv (defaultConfig, loadFile)
@@ -220,6 +227,12 @@ main = do
 
 Set `rtReadonly = True` to omit mutating tools from the schema sent to the model and to block them at execution time.
 
+Every request's messages are checked with `validateTurn` (for example, no tool-call parts in a user turn); an invalid turn is logged as a warning and the request is still sent. From 0.5 it will be an error.
+
+Log messages of an agent run (`onLog`) start with `[<agName>] `; leave `agName` empty for no prefix.
+
+Hooks are for observation only. An exception a hook throws is caught and dropped (asynchronous exceptions still propagate), so a hook cannot stop a run.
+
 For local debugging, `defaultDebugHooks` enables stderr logging and writes request/response JSON to `./dumps` — avoid that in production or shared environments. Each dump is a new file readable only by its owner; dumps hold prompts, tool arguments and results, and model output, and are never deleted by the library.
 
 ### Single request (no agent loop)
@@ -250,7 +263,7 @@ Define a `Tool` with a `ToolDef` (sent to the model) and an execution function, 
 | `file_info`             | File metadata                           |
 | `find_files`            | Find files by pattern                   |
 | `grep`                  | Search file contents                    |
-| `move_file`             | Move/rename a file                      |
+| `move_file`             | Move/rename a file (never overwrites)   |
 | `multi_replace_in_file` | Multiple search-and-replace in one file |
 | `readdir`               | List directory contents                 |
 | `read_file_paginated`   | Read a file in pages                    |
@@ -263,7 +276,7 @@ Use `fsTools'` to map tool results through a custom embedding function.
 
 ### Filesystem sandbox
 
-Filesystem tools enforce **workspace-relative path containment**: `..` escapes, absolute paths outside the workspace, and symlinks pointing outside are rejected. A symlink is judged by where it points, including when its target does not exist yet: writing through a dangling link that leads out of the workspace is refused and does not create the target. A link that resolves inside the workspace is followed, and the operation lands on its target. Recursive tools skip symlinks rather than following them. A path that cannot be checked for being a symlink (for example, permission denied) is treated as one.
+Filesystem tools enforce **workspace-relative path containment**: `..` escapes, absolute paths outside the workspace, and symlinks pointing outside are rejected. A symlink is judged by where it points, including when its target does not exist yet: writing through a dangling link that leads out of the workspace is refused and does not create the target. A link that resolves inside the workspace is followed, and the operation lands on its target. Recursive tools skip symlinks rather than following them. A `..` that would step back out of a symlink (`link/..`) is refused, since it names a different file by name than the operating system would open. A path that cannot be checked for being a symlink (for example, permission denied) is treated as one.
 
 Errors that reach the model name paths relative to the workspace, so the model does not learn where the workspace lives on the host. For any tool, the library drops an absolute file name from an `IOException` before it shows the error to the model.
 
@@ -271,12 +284,14 @@ Errors that reach the model name paths relative to the workspace, so the model d
 
 The sandbox does **not** protect against *other processes* that write to the workspace while the agent runs. A path is checked and then opened. A process that swaps a directory for a symlink between those two steps (a time-of-check/time-of-use race) can make a tool read or write outside the workspace. Hard links to files outside the workspace are not detected either. Such a process usually runs as the same user and can reach those files directly, so this only matters if it has less access than the agent. If a less-trusted process can write to the workspace, isolate the agent at the OS level (a container, or a separate user).
 
-**Limitations (0.1.x):**
+**Limitations (pre-1.0):**
 
 - The sandbox is **path-scoped**, not kernel-level isolation. Use a dedicated, disposable workspace directory — not your home directory or a production tree.
 - There is no denylist for sensitive in-workspace files (`.env`, `.git/config`, etc.). Anything inside the workspace is accessible to tools the model can call.
-- Read tools enforce byte caps: whole-file and edit tools use a 1 MiB limit; `read_file_paginated` accepts source files up to 10 MiB.
+- Read tools enforce byte caps: whole-file and edit tools use a 1 MiB limit; `read_file_paginated` accepts source files up to 10 MiB and returns at most 100 KiB per page.
+- Search and listing tools bound their work: `find_files`, `grep` and `directory_tree` look at no more than 20,000 entries per call and say so when they stop; tool output is capped at 100 KiB.
 - `rtReadonly` omits mutating tools from the model schema and blocks them at execution time if they are invoked anyway.
+- `writefile` and the replace tools replace the file as a whole (a temporary file renamed over it), so a failed write leaves the old content. The file keeps its mode bits but gets a new inode, so hard links to it keep the old content. Concurrent edits of one file from the same process are serialized; edits from other processes are not.
 
 ## Module layout
 
@@ -286,11 +301,11 @@ The sandbox does **not** protect against *other processes* that write to the wor
 | `LLM.Core`      | Types, gateways, provider interface, usage tracking                                                            |
 | `LLM.Providers` | Provider implementations (OpenAI, Claude, Gemini, Ollama, DeepSeek)                                            |
 | `LLM.Generate`  | Single-request generation with fallbacks (`generateTextWithFallbacks`, `streamTextWithFallbacks`, `genObject`) |
-| `LLM.Agent`     | Agent loops with tool execution (`generateText`, `streamText`)                                                 |
+| `LLM.Agent`     | Agent loops with tool execution (`generateText`, `streamText`); structured output without tools (`generateObject`) |
 | `LLM.Tools`     | Built-in filesystem tool definitions                                                                           |
 | `LLM.Load`      | Model and provider catalog loading, gateway init, `fsTools`                                                    |
 
-Import `LLM` for the common surface, or import sub-modules directly for agent loops, providers, and advanced configuration. Sub-module APIs are exposed but considered experimental in 0.1.x.
+Import `LLM` for the common surface, or import sub-modules directly for agent loops, providers, and advanced configuration. Sub-module APIs are exposed but considered experimental before 1.0.
 
 **Note:** Workflow support was removed from this repo and moved elsewhere.
 

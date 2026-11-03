@@ -8,7 +8,7 @@ module LLM.Load.ProviderCatalog
   )
 where
 
-import Control.Monad.Except (ExceptT (..))
+import Control.Monad.Except (ExceptT (..), throwError)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON), withText)
 import Data.Map (Map)
@@ -112,10 +112,17 @@ defaultProviderCatalogMap =
           baseUrlEnv = Just "OLLAMA_BASE_URL"
         }
 
+-- | Read a provider catalog file. Fails with 'LoadProviderCatalogError' if
+-- the file cannot be read or parsed, or if two entries share a
+-- @providerName@.
 loadProviderCatalog :: FilePath -> ExceptT LoadConfigError IO ProviderCatalogMap
-loadProviderCatalog filePath =
-  Map.fromList . fmap (\item -> (item.providerName, item))
-    <$> decodeJsonFile filePath (LoadProviderCatalogError . T.pack)
+loadProviderCatalog filePath = do
+  items <- decodeJsonFile filePath (LoadProviderCatalogError . T.pack)
+  case duplicates (map (.providerName) items) of
+    name : _ -> throwError (LoadProviderCatalogError ("duplicate providerName: " <> name))
+    [] -> pure (Map.fromList [(item.providerName, item) | item <- items])
+  where
+    duplicates names = [n | (i, n) <- zip [0 :: Int ..] names, n `elem` take i names]
 
 -- | Load providers for a model catalog path.
 --

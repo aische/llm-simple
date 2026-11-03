@@ -18,7 +18,7 @@ import Data.Text (Text)
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Encoding qualified as TLE
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig)
+import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, readResponseBody)
 import LLM.Core.Types
   ( commonImageMediaTypes,
     ChatRequest
@@ -49,11 +49,7 @@ import Network.HTTP.Req
     ReqBodyJson (ReqBodyJson),
     Url,
     https,
-    bsResponse,
-    req,
     reqBr,
-    responseBody,
-    responseStatusCode,
     runReq,
     (/:),
   )
@@ -105,8 +101,7 @@ deepSeekProviderWith baseUrl baseOpts apiKey =
       runReq lenientConfig $ do
         let url = baseUrl /: "v1" /: "chat" /: "completions"
             opts = baseOpts <> authHeader apiKey
-        resp <- req POST url (ReqBodyJson body) bsResponse opts
-        pure (responseStatusCode resp, responseBody resp)
+        reqBr POST url (ReqBodyJson body) opts readResponseBody
 
 -- | OpenAI-compatible body; DeepSeek uses @max_tokens@ (not @max_completion_tokens@).
 deepSeekBuildBody :: Bool -> ChatRequest -> Value

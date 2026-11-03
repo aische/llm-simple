@@ -2,7 +2,7 @@ cabal-version:      3.0
 
 name:               llm-simple
 
-version:            0.4.1.0
+version:            0.4.2.0
 
 synopsis:
     Multi-provider LLM library with agent tool loops and filesystem tools
@@ -139,8 +139,12 @@ library
         LLM.Load.FsTools
 
     other-modules:
+        LLM.Core.Internal.Body
         LLM.Core.SSE
+        LLM.Tools.Internal.PathLock
+        LLM.Tools.Internal.TextEdit
         LLM.Tools.Internal.TextFile
+        LLM.Tools.Internal.WalkBudget
     hs-source-dirs:     src
     build-depends:
         aeson          >=2.0   && <2.3,
@@ -239,6 +243,7 @@ test-suite llm-simple-test
                         LLM.GenerateObjectSpec
                         LLM.ToolUtilsSpec
                         LLM.CrossProviderSpec
+                        LLM.ScaleSpec
                         LLM.TestKit
                         LLM.WeatherTool
     hs-source-dirs:     test
@@ -264,4 +269,6 @@ test-suite llm-simple-test
         scientific     >=0.3   && <0.4,
         uuid-types     >=1.0.4 && <1.1,
         vector         >=0.13  && <0.14
+    if !os(windows)
+        build-depends: unix >=2.8 && <2.9
     build-tool-depends: hspec-discover:hspec-discover

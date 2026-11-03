@@ -45,7 +45,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, normalizeSchemaOpenAI, unexpectedResponse)
+import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, normalizeSchemaOpenAI, readResponseBody, unexpectedResponse)
 import LLM.Core.SSE (SSEEvent (sseData), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( commonImageMediaTypes,
@@ -91,11 +91,7 @@ import Network.HTTP.Req
     Url,
     header,
     https,
-    bsResponse,
-    req,
     reqBr,
-    responseBody,
-    responseStatusCode,
     runReq,
     (/:),
   )
@@ -160,8 +156,7 @@ openAIProviderWithName name baseUrl baseOpts apiKey =
       runReq lenientConfig $ do
         let url = baseUrl /: "v1" /: "chat" /: "completions"
             opts = baseOpts <> authHeader apiKey
-        resp <- req POST url (ReqBodyJson body) bsResponse opts
-        pure (responseStatusCode resp, responseBody resp)
+        reqBr POST url (ReqBodyJson body) opts readResponseBody
 
 authHeader :: Text -> Option scheme
 authHeader apiKey
@@ -417,17 +412,19 @@ parseOpenAIUsageObject uo = do
 parseOpenAIStream :: HC.BodyReader -> (StreamEvent -> IO ()) -> IO LLMTextResult
 parseOpenAIStream reader callback = do
   blocksRef <- newIORef ([] :: [ContentPart])
-  reasoningRef <- newIORef Nothing
+  -- Reasoning fragments, newest first; joined once at the end.
+  reasoningRef <- newIORef ([] :: [Text])
   usageRef <- newIORef Nothing
-  -- Tool calls being assembled, keyed by index: (id, name, argument text).
-  toolAccRef <- newIORef (Map.empty :: Map.Map Int (Text, Text, Text))
+  -- Tool calls being assembled, keyed by index: (id, name, argument
+  -- fragments newest first).
+  toolAccRef <- newIORef (Map.empty :: Map.Map Int (Text, Text, [Text]))
   errorRef <- newIORef (Nothing :: Maybe LLMError)
   finishReasonRef <- newIORef (Nothing :: Maybe Text)
   badToolRef <- newIORef (Nothing :: Maybe Text) -- first tool with invalid JSON args
   let flushTools = do
         tools <- readIORef toolAccRef
-        forM_ (Map.elems tools) $ \(cid, name, argsStr) ->
-          case decodeToolArguments argsStr of
+        forM_ (Map.elems tools) $ \(cid, name, fragments) ->
+          case decodeToolArguments (T.concat (reverse fragments)) of
             Just args -> do
               let tc = mkToolCall cid name args
               modifyIORef' blocksRef (toolCallPart tc :)
@@ -451,7 +448,7 @@ parseOpenAIStream reader callback = do
             modifyIORef' errorRef (<|> Just (HttpError status raw))
           case parseMaybe parseStreamReasoningDelta v of
             Just (Just txt) | not (T.null txt) -> do
-              modifyIORef' reasoningRef (Just . maybe txt (<> txt))
+              modifyIORef' reasoningRef (txt :)
               callback (StreamReasoningDelta txt)
             _ -> pure ()
           case parseMaybe parseStreamTextDelta v of
@@ -472,12 +469,11 @@ parseOpenAIStream reader callback = do
             Nothing -> pure ()
   flushTools
   textBlocks <- reverse <$> readIORef blocksRef
-  mReasoning <- readIORef reasoningRef
+  reasoning <- T.concat . reverse <$> readIORef reasoningRef
   usage <- readIORef usageRef
   let thinkingBlocks =
-        [ thinkingPart (ThinkingContent (Just rc) Nothing)
-          | Just rc <- [mReasoning],
-            not (T.null rc)
+        [ thinkingPart (ThinkingContent (Just reasoning) Nothing)
+          | not (T.null reasoning)
         ]
       parts = thinkingBlocks ++ textBlocks
   mError <- readIORef errorRef
@@ -532,16 +528,16 @@ type ToolDelta = (Int, Maybe Text, Maybe Text, Text)
 -- | Merge a fragment into the accumulated tool calls. A fragment whose id
 -- differs from the call already at its index starts a new call (servers
 -- that omit @index@ would otherwise merge distinct calls).
-addToolDelta :: Map.Map Int (Text, Text, Text) -> ToolDelta -> Map.Map Int (Text, Text, Text)
+addToolDelta :: Map.Map Int (Text, Text, [Text]) -> ToolDelta -> Map.Map Int (Text, Text, [Text])
 addToolDelta acc (idx, mId, mName, argChunk) =
   case Map.lookup idx acc of
     Just (cid, n, a)
       | maybe True (== cid) mId || T.null cid ->
-          Map.insert idx (fromMaybe cid mId, fromMaybe n mName, a <> argChunk) acc
+          Map.insert idx (fromMaybe cid mId, fromMaybe n mName, argChunk : a) acc
       | otherwise -> Map.insert (nextIndex acc) new acc
     Nothing -> Map.insert idx new acc
   where
-    new = (fromMaybe "" mId, fromMaybe "" mName, argChunk)
+    new = (fromMaybe "" mId, fromMaybe "" mName, [argChunk])
     nextIndex m = maybe 0 ((+ 1) . fst) (Map.lookupMax m)
 
 -- | All tool-call fragments in a chunk. Ollama may send several complete

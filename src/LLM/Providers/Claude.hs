@@ -40,7 +40,7 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, unexpectedResponse)
+import LLM.Core.ProviderUtils (decodeObjectText, decodeToolArguments, handleStreamResponse, invalidToolArgumentsError, lenientConfig, readResponseBody, unexpectedResponse)
 import LLM.Core.SSE (SSEEvent (sseData, sseEvent), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( commonImageMediaTypes,
@@ -86,11 +86,7 @@ import Network.HTTP.Req
     Url,
     header,
     https,
-    bsResponse,
-    req,
     reqBr,
-    responseBody,
-    responseStatusCode,
     runReq,
     (/:),
   )
@@ -159,8 +155,7 @@ claudeProviderWith baseUrl baseOpts apiKey =
       runReq lenientConfig $ do
         let url = baseUrl /: "v1" /: "messages"
             opts = baseOpts <> claudeAuthOpts apiKey
-        resp <- req POST url (ReqBodyJson body) bsResponse opts
-        pure (responseStatusCode resp, responseBody resp)
+        reqBr POST url (ReqBodyJson body) opts readResponseBody
 
 claudeAuthOpts :: Text -> Option scheme
 claudeAuthOpts apiKey =
@@ -481,8 +476,9 @@ parseClaudeStream :: Text -> IO BS.ByteString -> (StreamEvent -> IO ()) -> IO LL
 parseClaudeStream modelHint readChunk callback = do
   blocksRef <- newIORef ([] :: [StreamBlock])
   usageRef <- newIORef emptyUsage
-  toolAccRef <- newIORef (Nothing :: Maybe (Text, Text, Text))
-  thinkingAccRef <- newIORef (Nothing :: Maybe (Text, Maybe Text)) -- text, signature
+  -- Fragments are kept newest first and joined once at content_block_stop.
+  toolAccRef <- newIORef (Nothing :: Maybe (Text, Text, [Text]))
+  thinkingAccRef <- newIORef (Nothing :: Maybe ([Text], Maybe Text)) -- text, signature
   redactedRef <- newIORef (Nothing :: Maybe Text)
   modelRef <- newIORef modelHint
   errorRef <- newIORef (Nothing :: Maybe LLMError)
@@ -517,8 +513,8 @@ parseClaudeStream modelHint readChunk callback = do
       Just "content_block_start" ->
         case mv of
           Just v -> case parseMaybe parseContentBlockStart v of
-            Just (StartTool cid name) -> writeIORef toolAccRef (Just (cid, name, ""))
-            Just StartThinking -> writeIORef thinkingAccRef (Just ("", Nothing))
+            Just (StartTool cid name) -> writeIORef toolAccRef (Just (cid, name, []))
+            Just StartThinking -> writeIORef thinkingAccRef (Just ([], Nothing))
             Just (StartRedacted data_) -> writeIORef redactedRef (Just data_)
             Just StartText -> pure ()
             Nothing -> pure ()
@@ -533,7 +529,7 @@ parseClaudeStream modelHint readChunk callback = do
               Nothing -> pure ()
             case parseMaybe parseThinkingDelta v of
               Just txt -> do
-                modifyIORef' thinkingAccRef $ fmap (\(acc, sig) -> (acc <> txt, sig))
+                modifyIORef' thinkingAccRef $ fmap (\(acc, sig) -> (txt : acc, sig))
                 callback (StreamReasoningDelta txt)
               Nothing -> pure ()
             case parseMaybe parseSignatureDelta v of
@@ -542,14 +538,14 @@ parseClaudeStream modelHint readChunk callback = do
               Nothing -> pure ()
             case parseMaybe parseInputJsonDelta v of
               Just fragment ->
-                modifyIORef' toolAccRef $ fmap (\(cid, name, acc) -> (cid, name, acc <> fragment))
+                modifyIORef' toolAccRef $ fmap (\(cid, name, acc) -> (cid, name, fragment : acc))
               Nothing -> pure ()
           Nothing -> pure ()
       Just "content_block_stop" -> do
         mThinking <- readIORef thinkingAccRef
         case mThinking of
-          Just (txt, mSig) -> do
-            modifyIORef' blocksRef (StreamThinking txt mSig :)
+          Just (fragments, mSig) -> do
+            modifyIORef' blocksRef (StreamThinking (T.concat (reverse fragments)) mSig :)
             writeIORef thinkingAccRef Nothing
           Nothing -> pure ()
         mRedacted <- readIORef redactedRef
@@ -560,8 +556,8 @@ parseClaudeStream modelHint readChunk callback = do
           Nothing -> pure ()
         mTool <- readIORef toolAccRef
         case mTool of
-          Just (cid, name, jsonStr) -> do
-            case decodeToolArguments jsonStr of
+          Just (cid, name, fragments) -> do
+            case decodeToolArguments (T.concat (reverse fragments)) of
               Just args -> do
                 modifyIORef' blocksRef (StreamTool cid name args :)
                 callback (StreamToolCall (mkToolCall cid name args))

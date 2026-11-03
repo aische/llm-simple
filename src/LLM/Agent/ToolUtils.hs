@@ -12,6 +12,9 @@ module LLM.Agent.ToolUtils
     createGenRequest,
     createGenRequestNoTools,
     embedTextTool,
+    safeRuntimeArgs,
+    agentRuntimeArgs,
+    validateAgent,
   )
 where
 
@@ -19,13 +22,15 @@ import Autodocodec qualified as AC
 import Autodocodec.Schema (jsonSchemaVia)
 import Control.Exception (IOException, SomeException, fromException)
 import Control.Monad (mfilter)
+import Data.Containers.ListUtils (nubOrd)
+import Data.List (nub)
 import Data.Aeson (FromJSON)
 import Data.Aeson qualified as AE
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import LLM.Agent.Tools.HistoryTool (historyToolTyped)
+import LLM.Agent.Tools.HistoryTool (findNthUserBack, historyToolTyped)
 import LLM.Agent.Types
   ( Agent (..),
     RuntimeArgs (..),
@@ -43,7 +48,7 @@ import LLM.Core.Types
   )
 import LLM.Core.Usage (Usage)
 import LLM.Core.Utils (interruptOnAbort, toolResult, trySync)
-import LLM.Generate.Logger (Hooks (..))
+import LLM.Generate.Logger (Hooks (..), safeHooks, safeLLMHooks)
 import LLM.Generate.Types (GenRequest (..))
 import LLM.Tools.FsConfig (SandboxViolation, formatSandboxViolation)
 import GHC.IO.Exception (IOException (ioe_filename))
@@ -59,7 +64,10 @@ executeTool hooks ctx tools tc =
 -- Returns 'Nothing' if it was; 'onToolError' then reports @\"Aborted\"@.
 executeToolInterruptible :: Maybe AbortSignal -> Hooks -> ToolContext -> [Tool Text] -> ToolCall -> IO (Maybe ToolResult)
 executeToolInterruptible mSig hooks ctx tools tc = case lookup tc.tcName toolMap of
-  Nothing -> pure $ Just $ toolResult tc ("Unknown tool: " <> tc.tcName)
+  Nothing -> do
+    let msg = "Unknown tool: " <> tc.tcName
+    hooks.onToolError tc.tcName msg
+    pure $ Just $ toolResult tc msg
   Just tool -> do
     if ctx.tcRuntimeArgs.rtReadonly && not tool.toolDef.toolReadonly
       then do
@@ -158,24 +166,18 @@ filterReadonlyTools True tools = filter (\x -> x.toolDef.toolReadonly) tools
 -- | Compute the index where the visible window starts.
 -- The window includes the last @n@ user messages and all turns that follow
 -- each of them (assistant replies, tool rounds, etc.).
--- Returns 0 (no windowing) when the window is 'Nothing' or the conversation
--- contains fewer than @n@ user messages.
+-- Returns 0 (no windowing) when the window is 'Nothing' or @'Just' n@ with
+-- @n <= 0@, or when the conversation contains fewer than @n@ user messages.
 windowOffset :: Maybe Int -> [Turn] -> Int
 windowOffset Nothing _ = 0
 windowOffset (Just n) conv = findNthUserFromEnd n conv
 
 -- | Find the index of the Nth 'UserTurn' from the end of a conversation.
--- Returns 0 if there are fewer than @n@ user messages.
+-- Returns 0 if there are fewer than @n@ user messages, or if @n <= 0@.
 findNthUserFromEnd :: Int -> [Turn] -> Int
-findNthUserFromEnd 0 _conv = 0
-findNthUserFromEnd n conv = go (length conv - 1) n
-  where
-    go idx remaining
-      | idx < 0 = 0
-      | remaining <= 0 = idx + 1
-      | otherwise = case conv !! idx of
-          UserMessage _ -> go (idx - 1) (remaining - 1)
-          _ -> go (idx - 1) remaining
+findNthUserFromEnd n conv
+  | n <= 0 = 0
+  | otherwise = findNthUserBack n conv
 
 -- | Build a 'GenRequest' from agent configuration and runtime state.
 --
@@ -212,20 +214,74 @@ createGenRequestNoTools agent rt messages =
           grHooks = rt.rtHooks
         }
 
+-- | The tools sent to the model: the 'Agent.agTools' names found in the
+-- 'ToolMap', each once (the first occurrence counts), read-only ones only
+-- when 'rtReadonly' is set, followed by the built-in @get_history@ when
+-- windowing is on. A caller tool named @get_history@ is dropped while
+-- windowing is on. Names missing from the map are skipped;
+-- 'validateAgent' reports them.
 getResolvedTools :: (Text -> result) -> Agent -> ToolMap result -> RuntimeArgs -> [Tool result]
-getResolvedTools embed agent toolMap rt = filterReadonlyTools rt.rtReadonly (getToolsFromMap toolMap agent.agTools) ++ fmap (embedTextTool embed) (getHistoryTool agent)
+getResolvedTools embed agent toolMap rt =
+  filterReadonlyTools rt.rtReadonly (getToolsFromMap toolMap callerNames)
+    ++ fmap (embedTextTool embed) historyTools
+  where
+    historyTools = getHistoryTool agent
+    callerNames
+      | null historyTools = agent.agTools
+      | otherwise = filter (/= historyToolName) agent.agTools
 
 getToolsFromMap :: ToolMap result -> [Text] -> [Tool result]
-getToolsFromMap toolMap toolNames = toolNames >>= lookupTool
+getToolsFromMap toolMap toolNames = nubOrd toolNames >>= lookupTool
   where
     lookupTool name = case Map.lookup name toolMap of
       Just tool -> [tool]
       Nothing -> []
 
 getHistoryTool :: Agent -> [Tool Text]
-getHistoryTool agent = case agent.agContextWindow of
-  Just n | n > 0 -> [toTool historyToolTyped]
-  _ -> []
+getHistoryTool agent
+  | windowingOn agent = [toTool historyToolTyped]
+  | otherwise = []
+
+windowingOn :: Agent -> Bool
+windowingOn agent = case agent.agContextWindow of
+  Just n -> n > 0
+  Nothing -> False
+
+historyToolName :: Text
+historyToolName = "get_history"
+
+-- | Warnings about an agent configuration that the agent loop works around:
+--
+-- * a name listed more than once in 'agTools' (only the first counts);
+-- * a name in 'agTools' that the 'ToolMap' lacks (it is not sent);
+-- * a caller tool named @get_history@ while windowing is on (the built-in
+--   one is sent instead);
+-- * @'agContextWindow' = 'Just' n@ with @n <= 0@ (no windowing).
+--
+-- 'LLM.Agent.generateText' and 'LLM.Agent.streamText' send each warning
+-- to 'onLog' at 'LLM.Generate.Logger.Warn' once at the start of a run.
+-- An empty list means none apply.
+validateAgent :: Agent -> ToolMap result -> [Text]
+validateAgent agent toolMap =
+  [ "agTools lists " <> name <> " more than once; only the first is used"
+  | name <- nub (duplicates agent.agTools)
+  ]
+    ++ [ "agTools lists " <> name <> ", which is not in the tool map; it is not sent to the model"
+       | name <- nubOrd agent.agTools,
+         not (Map.member name toolMap),
+         not (name == historyToolName && windowingOn agent)
+       ]
+    ++ [ "agTools lists " <> historyToolName <> ", which is built in while agContextWindow is set; the caller's tool of that name is not used"
+       | windowingOn agent,
+         historyToolName `elem` agent.agTools,
+         Map.member historyToolName toolMap
+       ]
+    ++ [ "agContextWindow = Just " <> T.pack (show n) <> " is not positive; the whole conversation is sent"
+       | Just n <- [agent.agContextWindow],
+         n <= 0
+       ]
+  where
+    duplicates names = [n | (i, n) <- zip [0 :: Int ..] names, n `elem` take i names]
 
 embedTextTool :: (Text -> result) -> Tool Text -> Tool result
 embedTextTool embed tool =
@@ -249,3 +305,26 @@ formatToolException e
   | Just (ioe :: IOException) <- fromException e =
       T.pack (show ioe {ioe_filename = mfilter isRelative (ioe_filename ioe)})
   | otherwise = T.pack (show e)
+
+-- | The runtime arguments with their hooks wrapped by 'safeHooks' and
+-- 'safeLLMHooks', so an exception thrown by a hook cannot fail a run whose
+-- side effects (a tool call, say) already happened. Applied by the agent
+-- entry points.
+safeRuntimeArgs :: RuntimeArgs -> RuntimeArgs
+safeRuntimeArgs rt =
+  rt
+    { rtHooks = safeHooks rt.rtHooks,
+      rtLLMHooks = safeLLMHooks rt.rtLLMHooks
+    }
+
+-- | The runtime arguments the agent entry points ('LLM.Agent.generateText',
+-- 'LLM.Agent.streamText', 'LLM.Agent.generateObject',
+-- 'LLM.Agent.generateObjectUntyped') run with: 'safeRuntimeArgs', and every
+-- 'onLog' message prefixed with @[\<agName\>] @. An empty 'agName' adds
+-- no prefix.
+agentRuntimeArgs :: Agent -> RuntimeArgs -> RuntimeArgs
+agentRuntimeArgs agent rt = safeRuntimeArgs rt {rtHooks = named rt.rtHooks}
+  where
+    named hooks
+      | T.null agent.agName = hooks
+      | otherwise = hooks {onLog = \lvl msg -> hooks.onLog lvl ("[" <> agent.agName <> "] " <> msg)}

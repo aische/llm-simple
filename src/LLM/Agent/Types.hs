@@ -26,21 +26,32 @@ import LLM.Generate.Types (GenerateError, GenerateErrorResult, GenerateTextResul
 
 -- | Static agent configuration shared across requests.
 data Agent = Agent
-  { -- | Display name used in logs and debug hooks.
+  { -- | Name of the agent. The agent entry points prefix every 'onLog'
+    -- message of a run with @[\<agName\>] @; an empty name adds no prefix.
+    -- It is not sent to the model.
     agName :: Text,
     -- | Optional system prompt prepended to every provider request.
     agSystemPrompt :: Maybe Text,
     -- | Tool names from the 'ToolMap' that may be sent to the model.
     -- Only these names are exposed; the map may contain additional tools.
+    -- A repeated name is sent once; a name missing from the map is not sent
+    -- and logged as a warning at the start of the run.
     agTools :: [Text],
-    -- | Maximum number of model→tool rounds before returning 'GErrToolExceeded'.
-    -- The tools of the last round run, and their results are in
-    -- 'gerPartialNewMessages', but no further model call is made, so the
-    -- model never sees them.
+    -- | Maximum number of model→tool rounds. Once that many rounds have
+    -- run, the agent makes one final model call with the tools still
+    -- declared and a line appended to the system prompt asking for a text
+    -- answer ('LLM.Agent.Generate.toolBudgetUsedUpPrompt'). A text reply
+    -- ends the run successfully. Tool calls in that reply are not run: each
+    -- gets the result @\"Not run: tool round limit reached\"@ and the run
+    -- returns 'GErrToolExceeded'. So every tool that runs has its result
+    -- seen by the model, and a run makes at most @agMaxToolRounds + 1@
+    -- model calls. A value @<= 0@ makes only the final call.
     agMaxToolRounds :: Int,
     -- | When 'Just', only the last @n@ user messages (and their follow-on
     -- turns) are sent to the provider. Older turns remain in 'ToolContext' and
-    -- can be retrieved via the auto-injected @get_history@ tool.
+    -- can be retrieved via the auto-injected @get_history@ tool, which
+    -- replaces a caller tool of that name. @'Just' n@ with @n <= 0@ means no
+    -- windowing (as 'Nothing'), with a warning at the start of the run.
     agContextWindow :: Maybe Int
   }
 
@@ -104,7 +115,7 @@ data GenerateEventDetail
     GenerationFailed GenerateError GenerateErrorResult
   | -- | A new turn was appended (assistant tool-call round or tool results).
     MessageCreated Turn
-  | -- | Streaming update to an in-flight assistant message (unused by default loop).
+  | -- | Never emitted. Deprecated; removed in 0.5.
     MessageUpdated UUID Text
   | -- | The final assistant turn for a successful run.
     MessageFinalized Turn
@@ -113,6 +124,8 @@ data GenerateEventDetail
   | -- | Tool execution for round @n@ finished.
     ToolRoundFinished Int
   deriving (Show, Eq)
+
+{-# DEPRECATED MessageUpdated "Never emitted by the agent loop; removed in 0.5. Streamed text arrives through the streamText callback." #-}
 
 -- | Callback invoked for each 'GenerateEvent' during a run.
 type EventObserver = GenerateEvent -> IO ()

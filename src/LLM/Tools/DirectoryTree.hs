@@ -7,7 +7,8 @@ import Data.Text qualified as T
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, isFileHidden, isSymlink, sandboxPath, withWorkspacePaths)
-import LLM.Tools.FsLimits (cheapWalkDepth, maxTreeEntries)
+import LLM.Tools.FsLimits (cheapWalkDepth, maxOutputBytes, maxTreeEntries, maxVisitedEntries)
+import LLM.Tools.Internal.WalkBudget (WalkBudget, budgetExhausted, budgetNote, capLines, newWalkBudget, takeEntries, utf8Length)
 import System.Directory
   ( doesDirectoryExist,
     listDirectory,
@@ -38,7 +39,11 @@ directoryTreeToolTyped fsConfig =
           <> T.pack (show cheapWalkDepth)
           <> " and "
           <> T.pack (show maxTreeEntries)
-          <> " entries; truncation is reported in the header.",
+          <> " entries shown, "
+          <> T.pack (show maxVisitedEntries)
+          <> " entries looked at, and "
+          <> T.pack (show maxOutputBytes)
+          <> " bytes of output; truncation is reported in the header.",
       ttoolReadonly = True,
       ttoolExecute = const (withWorkspacePaths fsConfig . directoryTreeExecTyped fsConfig)
     }
@@ -63,14 +68,20 @@ data WalkState = WalkState
 drawTree :: FilePath -> FilePath -> IO Text
 drawTree path displayRoot = do
   let rootName = T.pack displayRoot
-  result <- walkDir "" 0 0 path
-  let header = renderHeader result.wsEntries result.wsTruncated result.wsDepthCut
-  pure $ T.unlines (header ++ rootName : result.wsLines)
+  budget <- newWalkBudget maxVisitedEntries
+  result <- walkDir budget "" 0 0 path
+  stopped <- budgetExhausted budget
+  let (shown, cut) = capLines (maxOutputBytes - utf8Length rootName - 1) result.wsLines
+      budgetNotes = [budgetNote budget | stopped]
+      header = renderHeader (length shown) result.wsTruncated cut result.wsDepthCut budgetNotes
+  pure $ T.unlines (header ++ rootName : shown)
   where
-    renderHeader n trunc depthCut =
+    renderHeader n trunc cut depthCut extra =
       let notes =
             ([T.pack ("truncated at " ++ show maxTreeEntries ++ " entries") | trunc])
+              ++ ([T.pack ("output truncated at " ++ show maxOutputBytes ++ " bytes") | cut])
               ++ ([T.pack ("depth cut at " ++ show cheapWalkDepth) | depthCut])
+              ++ extra
        in ( [ "=== directory_tree | "
                 <> T.pack (show n)
                 <> " entr"
@@ -86,8 +97,8 @@ drawTree path displayRoot = do
 -- emits lines for visible children, recursing into subdirectories until
 -- either depth or entry caps are hit. Both caps are global to the whole
 -- walk (entries is a running total across siblings).
-walkDir :: Text -> Int -> Int -> FilePath -> IO WalkState
-walkDir prefix depth entriesSoFar path
+walkDir :: WalkBudget -> Text -> Int -> Int -> FilePath -> IO WalkState
+walkDir budget prefix depth entriesSoFar path
   | depth > cheapWalkDepth =
       pure (WalkState [] entriesSoFar False True)
   | entriesSoFar >= maxTreeEntries =
@@ -99,12 +110,14 @@ walkDir prefix depth entriesSoFar path
         then pure (WalkState [] entriesSoFar False False)
         else do
           contents <- listDirectory path
-          let validContents =
-                filter (\n -> n `notElem` [".", ".."] && not (isFileHidden n)) contents
-              count = length validContents
-          stepChildren prefix depth entriesSoFar path (zip [1 .. count] validContents) count
+          validContents <-
+            takeEntries budget $
+              filter (\n -> n `notElem` [".", ".."] && not (isFileHidden n)) contents
+          let count = length validContents
+          stepChildren budget prefix depth entriesSoFar path (zip [1 .. count] validContents) count
 
 stepChildren ::
+  WalkBudget ->
   Text ->
   Int ->
   Int ->
@@ -112,9 +125,9 @@ stepChildren ::
   [(Int, FilePath)] ->
   Int ->
   IO WalkState
-stepChildren _ _ entries _ [] _ =
+stepChildren _ _ _ entries _ [] _ =
   pure (WalkState [] entries False False)
-stepChildren prefix depth entries dir ((idx, name) : rest) count
+stepChildren budget prefix depth entries dir ((idx, name) : rest) count
   | entries >= maxTreeEntries =
       pure (WalkState [] entries True False)
   | otherwise = do
@@ -124,8 +137,8 @@ stepChildren prefix depth entries dir ((idx, name) : rest) count
           currentLine = prefix <> connector <> textName
           newPrefix = prefix <> if isLast then "    " else "│   "
           entries' = entries + 1
-      sub <- walkDir newPrefix (depth + 1) entries' (dir </> name)
-      siblings <- stepChildren prefix depth sub.wsEntries dir rest count
+      sub <- walkDir budget newPrefix (depth + 1) entries' (dir </> name)
+      siblings <- stepChildren budget prefix depth sub.wsEntries dir rest count
       pure
         WalkState
           { wsLines = currentLine : sub.wsLines ++ siblings.wsLines,

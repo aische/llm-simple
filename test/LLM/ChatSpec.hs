@@ -8,9 +8,12 @@ import Data.Aeson (object, (.=))
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Map qualified as Map
 import Data.Text (Text)
+import Data.Text qualified as T
 import Heptapod (generate)
 import LLM.Agent.Events (noEventObserver)
-import LLM.Agent.Generate (generateText, streamText)
+import LLM.Agent.Generate (generateText, streamText, toolBudgetUsedUpPrompt)
+import LLM.Agent.GenerateObject (generateObjectUntyped)
+import LLM.Agent.ToolUtils (validateAgent)
 import LLM.Agent.Types
   ( Agent (..),
     RuntimeArgs (..),
@@ -35,11 +38,15 @@ import LLM.Core.Types
     LLMGateway (..),
     LLMHooks (..),
     ToolDef (ToolDef, toolDescription, toolName, toolParameters, toolReadonly),
+    ToolCall (..),
     ToolResult (..),
     mkToolCall,
   )
+import LLM.Core.Utils (getToolCalls)
 import LLM.Core.Usage (PricingInfo (..), defaultPricingInfo, mkUsage)
-import LLM.Generate.Logger (Hooks (..), noHooks)
+import LLM.Generate.Generate (generateTextWithFallbacks, streamTextWithFallbacks)
+import LLM.Generate.GenerateUtils (llmHooks)
+import LLM.Generate.Logger (Hooks (..), LogLevel (..), noHooks)
 import LLM.Generate.ModelConfig
   ( ModelCapabilities (..),
     ModelConfig (..),
@@ -47,7 +54,8 @@ import LLM.Generate.ModelConfig
     defaultModelCapabilities,
   )
 import LLM.Generate.Types
-  ( GenerateError (..),
+  ( GenRequest (..),
+    GenerateError (..),
     GenerateErrorResult (..),
     GenerateTextResult (..),
   )
@@ -57,6 +65,7 @@ import Test.Hspec
     expectationFailure,
     it,
     shouldBe,
+    shouldContain,
     shouldReturn,
     shouldSatisfy,
   )
@@ -294,6 +303,60 @@ toolThenFail req
 alwaysFail :: ChatRequest -> IO (Either LLMError ChatResponse)
 alwaysFail _ = pure $ Left (HttpError 503 "down")
 
+-- | Gateway that records every request, then answers with @respond@.
+recordingGateway :: IORef [ChatRequest] -> (ChatRequest -> IO (Either LLMError ChatResponse)) -> LLMGateway
+recordingGateway reqs respond =
+  let call req = modifyIORef' reqs (++ [req]) >> respond req
+   in LLMGateway
+        { gwName = "recording",
+          gwImageMediaTypes = supportedImageMediaTypes,
+          gwImageUrlSupport = True,
+          gwGenerateText = \_ -> call,
+          gwStreamText = \_ req _onEvent -> call req,
+          gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
+        }
+
+-- | Always one call of @get_weather@, numbered by the tool turns so far.
+alwaysTool :: ChatRequest -> IO (Either LLMError ChatResponse)
+alwaysTool req =
+  let n = length [() | ToolTurn _ <- req.reqConversation]
+      tc = mkToolCall ("call_" <> T.pack (show n)) "get_weather" (object [])
+   in pure $ Right (ChatResponse "" [toolCallPart tc] Nothing Nothing)
+
+-- | Calls a tool until the final-call line is in the system prompt, then
+-- answers in text.
+toolsUntilFinalCall :: ChatRequest -> IO (Either LLMError ChatResponse)
+toolsUntilFinalCall req
+  | isFinalCall req = pure $ Right (ChatResponse "Done." [textPart "Done."] Nothing Nothing)
+  | otherwise = alwaysTool req
+
+isFinalCall :: ChatRequest -> Bool
+isFinalCall req = maybe False (toolBudgetUsedUpPrompt `T.isInfixOf`) req.reqSystem
+
+-- | Every tool call in a history has a result with its id in the next turn.
+everyCallAnswered :: [Turn] -> Bool
+everyCallAnswered turns = and (zipWith answered turns (drop 1 turns ++ [UserTurn ""]))
+  where
+    answered (AssistantMessage parts) next =
+      let ids = map (.tcId) (getToolCalls (ChatResponse "" parts Nothing Nothing))
+       in null ids || case next of
+            ToolTurn rs -> map (.trCallId) rs == ids
+            _ -> False
+    answered _ _ = True
+
+-- | A runtime whose hooks record log lines and tool errors.
+recordingRuntime :: IO (RuntimeArgs, IORef [(LogLevel, Text)], IORef [(Text, Text)])
+recordingRuntime = do
+  logs <- newIORef []
+  toolErrors <- newIORef []
+  rt0 <- mkRuntime Nothing
+  let hooks =
+        noHooks
+          { onLog = \lvl msg -> modifyIORef' logs (++ [(lvl, msg)]),
+            onToolError = \name msg -> modifyIORef' toolErrors (++ [(name, msg)])
+          }
+  pure (rt0 {rtHooks = hooks}, logs, toolErrors)
+
 -- | Shared sticky-fallback checks, run for both 'runGenerate' and 'runStreamGenerate'.
 stickyFallbackSpec ::
   (Agent -> ModelWithFallbacks -> ToolMap Text -> Maybe AbortSignal -> [Turn] -> IO (Either GenerateErrorResult GenerateTextResult)) ->
@@ -398,29 +461,6 @@ spec = describe "Chat" $ do
           length convs `shouldBe` 2
           mapM_ (`shouldSatisfy` hasCachedUserPrefix) convs
         Left err -> expectationFailure $ show err
-
-    it "respects maxToolRounds" $ do
-      let infiniteToolGateway =
-            LLMGateway
-              { gwName = "mock-infinite",
-                gwImageMediaTypes = supportedImageMediaTypes,
-                gwImageUrlSupport = True,
-                gwGenerateText = \_ _ ->
-                  let tc = mkToolCall "call_1" "get_weather" (object [])
-                   in pure $ Right (ChatResponse "" [toolCallPart tc] Nothing Nothing),
-                gwStreamText = \_ _ _ -> pure $ Right (ChatResponse "" [] Nothing Nothing),
-                gwGenerateObject = \_ _ _ -> pure $ Right (object [], Nothing)
-              }
-          agent = defaultAgent {agMaxToolRounds = 2, agTools = ["get_weather"]}
-          models = ModelWithFallbacks (mockModel infiniteToolGateway) []
-      result <- runGenerate agent models toolMap Nothing [UserTurn "test"]
-      case result of
-        Left GenerateErrorResult {gerError = GErrToolExceeded, gerPartialNewMessages = msgs} ->
-          -- The last round's results are returned, though the model never saw them.
-          case reverse msgs of
-            ToolTurn [_] : AssistantMessage _ : _ -> length msgs `shouldBe` 4
-            _ -> expectationFailure $ "Expected the last round's ToolTurn last, got: " <> show msgs
-        other -> expectationFailure $ "Expected GErrToolExceeded, got: " <> show other
 
     it "falls back to next model on retryable error" $ do
       let failGw = mockErrorGateway (HttpError 503 "service unavailable")
@@ -618,3 +658,255 @@ spec = describe "Chat" $ do
           length convs `shouldBe` 2
           mapM_ (`shouldSatisfy` hasCachedUserPrefix) convs
         Left err -> expectationFailure $ show err
+
+  describe "throwing hooks" $ do
+    it "an onToolResult that throws does not fail the run after a mutating tool ran" $ do
+      ran <- newIORef (0 :: Int)
+      let tool = constTool "get_weather" (modifyIORef' ran (+ 1) >> pure "done")
+          agent = defaultAgent {agTools = ["get_weather"]}
+          models = ModelWithFallbacks (mockModel mockToolGateway) []
+      rt0 <- mkRuntime Nothing
+      let rt = rt0 {rtHooks = noHooks {onToolResult = \_ _ -> ioError (userError "hook failed")}}
+      result <- generateText agent models (Map.fromList [("get_weather", tool)]) rt [UserTurn "weather?"]
+      readIORef ran `shouldReturn` 1
+      case result of
+        Right r -> do
+          r.gtrText `shouldBe` "The weather is sunny."
+          lastToolResults (init r.gtrNewMessages) `shouldBe` Just [("call_1", "done")]
+        Left err -> expectationFailure $ show err
+
+    it "an onLog that throws does not stop a model fallback" $ do
+      let gr =
+            GenRequest
+              { grSystemPrompt = Nothing,
+                grMessages = [UserTurn "hi"],
+                grTools = [],
+                grAbortSignal = Nothing,
+                grLLMHooks = llmHooks noHooks,
+                grHooks = noHooks {onLog = \_ _ -> ioError (userError "log failed")}
+              }
+          ok = ChatResponse "fallback answer" [textPart "fallback answer"] Nothing Nothing
+          models = ModelWithFallbacks (mockModel (mockErrorGateway (HttpError 503 "down"))) [mockModel (mockGateway ok)]
+      result <- generateTextWithFallbacks gr models
+      fmap (.respText) result `shouldBe` Right "fallback answer"
+
+    it "an LLM wire hook that throws does not fail the call" $ do
+      let gw = (mockGateway (ChatResponse "x" [textPart "x"] Nothing Nothing))
+            { gwGenerateText = \hooks _ -> do
+                hooks.onLLMRequest "mock" (object [])
+                pure (Right (ChatResponse "x" [textPart "x"] Nothing Nothing))
+            }
+          throwing = (llmHooks noHooks) {onLLMRequest = \_ _ -> ioError (userError "wire hook failed")}
+      rt0 <- mkRuntime Nothing
+      result <- generateText defaultAgent (ModelWithFallbacks (mockModel gw) []) Map.empty rt0 {rtLLMHooks = throwing} [UserTurn "hi"]
+      fmap (.gtrText) result `shouldBe` Right "x"
+
+  describe "tool round limit (final call)" $ do
+    let countingTool ref = Map.fromList [("get_weather", constTool "get_weather" (modifyIORef' ref (+ 1) >> pure "Sunny"))]
+        limited n = defaultAgent {agMaxToolRounds = n, agTools = ["get_weather"], agSystemPrompt = Just "Be brief."}
+
+    it "runs tools exactly N times, then makes one final call that runs none" $ do
+      reqs <- newIORef []
+      ran <- newIORef (0 :: Int)
+      result <- runGenerate (limited 2) (ModelWithFallbacks (mockModel (recordingGateway reqs alwaysTool)) []) (countingTool ran) Nothing [UserTurn "go"]
+      readIORef ran `shouldReturn` 2
+      sent <- readIORef reqs
+      map isFinalCall sent `shouldBe` [False, False, True]
+      fmap (.reqSystem) (drop 2 sent) `shouldBe` [Just ("Be brief.\n\n" <> toolBudgetUsedUpPrompt)]
+      -- The final call still declares the tools.
+      map (map (.toolName) . (.reqTools)) sent `shouldBe` replicate 3 ["get_weather"]
+      case result of
+        Left GenerateErrorResult {gerError = GErrToolExceeded, gerPartialNewMessages = msgs} -> do
+          length msgs `shouldBe` 6
+          msgs `shouldSatisfy` everyCallAnswered
+          lastToolResults msgs `shouldBe` Just [("call_2", "Not run: tool round limit reached")]
+        other -> expectationFailure $ "Expected GErrToolExceeded, got: " <> show other
+
+    it "returns the final call's text answer as a success" $ do
+      reqs <- newIORef []
+      ran <- newIORef (0 :: Int)
+      result <- runGenerate (limited 1) (ModelWithFallbacks (mockModel (recordingGateway reqs toolsUntilFinalCall)) []) (countingTool ran) Nothing [UserTurn "go"]
+      readIORef ran `shouldReturn` 1
+      case result of
+        Right r -> do
+          r.gtrText `shouldBe` "Done."
+          length r.gtrNewMessages `shouldBe` 3
+          r.gtrNewMessages `shouldSatisfy` everyCallAnswered
+        Left err -> expectationFailure $ show err
+
+    it "adds the line as the whole system prompt when the agent has none" $ do
+      reqs <- newIORef []
+      ran <- newIORef (0 :: Int)
+      _ <- runGenerate (limited 0) {agSystemPrompt = Nothing} (ModelWithFallbacks (mockModel (recordingGateway reqs toolsUntilFinalCall)) []) (countingTool ran) Nothing [UserTurn "go"]
+      map (.reqSystem) <$> readIORef reqs `shouldReturn` [Just toolBudgetUsedUpPrompt]
+
+    it "agMaxToolRounds = 0 makes exactly one call and runs no tool" $ do
+      reqs <- newIORef []
+      ran <- newIORef (0 :: Int)
+      result <- runGenerate (limited 0) (ModelWithFallbacks (mockModel (recordingGateway reqs alwaysTool)) []) (countingTool ran) Nothing [UserTurn "go"]
+      readIORef ran `shouldReturn` 0
+      length <$> readIORef reqs `shouldReturn` 1
+      case result of
+        Left GenerateErrorResult {gerError = GErrToolExceeded, gerPartialNewMessages = msgs} -> do
+          length msgs `shouldBe` 2
+          msgs `shouldSatisfy` everyCallAnswered
+        other -> expectationFailure $ "Expected GErrToolExceeded, got: " <> show other
+
+    it "a negative agMaxToolRounds behaves like 0" $ do
+      reqs <- newIORef []
+      ran <- newIORef (0 :: Int)
+      _ <- runGenerate (limited (-3)) (ModelWithFallbacks (mockModel (recordingGateway reqs alwaysTool)) []) (countingTool ran) Nothing [UserTurn "go"]
+      readIORef ran `shouldReturn` 0
+      map isFinalCall <$> readIORef reqs `shouldReturn` [True]
+
+    it "streamText makes the same final call" $ do
+      reqs <- newIORef []
+      ran <- newIORef (0 :: Int)
+      result <- runStreamGenerate (limited 1) (ModelWithFallbacks (mockModel (recordingGateway reqs alwaysTool)) []) (countingTool ran) Nothing [UserTurn "go"]
+      readIORef ran `shouldReturn` 1
+      map isFinalCall <$> readIORef reqs `shouldReturn` [False, True]
+      fmap (const ()) result `shouldSatisfy` either (\e -> e.gerError == GErrToolExceeded) (const False)
+
+  describe "agent configuration checks" $ do
+    let warnings logs = [m | (Warn, m) <- logs]
+
+    it "sends a tool listed twice once, with a warning" $ do
+      reqs <- newIORef []
+      (rt, logs, _) <- recordingRuntime
+      let agent = defaultAgent {agTools = ["get_weather", "get_weather"]}
+      _ <- generateText agent (ModelWithFallbacks (mockModel (recordingGateway reqs toolThenText)) []) toolMap rt [UserTurn "go"]
+      sent <- readIORef reqs
+      map (map (.toolName) . (.reqTools)) sent `shouldBe` [["get_weather"], ["get_weather"]]
+      ws <- warnings <$> readIORef logs
+      length (filter ("more than once" `T.isInfixOf`) ws) `shouldBe` 1
+
+    it "logs an unknown tool name once per run, not once per round" $ do
+      reqs <- newIORef []
+      (rt, logs, _) <- recordingRuntime
+      let agent = defaultAgent {agTools = ["no_such_tool", "get_weather"]}
+      result <- generateText agent (ModelWithFallbacks (mockModel (recordingGateway reqs toolThenText)) []) toolMap rt [UserTurn "go"]
+      fmap (.gtrText) result `shouldBe` Right "The weather is sunny."
+      length <$> readIORef reqs `shouldReturn` 2
+      ws <- warnings <$> readIORef logs
+      filter ("no_such_tool" `T.isInfixOf`) ws
+        `shouldBe` ["[test] agTools lists no_such_tool, which is not in the tool map; it is not sent to the model"]
+
+    it "uses the built-in get_history over a caller tool of that name when windowing is on" $ do
+      reqs <- newIORef []
+      (rt, logs, _) <- recordingRuntime
+      let callerHistory = constTool "get_history" (pure "caller history")
+          tm = Map.insert "get_history" callerHistory toolMap
+          agent = defaultAgent {agTools = ["get_weather", "get_history"], agContextWindow = Just 2}
+          gw = mockGateway (ChatResponse "ok" [textPart "ok"] Nothing Nothing)
+      _ <- generateText agent (ModelWithFallbacks (mockModel (recordingGateway reqs (gw.gwGenerateText (llmHooks noHooks)))) []) tm rt [UserTurn "go"]
+      [req] <- readIORef reqs
+      let histories = [d | d <- req.reqTools, d.toolName == "get_history"]
+      map (.toolDescription) histories `shouldSatisfy` \ds -> length ds == 1 && ds /= ["test tool"]
+      ws <- warnings <$> readIORef logs
+      length (filter ("get_history" `T.isInfixOf`) ws) `shouldBe` 1
+
+    it "keeps a caller tool named get_history when windowing is off" $ do
+      reqs <- newIORef []
+      (rt, logs, _) <- recordingRuntime
+      let tm = Map.insert "get_history" (constTool "get_history" (pure "caller history")) toolMap
+          agent = defaultAgent {agTools = ["get_history"]}
+          gw = mockGateway (ChatResponse "ok" [textPart "ok"] Nothing Nothing)
+      _ <- generateText agent (ModelWithFallbacks (mockModel (recordingGateway reqs (gw.gwGenerateText (llmHooks noHooks)))) []) tm rt [UserTurn "go"]
+      [req] <- readIORef reqs
+      map (.toolDescription) req.reqTools `shouldBe` ["test tool"]
+      warnings <$> readIORef logs `shouldReturn` []
+
+    it "fires onToolError for a call to an unknown tool" $ do
+      (rt, _, toolErrors) <- recordingRuntime
+      let gw = twoToolCallGateway "no_such_tool"
+          agent = defaultAgent {agMaxToolRounds = 1}
+      _ <- generateText agent (ModelWithFallbacks (mockModel gw) []) toolMap rt [UserTurn "go"]
+      errs <- readIORef toolErrors
+      errs `shouldContain` [("no_such_tool", "Unknown tool: no_such_tool")]
+      length errs `shouldBe` 2
+
+    it "treats a non-positive context window as no windowing, with one warning" $ do
+      let conv = [UserTurn "one", AssistantMessage [textPart "a"], UserTurn "two"]
+      mapM_
+        ( \n -> do
+            reqs <- newIORef []
+            (rt, logs, _) <- recordingRuntime
+            let agent = defaultAgent {agTools = ["get_weather"], agContextWindow = Just n}
+            _ <- generateText agent (ModelWithFallbacks (mockModel (recordingGateway reqs toolThenText)) []) toolMap rt conv
+            sent <- readIORef reqs
+            -- The whole conversation is sent and no get_history is added.
+            map (take 3 . (.reqConversation)) sent `shouldBe` replicate (length sent) conv
+            map (map (.toolName) . (.reqTools)) sent `shouldBe` replicate (length sent) ["get_weather"]
+            ws <- warnings <$> readIORef logs
+            filter ("agContextWindow" `T.isInfixOf`) ws
+              `shouldBe` ["[test] agContextWindow = Just " <> T.pack (show n) <> " is not positive; the whole conversation is sent"]
+        )
+        [0, -1]
+
+    it "validateAgent reports nothing for a valid agent" $ do
+      validateAgent defaultAgent {agTools = ["get_weather"], agContextWindow = Just 3} toolMap `shouldBe` []
+
+  describe "turn validation (warning only)" $ do
+    let invalidHistory =
+          [ UserTurn "look at this",
+            AssistantMessage [textPart "here"],
+            UserMessage [textPart "and now?", toolCallPart (mkToolCall "c1" "get_weather" (object []))]
+          ]
+        request logs turns =
+          GenRequest
+            { grSystemPrompt = Nothing,
+              grMessages = turns,
+              grTools = [],
+              grAbortSignal = Nothing,
+              grLLMHooks = llmHooks noHooks,
+              grHooks = noHooks {onLog = \lvl msg -> modifyIORef' logs (++ [(lvl, msg)])}
+            }
+        answer _ = pure $ Right (ChatResponse "ok" [textPart "ok"] Nothing Nothing)
+
+    it "logs one warning per invalid turn and still sends the request" $ do
+      logs <- newIORef []
+      calls <- newIORef []
+      result <- generateTextWithFallbacks (request logs invalidHistory) (ModelWithFallbacks (mockModel (loggingGateway calls "m" answer)) [])
+      fmap (.respText) result `shouldBe` Right "ok"
+      readIORef calls `shouldReturn` ["m"]
+      ws <- (\ls -> [m | (Warn, m) <- ls]) <$> readIORef logs
+      ws `shouldBe` ["turn 2: user messages may not contain tool-call parts"]
+
+    it "logs once per request, not once per fallback model" $ do
+      logs <- newIORef []
+      calls <- newIORef []
+      let models = ModelWithFallbacks (mockModel (loggingGateway calls "a" alwaysFail)) [mockModel (loggingGateway calls "b" answer)]
+      _ <- streamTextWithFallbacks (\_ -> pure ()) (request logs invalidHistory) models
+      readIORef calls `shouldReturn` ["a", "b"]
+      ws <- (\ls -> [m | (Warn, m) <- ls, "turn " `T.isPrefixOf` m]) <$> readIORef logs
+      ws `shouldBe` ["turn 2: user messages may not contain tool-call parts"]
+
+    it "logs nothing for a valid history" $ do
+      logs <- newIORef []
+      calls <- newIORef []
+      _ <- generateTextWithFallbacks (request logs [UserTurn "hi", AssistantMessage [textPart "hello"], UserTurn "bye"]) (ModelWithFallbacks (mockModel (loggingGateway calls "m" answer)) [])
+      ws <- (\ls -> [m | (Warn, m) <- ls]) <$> readIORef logs
+      ws `shouldBe` []
+
+  describe "agent name in log messages" $ do
+    it "prefixes every onLog message of a run with [agName]" $ do
+      (rt, logs, _) <- recordingRuntime
+      let agent = defaultAgent {agName = "helper", agTools = ["get_weather", "no_such_tool"]}
+      _ <- generateText agent (ModelWithFallbacks (mockModel mockToolGateway) []) toolMap rt [UserTurn "go"]
+      msgs <- map snd <$> readIORef logs
+      msgs `shouldSatisfy` (not . null)
+      msgs `shouldSatisfy` all ("[helper] " `T.isPrefixOf`)
+      msgs `shouldSatisfy` any ("Trying model" `T.isInfixOf`)
+
+    it "prefixes the log messages of generateObjectUntyped" $ do
+      (rt, logs, _) <- recordingRuntime
+      _ <- generateObjectUntyped defaultAgent {agName = "helper"} (ModelWithFallbacks (mockModel mockToolGateway) []) rt [UserTurn "go"] (object [])
+      msgs <- map snd <$> readIORef logs
+      msgs `shouldSatisfy` (not . null)
+      msgs `shouldSatisfy` all ("[helper] " `T.isPrefixOf`)
+
+    it "adds no prefix for an empty name" $ do
+      (rt, logs, _) <- recordingRuntime
+      _ <- generateText defaultAgent {agName = ""} (ModelWithFallbacks (mockModel mockToolGateway) []) toolMap rt [UserTurn "go"]
+      msgs <- map snd <$> readIORef logs
+      msgs `shouldSatisfy` any ("Trying model" `T.isPrefixOf`)

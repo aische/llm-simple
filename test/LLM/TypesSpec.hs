@@ -1,5 +1,6 @@
 module LLM.TypesSpec (spec) where
 
+import Control.Monad (forM_)
 import Data.Aeson (eitherDecode, encode, object, (.=))
 import Data.Text qualified as T
 import LLM.Core.Types
@@ -210,6 +211,12 @@ spec = describe "Types" $ do
 
     it "rejects invalid base64 characters" $ do
       imageBase64Part "image/png" "!!!!" `shouldBe` Left "image data is not valid base64"
+
+    it "allows '=' only as the last one or two characters" $ do
+      forM_ ["====", "A===", "ab=c", "=abc", "ab==cdef"] $ \bad ->
+        imageBase64Part "image/png" bad `shouldBe` Left "image data is not valid base64"
+      forM_ ["aGVsbG8=", "aGVsbA==", "aGVs", "aGVs\nbG8="] $ \good ->
+        imageBase64Part "image/png" good `shouldSatisfy` either (const False) (const True)
 
   describe "isRetryable" $ do
     it "retries on 429" $ do

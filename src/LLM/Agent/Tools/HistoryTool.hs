@@ -1,4 +1,16 @@
-module LLM.Agent.Tools.HistoryTool where
+module LLM.Agent.Tools.HistoryTool
+  ( HistoryToolArgs (..),
+    getHistoryExecTyped,
+    historyToolTyped,
+    countUserTurns,
+    isUserTurn,
+    chunkBackward,
+    findNthUserBack,
+    slice,
+    formatChunk,
+    formatTurn,
+  )
+where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)
@@ -72,32 +84,38 @@ isUserTurn _ = False
 -- When @n <= 0@ (e.g. the visible window has no user turns), paging is
 -- disabled and the whole conversation is returned as a single chunk.
 -- This avoids an infinite loop in the page walker when @start == end@.
+--
+-- Turns before the first user message belong to the oldest page, or form a
+-- page of their own when the user messages divide into whole pages.
 chunkBackward :: Int -> [Turn] -> [[Turn]]
 chunkBackward _ [] = []
 chunkBackward n conv
   | n <= 0 = [conv]
-  | otherwise = reverse (go (length conv) [])
+  | otherwise = reverse (oldestPage ++ map concat (chunksOf newer))
   where
-    go 0 acc = acc
-    go end acc =
-      let start = findNthUserBack n (take end conv)
-          page = slice start end conv
-       in if start >= end
-            then page : acc -- should not happen for n > 0; refuse to loop
-            else go start (page : acc)
+    (leading, rest) = break isUserTurn conv
+    -- Each segment is a user message and the turns up to the next one.
+    segments = userSegments rest
+    (oldest, newer) = splitAt (length segments `mod` n) segments
+    oldestPage
+      | null oldest = [leading | not (null leading)]
+      | otherwise = [leading ++ concat oldest]
+    chunksOf [] = []
+    chunksOf xs = let (page, more) = splitAt n xs in page : chunksOf more
+    userSegments [] = []
+    userSegments (t : ts) = let (body, more) = break isUserTurn ts in (t : body) : userSegments more
 
 -- | Find the start index for a page containing @n@ user messages,
 -- scanning backward from the end of the given prefix.
 -- Returns 0 if fewer than @n@ user messages remain.
 findNthUserBack :: Int -> [Turn] -> Int
-findNthUserBack n conv = go (length conv - 1) n
+findNthUserBack n conv = go (reverse (zip [0 ..] conv)) n
   where
-    go idx remaining
-      | idx < 0 = 0
+    go [] _ = 0
+    go ((idx, turn) : older) remaining
       | remaining <= 0 = idx + 1
-      | otherwise = case conv !! idx of
-          UserMessage _ -> go (idx - 1) (remaining - 1)
-          _ -> go (idx - 1) remaining
+      | isUserTurn turn = go older (remaining - 1)
+      | otherwise = go older remaining
 
 -- | Extract a slice [start, end) from a list.
 slice :: Int -> Int -> [a] -> [a]

@@ -8,6 +8,8 @@ import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath, withWorkspacePaths)
 import LLM.Tools.FsLimits (maxReadBytes, readBoundedUtf8File, writeUtf8File)
+import LLM.Tools.Internal.PathLock (withPathLock)
+import LLM.Tools.Internal.TextEdit (countOccurrences, replaceFirst)
 
 data ReplaceInFileToolArgs = ReplaceInFileToolArgs
   { _rifPath :: Text,
@@ -42,38 +44,22 @@ replaceInFileToolTyped cfg =
     }
 
 replaceExecTyped :: FsConfig -> ReplaceInFileToolArgs -> IO Text
-replaceExecTyped cfg args = do
-  let ReplaceInFileToolArgs {_rifPath, _rifOld, _rifNew} = args
-      p = _rifPath
+replaceExecTyped cfg ReplaceInFileToolArgs {_rifPath = p, _rifOld, _rifNew} = do
   resolved <- sandboxPath cfg (T.unpack p)
-  contentE <- readBoundedUtf8File resolved p maxReadBytes
-  case contentE of
-    Left err -> pure $ "Error: " <> err
-    Right content -> case countOccurrences _rifOld content of
-      0 -> pure "Error: the 'old' string was not found in the file"
-      1 -> do
-        let replaced = replaceFirst _rifOld _rifNew content
-        writeUtf8File resolved replaced
-        pure $ "Successfully replaced text in " <> p
-      n ->
-        pure $
-          "Error: the 'old' string was found "
-            <> T.pack (show n)
-            <> " times; it must appear exactly once"
-
--- | Count non-overlapping occurrences of needle in haystack.
-countOccurrences :: Text -> Text -> Int
-countOccurrences needle haystack
-  | T.null needle = 0
-  | otherwise = go 0 haystack
-  where
-    go !n hay = case T.breakOn needle hay of
-      (_, rest)
-        | T.null rest -> n
-        | otherwise -> go (n + 1) (T.drop (T.length needle) rest)
-
--- | Replace the first occurrence of needle with replacement.
-replaceFirst :: Text -> Text -> Text -> Text
-replaceFirst needle replacement haystack =
-  let (before, after) = T.breakOn needle haystack
-   in before <> replacement <> T.drop (T.length needle) after
+  -- Hold the lock from the read to the write, so a concurrent edit of the
+  -- same file cannot be lost.
+  withPathLock resolved $ do
+    contentE <- readBoundedUtf8File resolved p maxReadBytes
+    case contentE of
+      Left err -> pure $ "Error: " <> err
+      Right content -> case countOccurrences _rifOld content of
+        0 -> pure "Error: the 'old' string was not found in the file"
+        1 -> do
+          let replaced = replaceFirst _rifOld _rifNew content
+          writeUtf8File resolved replaced
+          pure $ "Successfully replaced text in " <> p
+        n ->
+          pure $
+            "Error: the 'old' string was found "
+              <> T.pack (show n)
+              <> " times; it must appear exactly once"

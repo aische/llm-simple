@@ -33,7 +33,7 @@ import LLM.Agent.Events (noEventObserver)
 import LLM.Agent.Generate (generateText, streamText)
 import LLM.Agent.ToolUtils (toTool)
 import LLM.Agent.Types (Agent (..), RuntimeArgs (..), ToolMap)
-import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
+import LLM.Core.LLMProvider (LLMProvider (..), toGateway, withoutRoutingFields)
 import LLM.Core.Types (LLMGateway, ThinkingMode (..), Turn (..), pattern UserTurn)
 import LLM.Core.Usage (addUsage, defaultPricingInfo, emptyUsage)
 import LLM.Core.Utils (streamResponseJson)
@@ -88,7 +88,9 @@ loadRecordedConversation filePath = do
   case s of
     Nothing -> error "can't read conversation"
     Just rrs ->
-      let pairs = map (\rr -> (rr.request, rr)) rrs
+      -- Keyed by the body as sent: recordings made through the request
+      -- hook have no @_model@ routing key, older ones do.
+      let pairs = map (\rr -> (withoutRoutingFields rr.request, rr)) rrs
           rrMap = M.fromList pairs
           prompts = rrs >>= \rsp -> case rsp.prompt of Nothing -> []; Just p -> [p]
        in pure (rrMap, prompts)
@@ -106,12 +108,12 @@ mockProvider :: MockConversationMap -> LLMProvider -> LLMProvider
 mockProvider mp adapter =
   adapter
     { sendRequest = \val -> do
-        case M.lookup val mp of
+        case M.lookup (withoutRoutingFields val) mp of
           Nothing ->
             error (show val <> "\n" <> show (fst $ head $ M.toList mp))
           Just rr -> pure (200, BSL.toStrict (encode rr.response)),
       openStream = \body k -> do
-        case M.lookup body mp of
+        case M.lookup (withoutRoutingFields body) mp of
           Nothing -> error ("value not found for:" <> show body)
           Just rr -> case rr.sse of
             Nothing -> error "recorded streaming call has no raw SSE body; re-record the fixture"

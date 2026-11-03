@@ -5,6 +5,205 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2.0] - 2026-11-03
+
+### Added
+
+- `LLM.Core.Types.validateTurns` (also in `LLM.Core`): the invalid turns
+  of a conversation, by index, with `validateTurn`'s reason.
+- `LLM.Core.LLMProvider.withoutRoutingFields` removes the `_model`
+  routing key from a request body (see below).
+- `LLM.Core.ProviderUtils.readResponseBody` reads a non-streaming response
+  with the size limits below, for `sendRequest` in custom providers
+  (`reqBr POST url body opts readResponseBody`).
+- `LLM.Generate.Logger.safeLLMHooks` (also in `LLM.Generate`): `safeHooks`
+  for `LLMHooks`. `LLM.Generate.GenerateUtils.safeGenRequest` and
+  `LLM.Agent.ToolUtils.safeRuntimeArgs` apply both to a request.
+- `LLM.Agent.Generate.toolBudgetUsedUpPrompt` (also in `LLM.Agent`): the
+  system-prompt line of the agent's final call after the last tool round.
+- `LLM.Agent.ToolUtils.validateAgent` (also in `LLM.Agent`) lists the
+  warnings the agent loop logs about an agent configuration.
+- `LLM.Agent.ToolUtils.agentRuntimeArgs`: the runtime arguments the agent
+  entry points use (`safeRuntimeArgs` plus the `agName` log prefix).
+- `LLM.Tools` exports `readFilePaginatedToolTyped`, the file reader that
+  `fsTools` registers (`read_file_paginated`).
+- `LLM.Tools.FsLimits.atomicWriteWith` replaces a file by writing a
+  temporary file in the same directory and renaming it over the target.
+- `LLM.Tools.FsLimits.maxVisitedEntries` (20,000) and `maxOutputBytes`
+  (100 KiB): the work and output bounds of the filesystem tools.
+
+### Changed
+
+- `agName` is now used: the agent entry points (`generateText`,
+  `streamText`, `generateObject`, `generateObjectUntyped`) prefix every
+  `onLog` message of a run with `[<agName>] `. An empty name adds no
+  prefix. **Behaviour change** for log output.
+- `LLM.Agent.GenerateObject`, `LLM.Agent.Tools.HistoryTool`,
+  `LLM.Load.FsTools`, `LLM.Load.ModelCatalog`, `LLM.Load.Types` and
+  `LLM.Load.Utils` have explicit export lists. They export the same names
+  as before; new helpers in them no longer become public by accident.
+
+### Deprecated
+
+- The `FsConfig` data constructor: build an `FsConfig` with `mkFsConfig`,
+  which canonicalizes the base path. From 0.5 the constructor is not
+  exported (the type and `fsBasePath` stay). GHC 9.10 and later warn about
+  uses of the constructor; GHC 9.6 and 9.8 cannot deprecate a constructor
+  without also deprecating the type of the same name, so they do not.
+- `readfileToolTyped` (`LLM.Tools`, `LLM.Tools.Readfile`): `fsTools` does
+  not register it. Use `readFilePaginatedToolTyped`. It is removed in 0.5.
+- `MessageUpdated` (`GenerateEventDetail`): the agent loop never emits it.
+  It is removed in 0.5; streamed text arrives through the `streamText`
+  callback.
+
+### Fixed
+
+- Stream assembly, history paging and context windowing take linear time.
+  Before, a stream split into many small reads or many fragments (one
+  long SSE line, streamed tool arguments or reasoning for Claude and
+  OpenAI-compatible providers, Gemini parts), and a long conversation in
+  `windowOffset` or `get_history`, took quadratic time. No change in
+  results.
+- The example executable (`cabal run llm-simple`) loads only the model it
+  uses (`deepseek4flash`), so it needs only `DEEPSEEK_API_KEY`. It loaded
+  six models, and so needed every cloud provider's key.
+- `onLLMRequest` (and so `onRequest` and the JSON dumps) now sees a Gemini
+  request body as it is sent. It included the `_model` key that the
+  provider uses to build the URL and removes before sending. A top-level
+  `_model` key is now documented as routing data for any `LLMProvider`,
+  and the request hooks never see it.
+- `imageBase64Part` and `mkImageBase64` reject `=` anywhere but in the
+  last one or two characters (`====`, `A===` and `ab=c` were accepted).
+  **Behaviour change** for malformed input only.
+- `validateTurn` is now applied: every generation entry point checks the
+  request's messages once, before trying the first model, and logs each
+  invalid turn (a user turn with a thinking or tool-call part, an
+  assistant turn with an image) as `onLog Warn "turn <n>: <reason>"`, `n`
+  counting from 0 in `grMessages`. The request is still sent unchanged.
+  In an agent run the check runs once per model call. **0.5 will reject
+  such a request** with an error instead.
+- Loading the configuration rejects ambiguous or invalid values.
+  **Behaviour change:** a catalog that loaded before can now fail to load.
+  - `loadModelCatalog` (and every model loader) fails with
+    `LoadModelCatalogError` naming the entry for a `modelConfigName` used
+    twice (the last one silently won), `maxTokens <= 0`, or a negative
+    `requestTimeout`, `throttleDelay`, `retryCount`, `jitterBackoff` or
+    price. The whole catalog is rejected, not just the entry.
+  - `loadProviderCatalog` fails with `LoadProviderCatalogError` for a
+    `providerName` used twice in one file. Overriding a built-in provider
+    is still allowed.
+  - An API key variable that is set but empty or only whitespace counts as
+    missing (`MissingApiKey`, "env var X is not set or is empty"). Before,
+    the provider was available and sent the blank key, and an empty key
+    also skipped the plain-HTTP base URL check.
+- The agent checks its tool configuration. **Behaviour change:**
+  - A name repeated in `agTools` is sent to the model once. Before, each
+    copy was sent, a duplicate tool definition.
+  - A name in `agTools` that the tool map lacks is logged as a warning
+    (`onLog Warn`) once at the start of the run, as is a repeated name. It
+    was dropped silently.
+  - While `agContextWindow` is set, a caller tool named `get_history` is
+    dropped with a warning, and only the built-in one is sent. Before, both
+    were sent under one name.
+  - A model call to an unknown tool fires `onToolError` (it already got
+    the result "Unknown tool: <name>").
+  - `agContextWindow = Just n` with `n <= 0` means no windowing, with a
+    warning. A negative `n` sent an empty message list, and `windowOffset`
+    returned the length of the conversation; it now returns 0.
+- After the last allowed tool round, the agent makes one more model call
+  instead of returning `GErrToolExceeded` with tool results the model never
+  saw. **Behaviour change:** runs that ended in `GErrToolExceeded` mostly
+  return an answer now, and a run makes up to `agMaxToolRounds + 1` model
+  calls.
+  - The final call is a normal request (the tools are still declared) with
+    `toolBudgetUsedUpPrompt` appended to the system prompt.
+  - A text reply is returned as a success. Tool calls in the reply are not
+    run: each gets the result "Not run: tool round limit reached", and the
+    run returns `GErrToolExceeded` with that assistant turn and tool turn
+    in `gerPartialNewMessages`, so the history stays valid.
+  - `agMaxToolRounds <= 0` makes only the final call.
+- Invalid tool arguments are reported instead of silently replaced.
+  **Behaviour change** for invalid arguments only: `find_files` returns an
+  error for an unknown `type` (it searched for any kind) and for
+  `maxResults <= 0`; `grep` for `maxResults <= 0`; `read_file_paginated`
+  for `offset < 1` or `limit < 1` (all were clamped to 1). Values above a
+  tool's hard cap are still lowered to the cap.
+- `file_info` reports a symbolic link as a link. It resolved the path
+  first, so it described the target and never said "symlink". It now
+  shows `=== <path> | symbolic link ===` and the target relative to the
+  workspace, with its kind (file, directory, or does not exist); a target
+  outside the workspace is shown as "outside the workspace", not by its
+  host path. **Behaviour change.**
+- A path in which `..` would step back out of a symbolic link (`link/..`,
+  `link/sub/../..`) is now refused with an error naming the link. The
+  sandbox resolved `..` by name before following links, so such a path
+  named a different file than the operating system would open.
+  **Behaviour change** for such paths only. A surplus `..` at the
+  filesystem root no longer turns the path into a relative one.
+- `move_file` no longer overwrites its destination silently. If anything
+  exists there, a symbolic link included (even a dangling one), it returns
+  "Error: destination already exists: <dst>; remove it first" and changes
+  nothing. **Behaviour change.** The check and the rename are not atomic,
+  so another process can still create the destination in between.
+- An exception thrown by a hook no longer fails a run whose side effects
+  (a tool call, a paid model call) already happened. **Behaviour change:**
+  every entry point (`generateTextLLM`, `streamTextLLM`, the
+  `*WithFallbacks` functions, `genObject`, `genObjectUntyped`, and the
+  agent's `generateText`, `streamText` and `generateObject*`) now wraps
+  `Hooks` with `safeHooks` and `LLMHooks` with `safeLLMHooks`, which drop
+  synchronous exceptions. A hook that throws to stop a run no longer stops
+  it; use an `AbortSignal`. Asynchronous exceptions still propagate.
+- An `HttpException` thrown by the caller's own stream callback (for
+  example from an HTTP call it makes) is no longer reported as the
+  provider's `NetworkError` and retried, which repeated the callback's
+  effects. It now propagates from `streamTextLLM` (and the functions built
+  on it) unchanged, after one attempt, like any other exception from the
+  callback.
+- Provider response bodies are now bounded. **Behaviour change:**
+  - An error body (non-200) is read up to 64 KiB and cut there, with `...`
+    appended, for both streaming and non-streaming calls. `readAll` does
+    the same.
+  - A 200 body of a non-streaming call larger than 32 MiB is a
+    `ParseError "response body exceeds 33554432 bytes"`, as is a single
+    stream event (or line) larger than 8 MiB. Before, either was read
+    into memory in full.
+  - The bundled providers read bodies with `readResponseBody`. Custom
+    providers that read with `bsResponse` keep working, unbounded.
+- `writefile`, `replace_in_file` and `multi_replace_in_file` no longer
+  leave a partial or empty file when a write fails, and two edits of one
+  file at the same time no longer lose one of them. **Behaviour change:**
+  - The file is written to a temporary file next to it, then renamed over
+    it. An existing file keeps its mode bits; a new file gets the default
+    mode (`0666` minus the umask), as before. The data is flushed but not
+    `fsync`ed.
+  - The file gets a new inode. A hard link to it keeps the old content, so
+    a write no longer changes a file outside the workspace through a hard
+    link (a read still can). The new file is owned by the user running the
+    process; ACLs and extended attributes are not copied.
+  - The edit tools hold a per-file lock from the read to the write. It
+    covers threads of the same process only; edits from other processes
+    can still be lost.
+- The search and listing tools now bound their total work, not just their
+  output. **Behaviour change:**
+  - `find_files`, `grep` and `directory_tree` look at no more than
+    `maxVisitedEntries` directory entries per call. A walk that runs out
+    stops and says so in its header ("stopped after visiting 20000
+    entries; narrow the path or pattern"). Before, a large tree with no
+    match was walked in full.
+  - `grep` searches files as it walks and stops at `maxResults`, instead of
+    collecting every candidate first and reading on to count files. When it
+    stops early, the header shows the file count as `N+`, and "stopped at
+    maxResults" replaces "truncated".
+  - `readdir` lists at most 2,000 entries and ends with a line saying how
+    many there are. `find_files`, `grep`, `readdir` and `directory_tree`
+    cut their output at `maxOutputBytes` and say so.
+  - `file_info` stops counting a directory's entries at its 10,000 cap.
+  - A `read_file_paginated` page holds at most `maxOutputBytes` of text. A
+    page ends before a line that would go over; a single longer line is cut
+    and marked. Lines before `offset` are skipped without being decoded.
+  - `read_file_paginated` no longer reports a file that grew past its
+    10 MiB cap during the read as ending at the cap; it returns an error.
+
 ## [0.4.1.0] - 2026-11-02
 
 ### Added
@@ -541,6 +740,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   DeepSeek), single-shot generation with fallbacks, agent tool loops, structured
   output, JSON model catalog loading, and workspace-scoped filesystem tools.
 
+[0.4.2.0]: https://github.com/aische/llm-simple/compare/v0.4.1.0...v0.4.2.0
 [0.4.1.0]: https://github.com/aische/llm-simple/compare/v0.4.0.1...v0.4.1.0
 [0.4.0.1]: https://github.com/aische/llm-simple/compare/v0.4.0.0...v0.4.0.1
 [0.4.0.0]: https://github.com/aische/llm-simple/compare/v0.3.0.0...v0.4.0.0

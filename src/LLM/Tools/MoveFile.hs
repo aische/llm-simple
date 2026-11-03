@@ -30,7 +30,8 @@ moveFileToolTyped cfg =
     { ttoolName = "move_file",
       ttoolDescription =
         "Move (rename) a file from source to destination (both paths relative to the workspace). "
-          <> "Creates parent directories at the destination as needed.",
+          <> "Creates parent directories at the destination as needed. "
+          <> "Refuses to overwrite: if anything exists at the destination, remove it first.",
       ttoolReadonly = False,
       ttoolExecute = const (withWorkspacePaths cfg . moveFileExecTyped cfg)
     }
@@ -61,6 +62,20 @@ moveFileExecTyped cfg args = do
                 (False, True) -> pure $ "Error: source is a directory, not a regular file: " <> src
                 (False, False) -> pure $ "Error: source is not a regular file: " <> src
                 _ -> do
-                  dstResolved <- sandboxWritePath cfg (T.unpack dst)
-                  renameFile srcResolved dstResolved
-                  pure $ "Successfully moved " <> src <> " to " <> dst
+                  -- Anything at the destination counts, a link included
+                  -- (even a dangling one, which 'sandboxPath' would follow
+                  -- to a missing target). Checked before 'sandboxWritePath'
+                  -- creates parent directories. The check and the rename
+                  -- are not atomic; another process can still create the
+                  -- destination in between.
+                  dstLink <- sandboxSymlink cfg (T.unpack dst)
+                  dstExists <-
+                    if isJust dstLink
+                      then pure True
+                      else sandboxPath cfg (T.unpack dst) >>= doesPathExist
+                  if dstExists
+                    then pure $ "Error: destination already exists: " <> dst <> "; remove it first"
+                    else do
+                      dstResolved <- sandboxWritePath cfg (T.unpack dst)
+                      renameFile srcResolved dstResolved
+                      pure $ "Successfully moved " <> src <> " to " <> dst

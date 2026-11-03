@@ -6,12 +6,19 @@ import Control.Monad (forever, void)
 import Data.Aeson (Value, object)
 import Data.ByteString qualified as BS
 import Data.IORef (atomicModifyIORef', newIORef, readIORef)
+import Data.Text qualified as T
+import System.Timeout (timeout)
+import LLM.Core.LLMProvider (genericGenerateText, genericStreamText)
 import LLM.Core.ProviderUtils (mkLenientConfig)
+import LLM.Core.Types (ChatRequest (..), LLMError (..), pattern UserTurn)
+import LLM.Generate.GenerateUtils (llmHooks)
+import LLM.Generate.Logger (noHooks)
+import LLM.Providers.Ollama (ollamaProviderWith)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Req (POST (..), ReqBodyJson (..), http, ignoreResponse, port, req, runReq, (/:))
 import Network.Socket qualified as N
 import Network.Socket.ByteString qualified as NB
-import Test.Hspec (Spec, describe, it, shouldBe)
+import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe, shouldSatisfy)
 
 spec :: Spec
 spec = describe "HTTP config" $ do
@@ -28,6 +35,78 @@ spec = describe "HTTP config" $ do
         Left (_ :: SomeException) -> pure ()
         Right _ -> fail "expected the request to time out"
       readIORef posts >>= (`shouldBe` 1)
+
+  describe "response body limits" $ do
+    it "cuts an endless error body and returns HttpError" $
+      withEndlessServer "500 Internal Server Error" "" $ \p -> do
+        r <- within $ genericGenerateText (ollamaProviderWith (http "127.0.0.1") (port p)) (llmHooks noHooks) request
+        case r of
+          Left (HttpError 500 body) -> do
+            T.length body `shouldSatisfy` (<= 64 * 1024 + 3)
+            T.takeEnd 3 body `shouldBe` "..."
+          other -> expectationFailure ("expected HttpError 500, got " <> take 200 (show other))
+
+    it "cuts an endless error body of a stream and returns HttpError" $
+      withEndlessServer "503 Service Unavailable" "" $ \p -> do
+        r <- within $ genericStreamText (ollamaProviderWith (http "127.0.0.1") (port p)) (llmHooks noHooks) request (const (pure ()))
+        case r of
+          Left (HttpError 503 body) -> T.length body `shouldSatisfy` (<= 64 * 1024 + 3)
+          other -> expectationFailure ("expected HttpError 503, got " <> take 200 (show other))
+
+    it "turns an endless 200 body into a ParseError" $
+      withEndlessServer "200 OK" "" $ \p -> do
+        r <- within $ genericGenerateText (ollamaProviderWith (http "127.0.0.1") (port p)) (llmHooks noHooks) request
+        case r of
+          Left (ParseError msg) -> T.unpack msg `shouldBe` "response body exceeds 33554432 bytes"
+          other -> expectationFailure ("expected ParseError, got " <> take 200 (show other))
+
+    it "turns an endless stream event into a ParseError" $
+      withEndlessServer "200 OK" "data: " $ \p -> do
+        r <- within $ genericStreamText (ollamaProviderWith (http "127.0.0.1") (port p)) (llmHooks noHooks) request (const (pure ()))
+        case r of
+          Left (ParseError msg) -> T.unpack msg `shouldBe` "response body exceeds 8388608 bytes"
+          other -> expectationFailure ("expected ParseError, got " <> take 200 (show other))
+
+-- | Fail instead of hanging when a body is read without a bound.
+within :: IO a -> IO a
+within act = timeout 20_000_000 act >>= maybe (fail "timed out: the body was read without a bound") pure
+
+request :: ChatRequest
+request =
+  ChatRequest
+    { reqModel = "test",
+      reqConversation = [UserTurn "hi"],
+      reqSystem = Nothing,
+      reqTools = [],
+      reqMaxTokens = 10,
+      reqTemperature = Nothing,
+      reqThinking = Nothing
+    }
+
+-- | A TCP server on a free local port that answers every POST with the
+-- given status line, then the prefix, then @x@ bytes until the client
+-- hangs up.
+withEndlessServer :: BS.ByteString -> BS.ByteString -> (Int -> IO a) -> IO a
+withEndlessServer status prefix action =
+  bracket open N.close $ \sock -> do
+    p <- fromIntegral <$> N.socketPort sock
+    tid <- forkIO $ forever $ do
+      (conn, _) <- N.accept sock
+      void $ forkIO $ flip finally (N.close conn) $ do
+        chunk <- NB.recv conn 4096
+        if "POST" `BS.isPrefixOf` chunk
+          then do
+            NB.sendAll conn ("HTTP/1.1 " <> status <> "\r\nContent-Length: 1000000000000\r\n\r\n" <> prefix)
+            -- Stops when the client closes the connection and a send fails.
+            void (try @SomeException (forever (NB.sendAll conn (BS.replicate 65536 0x78))))
+          else pure ()
+    action p `finally` killThread tid
+  where
+    open = do
+      sock <- N.socket N.AF_INET N.Stream N.defaultProtocol
+      N.bind sock (N.SockAddrInet 0 (N.tupleToHostAddress (127, 0, 0, 1)))
+      N.listen sock 16
+      pure sock
 
 -- | A TCP server on a free local port that counts each request it receives
 -- and answers it only after the given delay.

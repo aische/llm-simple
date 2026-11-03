@@ -1,6 +1,9 @@
 module LLM.FsToolsSpec (spec) where
 
+import Control.Concurrent (forkIO)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import Control.Exception (IOException, bracket_, evaluate, try)
+import Control.Monad (forM, forM_)
 import Data.Aeson (Value, object, (.=))
 import Data.ByteString qualified as BS
 import Data.Map qualified as Map
@@ -16,6 +19,7 @@ import LLM.Generate.GenerateUtils (llmHooks)
 import LLM.Generate.Logger (noHooks)
 import LLM.Load.FsTools (fsTools)
 import LLM.Tools.FsConfig (SandboxViolation (..))
+import LLM.Tools.FsLimits (maxOutputBytes, maxTreeEntries, maxVisitedEntries)
 import System.Directory
   ( createDirectory,
     createDirectoryLink,
@@ -32,6 +36,7 @@ import GHC.Clock (getMonotonicTime)
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
   ( Spec,
+    aroundAll,
     describe,
     expectationFailure,
     it,
@@ -85,6 +90,26 @@ spec = describe "FsTools" $ do
       T.unpack result `shouldContain` "Successfully replaced"
       readBack <- runTool tm "read_file_paginated" (object ["path" .= ("code.hs" :: Text)])
       T.unpack readBack `shouldContain` "foo = 2"
+
+    it "lands every edit when many run on one file at once" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      -- A large file makes each edit slow enough that the threads would
+      -- interleave between read and write without the per-path lock.
+      let n = 40 :: Int
+          tok i = "<tok " <> T.pack (show i) <> ">"
+          done i = "<done " <> T.pack (show i) <> ">"
+          padding = T.replicate 95000 "0123456789"
+      runTool_ tm "writefile" (object ["path" .= ("big.txt" :: Text), "content" .= (padding <> T.concat (map tok [1 .. n]))])
+      dones <- forM [1 .. n] $ \i -> do
+        mv <- newEmptyMVar
+        _ <- forkIO $ do
+          r <- try (runTool tm "replace_in_file" (object ["path" .= ("big.txt" :: Text), "old" .= tok i, "new" .= done i]))
+          putMVar mv (r :: Either IOException Text)
+        pure mv
+      results <- mapM takeMVar dones
+      forM_ results $ \r -> r `shouldSatisfy` either (const False) ("Successfully" `T.isPrefixOf`)
+      final <- BS.readFile (sb </> "big.txt")
+      forM_ [1 .. n] $ \i -> encodeUtf8 (done i) `shouldSatisfy` (`BS.isInfixOf` final)
 
   describe "grep" $ do
     it "finds a literal substring" $ withSandbox $ \sb -> do
@@ -154,6 +179,25 @@ spec = describe "FsTools" $ do
       doesFileExist (sb </> "moved.txt") `shouldReturn` True
       doesFileExist (sb </> "copy.txt") `shouldReturn` False
 
+    it "move_file refuses to overwrite an existing file and changes neither" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "a.txt") "A"
+      BS.writeFile (sb </> "b.txt") "B"
+      result <- runTool tm "move_file" (object ["source" .= ("a.txt" :: Text), "destination" .= ("b.txt" :: Text)])
+      result `shouldBe` "Error: destination already exists: b.txt; remove it first"
+      BS.readFile (sb </> "a.txt") `shouldReturn` "A"
+      BS.readFile (sb </> "b.txt") `shouldReturn` "B"
+
+    it "move_file refuses to move onto a dangling link" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "a.txt") "A"
+      createFileLink (sb </> "missing.txt") (sb </> "link.txt")
+      result <- runTool tm "move_file" (object ["source" .= ("a.txt" :: Text), "destination" .= ("link.txt" :: Text)])
+      result `shouldBe` "Error: destination already exists: link.txt; remove it first"
+      BS.readFile (sb </> "a.txt") `shouldReturn` "A"
+      doesPathExist (sb </> "missing.txt") `shouldReturn` False
+      pathIsSymbolicLink (sb </> "link.txt") `shouldReturn` True
+
   describe "multi_replace_in_file" $ do
     it "applies ordered replacements" $ withSandbox $ \sb -> do
       tm <- fsTools sb
@@ -211,6 +255,44 @@ spec = describe "FsTools" $ do
       out `shouldNotContain` "llm-simple-fstools"
 
   describe "symbolic links" $ do
+    it "refuses a '..' that steps back out of a symbolic link" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      createDirectory (sb </> "real")
+      createDirectory (sb </> "real" </> "sub")
+      BS.writeFile (sb </> "x.txt") "root copy"
+      BS.writeFile (sb </> "real" </> "x.txt") "real copy"
+      createDirectoryLink (sb </> "real" </> "sub") (sb </> "lnk")
+      -- By name, lnk/../x.txt is the root's x.txt; the OS reads real/x.txt.
+      forM_ ["lnk/../x.txt", "lnk/a/../../x.txt"] $ \p -> do
+        out <- toolErrorText tm "read_file_paginated" (object ["path" .= (p :: Text)])
+        T.unpack out `shouldContain` "'..' after a symbolic link"
+        T.unpack out `shouldContain` "lnk"
+        T.unpack out `shouldNotContain` "copy"
+
+    it "file_info reports a link inside the workspace as a link, with its target" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      createDirectory (sb </> "real")
+      BS.writeFile (sb </> "real" </> "f.txt") "x"
+      createFileLink (sb </> "real" </> "f.txt") (sb </> "lnk")
+      createFileLink (sb </> "real" </> "gone.txt") (sb </> "dangling")
+      out <- runTool tm "file_info" (object ["path" .= ("lnk" :: Text)])
+      T.lines out `shouldBe` ["=== lnk | symbolic link ===", "target: " <> T.pack ("real" </> "f.txt") <> " (file)"]
+      dangling <- runTool tm "file_info" (object ["path" .= ("dangling" :: Text)])
+      T.unpack dangling `shouldContain` "(does not exist)"
+
+    it "file_info does not name a link target outside the workspace" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      createFileLink (takeDirectory sb </> "secret.txt") (sb </> "out")
+      out <- runTool tm "file_info" (object ["path" .= ("out" :: Text)])
+      T.lines out `shouldBe` ["=== out | symbolic link ===", "target: outside the workspace"]
+
+    it "still resolves '..' after an ordinary directory" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      createDirectory (sb </> "dir")
+      BS.writeFile (sb </> "x.txt") "root copy"
+      out <- runTool tm "read_file_paginated" (object ["path" .= ("dir/../x.txt" :: Text)])
+      T.unpack out `shouldContain` "root copy"
+
     it "remove_file removes the link and leaves its target intact" $ withSandbox $ \sb -> do
       tm <- fsTools sb
       writeFile (sb </> "real.txt") "keep"
@@ -350,6 +432,111 @@ spec = describe "FsTools" $ do
       T.unpack result `shouldContain` "0 match(es)"
       (t1 - t0) `shouldSatisfy` (< 1)
 
+  describe "work bounds" $ aroundAll withBigTree $ do
+    it "find_files stops at the entry budget when nothing matches" $ \sb -> do
+      tm <- fsTools sb
+      result <- runTool tm "find_files" (object ["pattern" .= ("**/*.nomatch" :: Text)])
+      T.unpack result `shouldContain` "0 match(es)"
+      T.unpack result `shouldContain` ("stopped after visiting " <> show maxVisitedEntries <> " entries")
+
+    it "grep stops at the entry budget when nothing matches" $ \sb -> do
+      tm <- fsTools sb
+      result <- runTool tm "grep" (object ["pattern" .= ("needle" :: Text)])
+      T.unpack result `shouldContain` "0 match(es)"
+      T.unpack result `shouldContain` ("stopped after visiting " <> show maxVisitedEntries <> " entries")
+
+    it "directory_tree stops at the entry budget" $ \sb -> do
+      tm <- fsTools sb
+      result <- runTool tm "directory_tree" (object ["path" .= ("." :: Text)])
+      T.unpack result `shouldContain` ("stopped after visiting " <> show maxVisitedEntries <> " entries")
+
+    it "readdir lists at most maxTreeEntries entries and says how many there are" $ \sb -> do
+      tm <- fsTools sb
+      result <- runTool tm "readdir" (object ["path" .= ("." :: Text)])
+      length (T.lines result) `shouldBe` maxTreeEntries + 1
+      last (T.lines result) `shouldBe` "[showing 2000 of 20001 entries; use find_files to search the rest]"
+
+  describe "work bounds (small trees)" $ do
+    it "grep stops at maxResults and reports a lower bound on files" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      mapM_ (\i -> BS.writeFile (sb </> ("f" <> show i <> ".txt")) "needle\n") [1 .. 5 :: Int]
+      result <- runTool tm "grep" (object ["pattern" .= ("needle" :: Text), "maxResults" .= (2 :: Int)])
+      T.unpack result `shouldContain` "2 match(es) across 2+ file(s)"
+      T.unpack result `shouldContain` "stopped at maxResults"
+
+    it "grep reports an exact file count when it searched everything" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      mapM_ (\i -> BS.writeFile (sb </> ("f" <> show i <> ".txt")) "needle\n") [1 .. 3 :: Int]
+      result <- runTool tm "grep" (object ["pattern" .= ("needle" :: Text)])
+      T.unpack result `shouldContain` "3 match(es) across 3 file(s) ==="
+
+    it "find_files cuts output at maxOutputBytes" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      -- 1500 names of ~100 bytes is ~150 KB of output, over the cap.
+      let name i = replicate 90 'x' <> show (i :: Int) <> ".txt"
+      mapM_ (\i -> BS.writeFile (sb </> name i) "") [1000 .. 2499]
+      result <- runTool tm "find_files" (object ["pattern" .= ("*.txt" :: Text), "maxResults" .= (2000 :: Int)])
+      BS.length (encodeUtf8 result) `shouldSatisfy` (< maxOutputBytes + 1000)
+      T.unpack result `shouldContain` "output truncated at"
+
+    it "read_file_paginated cuts a line longer than a page and marks it" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "long.txt") ("short\n" <> BS.replicate (maxOutputBytes * 3) 0x61 <> "\nlast\n")
+      result <- runTool tm "read_file_paginated" (object ["path" .= ("long.txt" :: Text), "offset" .= (2 :: Int)])
+      BS.length (encodeUtf8 result) `shouldSatisfy` (< maxOutputBytes + 1000)
+      T.unpack result `shouldContain` ("[line cut: " <> show (maxOutputBytes * 3) <> " bytes")
+      T.unpack result `shouldContain` "next offset: 3"
+
+    it "read_file_paginated ends a page before the byte cap" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      let line = BS.replicate (maxOutputBytes `div` 2 + 10) 0x62
+      BS.writeFile (sb </> "two.txt") (line <> "\n" <> line <> "\n")
+      result <- runTool tm "read_file_paginated" (object ["path" .= ("two.txt" :: Text)])
+      T.unpack result `shouldContain` "lines 1-1"
+      T.unpack result `shouldContain` "next offset: 2"
+      T.unpack result `shouldNotContain` "line cut"
+
+    it "read_file_paginated does not split a UTF-8 character when cutting" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      -- "ä" is two bytes; an odd prefix byte puts the cap inside one.
+      BS.writeFile (sb </> "u.txt") ("x" <> encodeUtf8 (T.replicate maxOutputBytes "ä"))
+      result <- runTool tm "read_file_paginated" (object ["path" .= ("u.txt" :: Text)])
+      T.unpack result `shouldNotContain` "\xFFFD"
+
+    it "read_file_paginated skips lines before the offset" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "n.txt") (BS.concat [encodeUtf8 (T.pack ("l" <> show i <> "\n")) | i <- [1 .. 10 :: Int]])
+      result <- runTool tm "read_file_paginated" (object ["path" .= ("n.txt" :: Text), "offset" .= (9 :: Int)])
+      filter (not . T.isPrefixOf "===") (T.lines result) `shouldBe` ["     9| l9", "    10| l10"]
+      T.unpack result `shouldContain` "end of file"
+
+  describe "argument checks" $ do
+    it "find_files rejects an unknown type" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      out <- runTool tm "find_files" (object ["pattern" .= ("*" :: Text), "type" .= ("files" :: Text)])
+      out `shouldBe` "Error: unknown type \"files\"; use 'file', 'directory' or 'any'"
+
+    it "find_files still accepts file, directory, dir and any" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      forM_ ["file", "directory", "dir", "any", "File"] $ \t -> do
+        out <- runTool tm "find_files" (object ["pattern" .= ("*" :: Text), "type" .= (t :: Text)])
+        T.unpack out `shouldNotContain` "Error"
+
+    it "find_files and grep reject a non-positive maxResults" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      ff <- runTool tm "find_files" (object ["pattern" .= ("*" :: Text), "maxResults" .= (0 :: Int)])
+      ff `shouldBe` "Error: maxResults must be positive, got 0"
+      g <- runTool tm "grep" (object ["pattern" .= ("x" :: Text), "maxResults" .= (-3 :: Int)])
+      g `shouldBe` "Error: maxResults must be positive, got -3"
+
+    it "read_file_paginated rejects a non-positive offset or limit" $ withSandbox $ \sb -> do
+      tm <- fsTools sb
+      BS.writeFile (sb </> "f.txt") "a\n"
+      o <- runTool tm "read_file_paginated" (object ["path" .= ("f.txt" :: Text), "offset" .= (0 :: Int)])
+      T.unpack o `shouldContain` "Error: offset is a 1-based line number"
+      l <- runTool tm "read_file_paginated" (object ["path" .= ("f.txt" :: Text), "limit" .= (0 :: Int)])
+      l `shouldBe` "Error: limit must be positive, got 0"
+
   describe "workspace root guard" $ do
     let rootPaths = [".", "", "./", "sub/.."] :: [Text]
     it "remove_directory refuses the workspace root" $ withSandbox $ \sb -> do
@@ -400,6 +587,12 @@ withLocaleEncoding enc act = do
   old <- getLocaleEncoding
   bracket_ (setLocaleEncoding enc) (setLocaleEncoding old) act
 
+-- | A sandbox with one more entry than 'maxVisitedEntries', none matching.
+withBigTree :: (FilePath -> IO ()) -> IO ()
+withBigTree act = withSandbox $ \sb -> do
+  mapM_ (\i -> BS.writeFile (sb </> ("e" <> show i)) "") [0 .. maxVisitedEntries]
+  act sb
+
 withSandbox :: (FilePath -> IO a) -> IO a
 withSandbox act = withSystemTempDirectory "llm-simple-fstools" $ \root -> do
   let sb = root </> "sandbox"
@@ -412,6 +605,14 @@ runTool tm name args = do
   case Map.lookup name tm of
     Nothing -> error ("tool not found: " <> T.unpack name)
     Just tool -> tool.toolExecute ctx args
+
+-- | Run a tool the way the agent does and return what the model sees.
+toolErrorText :: Map.Map Text (Tool Text) -> Text -> Value -> IO Text
+toolErrorText tm name args = do
+  ctx <- mkToolContext
+  let call = ToolCall {tcId = "1", tcName = name, tcArguments = args, tcProviderMeta = Nothing}
+  res <- executeTool noHooks ctx (Map.elems tm) call
+  pure res.trContent
 
 runTool_ :: Map.Map Text (Tool Text) -> Text -> Value -> IO ()
 runTool_ tm name args = runTool tm name args >> pure ()

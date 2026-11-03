@@ -35,8 +35,8 @@ import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.UUID.Types (UUID)
 import Data.UUID.Types qualified as UUID
-import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (decodeObjectText, handleStreamResponse, lenientConfig, stripBoundsAndComments)
+import LLM.Core.LLMProvider (LLMProvider (..), toGateway, withoutRoutingFields)
+import LLM.Core.ProviderUtils (decodeObjectText, handleStreamResponse, lenientConfig, readResponseBody, stripBoundsAndComments)
 import LLM.Core.SSE (SSEEvent (sseData), malformedEvent, readSSEEvents, streamFailure)
 import LLM.Core.Types
   ( supportedImageMediaTypes,
@@ -80,11 +80,7 @@ import Network.HTTP.Req
     Url,
     header,
     https,
-    bsResponse,
-    req,
     reqBr,
-    responseBody,
-    responseStatusCode,
     runReq,
     (/:),
     (=:),
@@ -126,7 +122,7 @@ geminiProviderWith baseUrl baseOpts apiKey =
                   /: "models"
                   /: (model <> ":streamGenerateContent")
               opts = baseOpts <> geminiAuthOpts apiKey <> "alt" =: ("sse" :: Text)
-          reqBr POST url (ReqBodyJson (stripModel body)) opts $ \resp ->
+          reqBr POST url (ReqBodyJson (withoutRoutingFields body)) opts $ \resp ->
             handleStreamResponse resp k,
       parseStream = const parseGeminiStream,
       parseResponse = parseGeminiResponse,
@@ -165,8 +161,7 @@ geminiProviderWith baseUrl baseOpts apiKey =
                 /: "models"
                 /: (model <> ":generateContent")
             opts = baseOpts <> geminiAuthOpts apiKey
-        resp <- req POST url (ReqBodyJson (stripModel body)) bsResponse opts
-        pure (responseStatusCode resp, responseBody resp)
+        reqBr POST url (ReqBodyJson (withoutRoutingFields body)) opts readResponseBody
 
 geminiAuthOpts :: Text -> Option scheme
 geminiAuthOpts apiKey = header "x-goog-api-key" (encodeUtf8 apiKey)
@@ -174,13 +169,9 @@ geminiAuthOpts apiKey = header "x-goog-api-key" (encodeUtf8 apiKey)
 extractModel :: Value -> Text
 extractModel v = fromMaybe "gemini-2.0-flash" (parseMaybe (withObject "body" (.: "_model")) v)
 
-stripModel :: Value -> Value
-stripModel (Object o) = Object (KM.delete "_model" o)
-stripModel v = v
-
 parseGeminiStream :: HC.BodyReader -> (StreamEvent -> IO ()) -> IO LLMTextResult
 parseGeminiStream reader callback = do
-  partsRef <- newIORef ([] :: [ContentPart])
+  partsRef <- newIORef ([] :: [ContentPart]) -- newest first
   usageRef <- newIORef Nothing
   errorRef <- newIORef (Nothing :: Maybe LLMError)
   stopRef <- newIORef (Nothing :: Maybe GeminiStop)
@@ -200,12 +191,12 @@ parseGeminiStream reader callback = do
         case parseMaybe (parseChunkParts modelVer) v of
           Just parts -> do
             newParts <- mapM (assignToolId callback) parts
-            modifyIORef' partsRef (++ newParts)
+            modifyIORef' partsRef (reverse newParts ++)
           Nothing -> pure ()
         case parseMaybe parseUsageMetadata v of
           Just u -> writeIORef usageRef (Just u)
           Nothing -> pure ()
-  parts <- readIORef partsRef
+  parts <- reverse <$> readIORef partsRef
   usage <- readIORef usageRef
   mError <- readIORef errorRef
   stop <- readIORef stopRef

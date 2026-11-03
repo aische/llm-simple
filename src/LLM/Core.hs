@@ -32,6 +32,7 @@ module LLM.Core
     conversationHasImages,
     coalesceAdjacentTextParts,
     validateTurn,
+    validateTurns,
     ToolCall (..),
     ToolResult (..),
     LLMHooks (..),

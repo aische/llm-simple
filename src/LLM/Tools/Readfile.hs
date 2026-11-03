@@ -20,6 +20,9 @@ instance AC.HasCodec ReadfileToolArgs where
     AC.object "read a file" $
       ReadfileToolArgs <$> AC.requiredField "path" "Relative file path to read" AC..= (._rfPath)
 
+-- | Deprecated: 'LLM.Load.fsTools' does not register this tool. Use
+-- 'LLM.Tools.ReadFilePaginated.readFilePaginatedToolTyped'
+-- (@read_file_paginated@), which reads large files in pages.
 readfileToolTyped :: FsConfig -> TypedTool ctx ReadfileToolArgs
 readfileToolTyped cfg =
   TypedTool
@@ -33,6 +36,8 @@ readfileToolTyped cfg =
       ttoolReadonly = True,
       ttoolExecute = const (withWorkspacePaths cfg . readfileExecTyped cfg)
     }
+
+{-# DEPRECATED readfileToolTyped "Use readFilePaginatedToolTyped (read_file_paginated), the reader fsTools registers. readfileToolTyped is removed in 0.5." #-}
 
 readfileExecTyped :: FsConfig -> ReadfileToolArgs -> IO Text
 readfileExecTyped cfg args = do

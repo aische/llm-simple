@@ -13,7 +13,7 @@ import Data.Text qualified as T
 import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
-import LLM.Tools.FsConfig (FsConfig, sandboxPath, withWorkspacePaths)
+import LLM.Tools.FsConfig (FsConfig (..), SandboxViolation, sandboxPath, sandboxSymlink, withWorkspacePaths)
 import LLM.Tools.Internal.TextFile (readLenient, withTextHandle)
 import System.Directory
   ( Permissions (..),
@@ -24,8 +24,8 @@ import System.Directory
     getModificationTime,
     getPermissions,
     listDirectory,
-    pathIsSymbolicLink,
   )
+import System.FilePath (dropTrailingPathSeparator, equalFilePath, makeRelative)
 import System.IO (Handle, IOMode (ReadMode), withBinaryFile)
 
 -- | Skip line-counting on files larger than this (bytes). For large text
@@ -60,7 +60,8 @@ fileInfoToolTyped cfg =
       ttoolDescription =
         "Get metadata about a file or directory at a workspace-relative path. "
           <> "For files: kind (text/binary), size in bytes, line count (text files up to 5 MB), "
-          <> "permissions, modification time, and whether it is a symbolic link. "
+          <> "permissions, modification time. "
+          <> "For a symbolic link: the link and where it points (it is not followed). "
           <> "For directories: entry count (visible vs. total), permissions, modification time. "
           <> "Reports clearly if the path does not exist. "
           <> "Use this before read_file_paginated to decide whether a file is worth reading.",
@@ -71,20 +72,51 @@ fileInfoToolTyped cfg =
 execute :: FsConfig -> FileInfoToolArgs -> IO Text
 execute cfg args = do
   let rel = args._fiPath
-  resolved <- sandboxPath cfg (T.unpack rel)
-  exists <- doesPathExist resolved
-  if not exists
-    then pure $ "Error: path does not exist: " <> rel
-    else do
+  -- 'sandboxPath' follows links, so look for one first, as remove_file does.
+  link <- sandboxSymlink cfg (T.unpack rel)
+  case link of
+    Just _ -> renderLinkInfo cfg rel
+    Nothing -> do
+      resolved <- sandboxPath cfg (T.unpack rel)
+      exists <- doesPathExist resolved
+      if not exists
+        then pure $ "Error: path does not exist: " <> rel
+        else do
+          isDir <- doesDirectoryExist resolved
+          isFile <- doesFileExist resolved
+          perms <- safeGetPermissions resolved
+          mtime <- safeGetModificationTime resolved
+          case (isDir, isFile) of
+            (True, _) -> renderDirInfo rel resolved perms mtime
+            (_, True) -> renderFileInfo rel resolved perms mtime
+            _ -> pure $ "Error: path is neither a regular file nor a directory: " <> rel
+
+-- | A symbolic link and where it points, without following it further.
+-- The target is shown relative to the workspace; a target outside it is
+-- not named, so no host path is shown.
+renderLinkInfo :: FsConfig -> Text -> IO Text
+renderLinkInfo cfg rel = do
+  target <- try (sandboxPath cfg (T.unpack rel))
+  targetText <- case target of
+    Left (_ :: SandboxViolation) -> pure "outside the workspace"
+    Right resolved -> do
       isDir <- doesDirectoryExist resolved
       isFile <- doesFileExist resolved
-      isLink <- safePathIsSymbolicLink resolved
-      perms <- safeGetPermissions resolved
-      mtime <- safeGetModificationTime resolved
-      case (isDir, isFile) of
-        (True, _) -> renderDirInfo rel resolved isLink perms mtime
-        (_, True) -> renderFileInfo rel resolved isLink perms mtime
-        _ -> pure $ "Error: path is neither a regular file nor a directory: " <> rel
+      let kind
+            | isDir = "directory"
+            | isFile = "file"
+            | otherwise = "does not exist"
+      pure $ T.pack (workspaceRelative resolved) <> " (" <> kind <> ")"
+  pure $
+    T.unlines
+      [ "=== " <> rel <> " | symbolic link ===",
+        "target: " <> targetText
+      ]
+  where
+    base = dropTrailingPathSeparator cfg.fsBasePath
+    workspaceRelative p
+      | equalFilePath base p = "."
+      | otherwise = makeRelative base p
 
 -- ---------------------------------------------------------------------------
 -- File rendering
@@ -93,11 +125,10 @@ execute cfg args = do
 renderFileInfo ::
   Text ->
   FilePath ->
-  Bool ->
   Maybe Permissions ->
   Maybe Text ->
   IO Text
-renderFileInfo rel resolved isLink perms mtime = do
+renderFileInfo rel resolved perms mtime = do
   size <- safeGetFileSize resolved
   -- 'Nothing' if the file looks binary or cannot be read.
   sniffed <-
@@ -110,9 +141,7 @@ renderFileInfo rel resolved isLink perms mtime = do
       header =
         "=== "
           <> rel
-          <> " | file"
-          <> (if isLink then " (symlink)" else "")
-          <> " ==="
+          <> " | file ==="
       lns =
         [ "kind: " <> if isBin then "binary" else "text",
           "size: " <> maybe "unknown" (\n -> T.pack (show n) <> " bytes") size,
@@ -136,23 +165,22 @@ renderFileInfo rel resolved isLink perms mtime = do
 renderDirInfo ::
   Text ->
   FilePath ->
-  Bool ->
   Maybe Permissions ->
   Maybe Text ->
   IO Text
-renderDirInfo rel resolved isLink perms mtime = do
+renderDirInfo rel resolved perms mtime = do
+  -- Listing the directory is unavoidable (streaming it needs a POSIX-only
+  -- API), but counting stops at the cap.
   entries <- safeListDirectory resolved
-  let total = length entries
-      visible = length (filter (not . isHidden) entries)
+  let total = length (take maxDirEntriesCounted entries)
+      visible = length (take maxDirEntriesCounted (filter (not . isHidden) entries))
       countText n
         | n >= maxDirEntriesCounted = T.pack (show maxDirEntriesCounted) <> "+"
         | otherwise = T.pack (show n)
       header =
         "=== "
           <> rel
-          <> " | directory"
-          <> (if isLink then " (symlink)" else "")
-          <> " ==="
+          <> " | directory ==="
       lns =
         [ "entries (visible): " <> countText visible,
           "entries (total):   " <> countText total,
@@ -199,13 +227,6 @@ safeGetPermissions :: FilePath -> IO (Maybe Permissions)
 safeGetPermissions p = do
   r <- try (getPermissions p) :: IO (Either IOException Permissions)
   pure (eitherToMaybe r)
-
-safePathIsSymbolicLink :: FilePath -> IO Bool
-safePathIsSymbolicLink p = do
-  r <- try (pathIsSymbolicLink p) :: IO (Either IOException Bool)
-  pure $ case r of
-    Right b -> b
-    Left _ -> False
 
 safeListDirectory :: FilePath -> IO [FilePath]
 safeListDirectory p = do

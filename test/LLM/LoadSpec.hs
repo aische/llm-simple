@@ -3,7 +3,10 @@ module LLM.LoadSpec (spec) where
 import Control.Exception (IOException, SomeException, catch, displayException, fromException, try)
 import Control.Monad (forM_)
 import Control.Monad.Except (runExceptT)
-import Data.Aeson (Value (Array), eitherDecodeFileStrict')
+import Data.Aeson (Value (Array, Object), eitherDecodeFileStrict', encode, object, toJSON, (.=))
+import Data.Aeson.Key qualified as K
+import Data.Aeson.KeyMap qualified as KM
+import Data.ByteString.Lazy qualified as BSL
 import Data.ByteString qualified as BS
 import Data.List (find)
 import Data.Map qualified as Map
@@ -26,6 +29,7 @@ import LLM.Load.Types (LoadConfigError (..))
 import LLM.Load.Utils (getSystemPrompt)
 import System.Directory (createDirectory, withCurrentDirectory)
 import System.Environment (setEnv)
+import System.Environment.Blank qualified as Blank
 import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
@@ -35,6 +39,7 @@ import Test.Hspec
     it,
     shouldBe,
     shouldContain,
+    shouldReturn,
     shouldSatisfy,
     shouldThrow,
     anyErrorCall,
@@ -295,6 +300,70 @@ spec = describe "Load" $ do
         Left other -> expectationFailure $ "expected LoadModelCatalogError, got: " <> show other
         Right _ -> expectationFailure "expected failure"
 
+  describe "invalid catalog entries" $ do
+    let expectCatalogError path name needles = do
+          result <- try @LoadConfigError (loadModelOrThrow path name)
+          case result of
+            Left (LoadModelCatalogError msg) -> mapM_ (\n -> T.unpack msg `shouldContain` n) needles
+            Left other -> expectationFailure $ "expected LoadModelCatalogError, got: " <> show other
+            Right _ -> expectationFailure "expected failure"
+
+    it "rejects a modelConfigName used twice" $
+      withModelCatalog [modelEntry "twice" [], modelEntry "twice" [("maxTokens", 2048)]] $ \path ->
+        expectCatalogError path "twice" ["duplicate modelConfigName", "twice"]
+
+    it "rejects maxTokens <= 0, naming the entry" $
+      forM_ [0, -5] $ \n ->
+        withModelCatalog [modelEntry "ok" [], modelEntry "bad_tokens" [("maxTokens", n)]] $ \path ->
+          -- The whole catalog is rejected, not only the bad entry.
+          expectCatalogError path "ok" ["bad_tokens", "maxTokens"]
+
+    it "rejects a negative limit, naming the entry and the field" $
+      forM_ ["requestTimeout", "throttleDelay", "retryCount", "jitterBackoff"] $ \field ->
+        withModelCatalog [modelEntry "bad_limit" [(field, -1)]] $ \path ->
+          expectCatalogError path "bad_limit" ["bad_limit", T.unpack field]
+
+    it "rejects a negative price, naming the entry and the field" $
+      forM_ ["pricePerMillionInput", "pricePerMillionOutput", "pricePerMillionCacheRead", "pricePerMillionCacheWrite"] $ \field ->
+        withModelCatalog [modelEntryWithPricing "bad_price" [(field, -0.5)]] $ \path ->
+          expectCatalogError path "bad_price" ["bad_price", T.unpack field]
+
+    it "accepts zero limits and prices" $
+      withModelCatalog [modelEntry "zeros" [("requestTimeout", 0), ("throttleDelay", 0), ("retryCount", 0), ("jitterBackoff", 0)]] $ \path -> do
+        cfg <- loadModelOrThrow path "zeros"
+        cfg.mcMaxTokens `shouldBe` 1024
+
+    it "rejects a providerName used twice in providers.json" $ do
+      let provider url = "{\"providerName\":\"dup\",\"protocol\":\"ollama\",\"baseUrl\":\"" <> url <> "\"}"
+      withCatalogs "[]" ("[" <> provider "http://localhost:1" <> "," <> provider "http://localhost:2" <> "]") $ \path -> do
+        result <- try @LoadConfigError (loadModelOrThrow path "x")
+        case result of
+          Left (LoadProviderCatalogError msg) -> do
+            T.unpack msg `shouldContain` "duplicate providerName"
+            T.unpack msg `shouldContain` "dup"
+          Left other -> expectationFailure $ "expected LoadProviderCatalogError, got: " <> show other
+          Right _ -> expectationFailure "expected failure"
+
+  describe "empty API keys" $ do
+    let item =
+          ProviderCatalogItem
+            { providerName = "custom",
+              protocol = OpenAIProtocol,
+              baseUrl = "https://example.com",
+              apiKeyEnv = Just "LLM_SIMPLE_TEST_BLANK_KEY",
+              baseUrlEnv = Nothing
+            }
+        resolveWith value = do
+          Blank.setEnv "LLM_SIMPLE_TEST_BLANK_KEY" value True
+          either Left (const (Right ())) <$> resolveGateway item
+
+    it "treats an empty or whitespace-only key as missing" $
+      forM_ ["", "   ", "\t\n"] $ \value ->
+        resolveWith value `shouldReturn` Left (MissingApiKey "LLM_SIMPLE_TEST_BLANK_KEY")
+
+    it "accepts a non-empty key" $
+      resolveWith "secret" `shouldReturn` Right ()
+
   describe "getSystemPrompt" $ do
     it "reports a file that is not valid UTF-8" $
       withSystemTempDirectory "llm-simple-prompt" $ \root -> do
@@ -307,6 +376,46 @@ spec = describe "Load" $ do
             T.unpack msg `shouldContain` "UTF-8"
           Left other -> expectationFailure $ "expected LoadSystemPromptError, got: " <> show other
           Right p -> expectationFailure $ "expected failure, got: " <> show p
+
+-- | A model catalog entry for Ollama (no key) with integer fields
+-- overridden.
+modelEntry :: Text -> [(Text, Int)] -> Value
+modelEntry name overrides = withFields (baseModelEntry name) [(f, toJSON v) | (f, v) <- overrides]
+
+-- | A model catalog entry with pricing fields overridden.
+modelEntryWithPricing :: Text -> [(Text, Double)] -> Value
+modelEntryWithPricing name overrides =
+  case baseModelEntry name of
+    Object o
+      | Just pricing <- KM.lookup "pricing" o ->
+          Object (KM.insert "pricing" (withFields pricing [(f, toJSON v) | (f, v) <- overrides]) o)
+    other -> other
+
+baseModelEntry :: Text -> Value
+baseModelEntry name =
+  object
+    [ "modelConfigName" .= name,
+      "providerName" .= ("ollama" :: Text),
+      "modelName" .= ("llama3.2:latest" :: Text),
+      "pricing" .= object ["pricePerMillionInput" .= (0 :: Double), "pricePerMillionOutput" .= (0 :: Double)],
+      "maxTokens" .= (1024 :: Int),
+      "retryCount" .= (0 :: Int),
+      "jitterBackoff" .= (0 :: Int)
+    ]
+
+withFields :: Value -> [(Text, Value)] -> Value
+withFields (Object o) fields = Object (foldr (\(f, v) -> KM.insert (K.fromText f) v) o fields)
+withFields v _ = v
+
+-- | Write a model catalog (and an empty @providers.json@) to a temporary
+-- directory.
+withModelCatalog :: [Value] -> (FilePath -> IO a) -> IO a
+withModelCatalog entries act =
+  withSystemTempDirectory "llm-simple-catalog-entries" $ \root -> do
+    let catalogPath = root </> "model-catalog.json"
+    BSL.writeFile catalogPath (encode entries)
+    writeFile (root </> "providers.json") "[]"
+    act catalogPath
 
 withTempCatalog :: String -> (FilePath -> IO a) -> IO a
 withTempCatalog contents act =

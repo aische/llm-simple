@@ -117,7 +117,8 @@ resolveBaseUrl item =
 
 -- | Why a provider in the catalog has no gateway.
 data ProviderUnavailable
-  = -- | The provider's API key environment variable is not set.
+  = -- | The provider's API key environment variable is not set, or is
+    -- empty or only whitespace.
     MissingApiKey Text
   | -- | The provider's base URL cannot be parsed (the parse error).
     InvalidBaseUrl Text
@@ -126,11 +127,14 @@ data ProviderUnavailable
 -- | Describe why a provider is unavailable, e.g. "env var X is not set".
 describeProviderUnavailable :: ProviderUnavailable -> Text
 describeProviderUnavailable = \case
-  MissingApiKey envVar -> "env var " <> envVar <> " is not set"
+  MissingApiKey envVar -> "env var " <> envVar <> " is not set or is empty"
   InvalidBaseUrl err -> "it has an " <> err
 
 -- | Build the gateway for a provider, or say why it is unavailable. Never
 -- throws.
+--
+-- An API key variable that is set but empty or only whitespace counts as
+-- missing ('MissingApiKey').
 --
 -- A provider that sends an API key must use @https://@, or @http://@ to a
 -- loopback host (@localhost@, @127.0.0.0/8@, @::1@); otherwise the key would
@@ -140,7 +144,11 @@ resolveGateway :: ProviderCatalogItem -> IO (Either ProviderUnavailable LLMGatew
 resolveGateway item = do
   apiKey <- case item.apiKeyEnv of
     Nothing -> pure (Right "")
-    Just envVar -> maybe (Left (MissingApiKey envVar)) (Right . T.pack) <$> lookupEnv (T.unpack envVar)
+    Just envVar -> do
+      value <- lookupEnv (T.unpack envVar)
+      pure $ case T.pack <$> value of
+        Just key | not (T.null (T.strip key)) -> Right key
+        _ -> Left (MissingApiKey envVar)
   baseUrlText <- resolveBaseUrl item
   pure $ do
     key <- apiKey

@@ -78,7 +78,9 @@ Models are defined in a JSON array. Each entry maps a logical config name to a p
 | `thinking`        | Extended thinking effort level (optional, provider-dependent)            |
 | `capabilities`    | Optional object: `thinking`, `vision`, `promptCaching` (default `false`) |
 
-A provider is only available if its API key is set (except Ollama, which is always available).
+A provider is only available if its API key is set and not empty or only whitespace (except Ollama, which is always available).
+
+Each `modelConfigName` must be unique, `maxTokens` must be positive, and `requestTimeout`, `throttleDelay`, `retryCount`, `jitterBackoff` and the prices must not be negative. Otherwise loading the catalog fails with a `LoadModelCatalogError` that names the entry, whichever model you ask for.
 
 Capability flags are declarations used before each fallback candidate is
 called: image parts require `vision`; enabled thinking requires `thinking`.
@@ -126,7 +128,8 @@ Providers are defined in `providers.json` (bundled with the package as a
 reference). Built-in providers are always available. When you load a model
 catalog, the loader looks for `providers.json` in the same directory; if present,
 its entries are merged on top of the built-ins — adding new providers or
-overriding built-ins with the same `providerName`.
+overriding built-ins with the same `providerName`. Within the file, each
+`providerName` must be unique (`LoadProviderCatalogError` otherwise).
 
 | Field         | Description                                                                 |
 | ------------- | --------------------------------------------------------------------------- |

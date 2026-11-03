@@ -26,6 +26,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Loading the configuration rejects ambiguous or invalid values.
+  **Behaviour change:** a catalog that loaded before can now fail to load.
+  - `loadModelCatalog` (and every model loader) fails with
+    `LoadModelCatalogError` naming the entry for a `modelConfigName` used
+    twice (the last one silently won), `maxTokens <= 0`, or a negative
+    `requestTimeout`, `throttleDelay`, `retryCount`, `jitterBackoff` or
+    price. The whole catalog is rejected, not just the entry.
+  - `loadProviderCatalog` fails with `LoadProviderCatalogError` for a
+    `providerName` used twice in one file. Overriding a built-in provider
+    is still allowed.
+  - An API key variable that is set but empty or only whitespace counts as
+    missing (`MissingApiKey`, "env var X is not set or is empty"). Before,
+    the provider was available and sent the blank key, and an empty key
+    also skipped the plain-HTTP base URL check.
 - The agent checks its tool configuration. **Behaviour change:**
   - A name repeated in `agTools` is sent to the model once. Before, each
     copy was sent, a duplicate tool definition.

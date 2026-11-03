@@ -1,4 +1,7 @@
-module LLM.Load.Types where
+module LLM.Load.Types
+  ( LoadConfigError (..),
+  )
+where
 
 import Control.Exception (Exception)
 import Data.Text (Text)

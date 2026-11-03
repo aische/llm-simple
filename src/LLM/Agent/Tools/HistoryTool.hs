@@ -1,4 +1,16 @@
-module LLM.Agent.Tools.HistoryTool where
+module LLM.Agent.Tools.HistoryTool
+  ( HistoryToolArgs (..),
+    getHistoryExecTyped,
+    historyToolTyped,
+    countUserTurns,
+    isUserTurn,
+    chunkBackward,
+    findNthUserBack,
+    slice,
+    formatChunk,
+    formatTurn,
+  )
+where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)

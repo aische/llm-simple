@@ -1,4 +1,8 @@
-module LLM.Load.Utils where
+module LLM.Load.Utils
+  ( decodeJsonFile,
+    getSystemPrompt,
+  )
+where
 
 import Control.Exception (IOException, try)
 import Control.Monad.Except (ExceptT (..), MonadError (throwError))

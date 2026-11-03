@@ -1,4 +1,9 @@
-module LLM.Load.ModelCatalog where
+module LLM.Load.ModelCatalog
+  ( ModelCatalogItem (..),
+    ModelCatalogMap,
+    loadModelCatalog,
+  )
+where
 
 import Control.Monad.Except (ExceptT, liftEither)
 import Data.Aeson (FromJSON, ToJSON)

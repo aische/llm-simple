@@ -1,4 +1,8 @@
-module LLM.Load.FsTools where
+module LLM.Load.FsTools
+  ( fsTools,
+    fsTools',
+  )
+where
 
 import Data.Map qualified as Map
 -- import LLM.Tools.Readfile (readfileToolTyped)

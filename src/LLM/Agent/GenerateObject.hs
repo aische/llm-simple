@@ -1,4 +1,8 @@
-module LLM.Agent.GenerateObject where
+module LLM.Agent.GenerateObject
+  ( generateObject,
+    generateObjectUntyped,
+  )
+where
 
 import Data.Aeson (Value)
 import LLM.Agent.ToolUtils (createGenRequestNoTools, safeRuntimeArgs)

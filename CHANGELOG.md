@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LLM.Core.Types.validateTurns` (also in `LLM.Core`): the invalid turns
   of a conversation, by index, with `validateTurn`'s reason.
 
+### Changed
+
+- `LLM.Agent.GenerateObject`, `LLM.Agent.Tools.HistoryTool`,
+  `LLM.Load.FsTools`, `LLM.Load.ModelCatalog`, `LLM.Load.Types` and
+  `LLM.Load.Utils` have explicit export lists. They export the same names
+  as before; new helpers in them no longer become public by accident.
+
 ### Fixed
 
 - Stream assembly, history paging and context windowing take linear time.

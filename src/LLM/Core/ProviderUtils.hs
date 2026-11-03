@@ -59,7 +59,7 @@ mkLenientConfig mgr =
 -- | Manager shared by all provider requests. A non-streaming call receives
 -- its response headers only after generation finishes, so http-client's
 -- default 30 s response timeout would cut off long calls. The only response
--- deadline is the one the application configures ('mcRequestTimeout').
+-- deadline is the one the application configures ('LLM.Generate.ModelConfig.mcRequestTimeout').
 sharedManager :: HC.Manager
 sharedManager =
   unsafePerformIO $

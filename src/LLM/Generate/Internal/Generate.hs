@@ -50,7 +50,7 @@ import LLM.Generate.Types
 
 -- | Generate text with retries and model fallbacks.
 --
--- Tries 'mwfModel' first, then each fallback in order. Returns a provider
+-- Tries 'LLM.Generate.ModelConfig.mwfModel' first, then each fallback in order. Returns a provider
 -- 'ChatResponse' on success; does not execute tools.
 generateTextWithFallbacks ::
   GenRequest ->
@@ -60,7 +60,7 @@ generateTextWithFallbacks gr models =
   fmap snd <$> generateTextWithFallbacksRotated (safeGenRequest gr) models
 
 -- | Like 'generateTextWithFallbacks', but also returns the chain rotated so
--- the model that answered comes first (see 'withModelFallbacksRotated').
+-- the model that answered comes first (see 'LLM.Generate.GenerateUtils.withModelFallbacksRotated').
 generateTextWithFallbacksRotated ::
   GenRequest ->
   ModelWithFallbacks ->
@@ -95,7 +95,7 @@ streamTextWithFallbacks onChunk gr models =
   fmap snd <$> streamTextWithFallbacksRotated onChunk (safeGenRequest gr) models
 
 -- | Like 'streamTextWithFallbacks', but also returns the rotated chain
--- (see 'withModelFallbacksRotated').
+-- (see 'LLM.Generate.GenerateUtils.withModelFallbacksRotated').
 streamTextWithFallbacksRotated ::
   (StreamChunk -> IO ()) ->
   GenRequest ->
@@ -129,7 +129,7 @@ generateTextLLM gr0 mc =
   where
     gr = safeGenRequest gr0
 
--- | Stream one model call with retries. 'mcRequestTimeout' bounds the time
+-- | Stream one model call with retries. 'LLM.Generate.ModelConfig.mcRequestTimeout' bounds the time
 -- until the first stream event of each attempt, not the whole stream.
 --
 -- If an attempt fails after streaming chunks, the next attempt first emits

@@ -17,7 +17,7 @@ import GHC.Generics (Generic)
 
 -- | Token usage from a single API call.
 --
--- 'usageInputTokens' is the total input token count, including tokens that were
+-- 'LLM.Core.Usage.usageInputTokens' is the total input token count, including tokens that were
 -- cache reads or cache writes. Provider parsers normalize differing wire
 -- semantics so this total is never double-counted.
 --
@@ -100,7 +100,7 @@ usageOrdinaryInputTokens u =
 
 -- | Pricing in dollars per million tokens.
 --
--- Optional cache rates fall back to 'pricePerMillionInput' when absent.
+-- Optional cache rates fall back to 'LLM.Core.Usage.pricePerMillionInput' when absent.
 data PricingInfo = PricingInfo
   { pricePerMillionInput :: Double,
     pricePerMillionOutput :: Double,

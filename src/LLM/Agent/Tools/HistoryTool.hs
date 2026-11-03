@@ -73,7 +73,7 @@ historyToolTyped =
       ttoolExecute = getHistoryExecTyped
     }
 
--- | Count the number of 'UserTurn's in a conversation.
+-- | Count the number of v'LLM.Core.Types.UserTurn's in a conversation.
 countUserTurns :: [Turn] -> Int
 countUserTurns = length . filter isUserTurn
 
@@ -82,7 +82,7 @@ isUserTurn (UserMessage _) = True
 isUserTurn _ = False
 
 -- | Split a conversation into pages of @n@ user messages each, working
--- backward from the end. Each page starts at a 'UserTurn'.
+-- backward from the end. Each page starts at a v'LLM.Core.Types.UserTurn'.
 -- Chunk 0 is the most recent page, chunk 1 the one before, etc.
 -- The oldest chunk (highest index) may contain fewer than @n@ user messages.
 --

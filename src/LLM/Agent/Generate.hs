@@ -50,14 +50,14 @@ import LLM.Generate.Types
 
 -- | Run the agent loop until the model returns final text or the run fails.
 --
--- On success, 'gtrNewMessages' contains only the turns produced during this
+-- On success, 'LLM.Generate.Types.gtrNewMessages' contains only the turns produced during this
 -- call (assistant and tool turns), not the input conversation.
 -- Tool rounds continue until the model responds without tool calls or
--- 'Agent.agMaxToolRounds' rounds have run. Then one final model call asks
+-- 'LLM.Agent.Types.agMaxToolRounds' rounds have run. Then one final model call asks
 -- for a text answer ('toolBudgetUsedUpPrompt'); tool calls in that reply
 -- are not run, and the run ends with 'GErrToolExceeded'.
 --
--- The warnings of 'LLM.Agent.ToolUtils.validateAgent' go to 'onLog' at
+-- The warnings of 'LLM.Agent.ToolUtils.validateAgent' go to 'LLM.Generate.Logger.onLog' at
 -- the start of the run, and so do the problems of the input conversation
 -- ('LLM.Core.Types.validateTurns', 'LLM.Core.Types.validateConversation'),
 -- once per run, as @turn <n>: <reason>@ with @n@ counting from 0 in the
@@ -101,7 +101,7 @@ streamText onChunk agent models toolMap rt initialTurns =
     initialTurns
 
 -- | The line appended to the system prompt for the final model call, made
--- once 'Agent.agMaxToolRounds' tool rounds have run.
+-- once 'LLM.Agent.Types.agMaxToolRounds' tool rounds have run.
 toolBudgetUsedUpPrompt :: Text
 toolBudgetUsedUpPrompt =
   "The tool budget for this run is used up. Answer in text; do not call tools."

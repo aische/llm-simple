@@ -209,7 +209,7 @@ loadGatewaysFromCatalogOrThrow catalog = do
 -- yourself or use 'loadGatewaysWithDotenv'.
 --
 -- For custom providers, place a @providers.json@ next to your model catalog;
--- 'loadModelOrThrow' loads that file automatically.
+-- 'LLM.Load.LoadModels.loadModelOrThrow' loads that file automatically.
 loadGateways :: IO GatewayMap
 loadGateways = loadGatewaysFromCatalog defaultProviderCatalogMap
 

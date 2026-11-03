@@ -73,8 +73,8 @@ usageWithModelCost mc u = u {usageTotalCost = estimateCost mc.mcPricing u}
 --
 -- Unsupported vision is a candidate failure (do not drop images), and so is
 -- an inline image whose media type the gateway does not accept
--- ('gwImageMediaTypes') or a URL image on a gateway without
--- 'gwImageUrlSupport'. URL images have no known media type, so their type
+-- ('LLM.Core.Types.gwImageMediaTypes') or a URL image on a gateway without
+-- 'LLM.Core.Types.gwImageUrlSupport'. URL images have no known media type, so their type
 -- is not checked.
 -- Thinking configuration requires a declared thinking capability. Cache
 -- hints are not validated here; unsupported providers ignore them.
@@ -149,10 +149,10 @@ imageSources turns =
 -- | Run one model call with the model's throttle delay and retry policy.
 -- @attempt@ is run once per try; any per-attempt timeout must be inside it.
 --
--- 'mcThrottleDelay' is slept before every try, retries included. Before a
+-- 'LLM.Generate.ModelConfig.mcThrottleDelay' is slept before every try, retries included. Before a
 -- retry it comes after the retry backoff, so the two delays add up.
 --
--- When 'grAbortSignal' fires, the call is interrupted wherever it is (in an
+-- When 'LLM.Generate.Types.grAbortSignal' fires, the call is interrupted wherever it is (in an
 -- attempt, or in the throttle or backoff sleep) and returns 'Aborted'. An
 -- interrupted attempt is cancelled, which closes its HTTP connection.
 callWithRetry ::
@@ -168,7 +168,7 @@ callWithRetry gr mc attempt =
         (gr.grHooks.onLog Warn)
         (maybeThrottle mc.mcThrottleDelay (unlessAborted gr attempt))
 
--- | Run @act@ unless 'grAbortSignal' has fired, else return 'Aborted'
+-- | Run @act@ unless 'LLM.Generate.Types.grAbortSignal' has fired, else return 'Aborted'
 -- (which is not retried). Checked before every attempt, so also after
 -- throttle and backoff sleeps.
 unlessAborted :: GenRequest -> IO (Either LLMError a) -> IO (Either LLMError a)
@@ -176,12 +176,12 @@ unlessAborted gr act = do
   aborted <- isAbortedMaybe gr.grAbortSignal
   if aborted then pure (Left Aborted) else act
 
--- | 'callWithRetry' where each attempt is limited by 'mcRequestTimeout'.
+-- | 'callWithRetry' where each attempt is limited by 'LLM.Generate.ModelConfig.mcRequestTimeout'.
 --
 -- The timeout applies to each attempt separately, not to the whole
 -- sequence of retries and backoff sleeps. A timed-out attempt yields
 -- 'TimeoutError', which is retryable. For streaming, see
--- 'LLM.Core.Utils.withFirstEventTimeout' (used by 'streamTextLLM').
+-- 'LLM.Core.Utils.withFirstEventTimeout' (used by 'LLM.Generate.Generate.streamTextLLM').
 callWithRetryTimeout ::
   GenRequest ->
   ModelConfig ->

@@ -61,7 +61,7 @@ executeTool hooks ctx tools tc =
   fromMaybe (toolResult tc "Aborted") <$> executeToolInterruptible Nothing hooks ctx tools tc
 
 -- | Like 'executeTool', but the tool is interrupted when the signal fires.
--- Returns 'Nothing' if it was; 'onToolError' then reports @\"Aborted\"@.
+-- Returns 'Nothing' if it was; 'LLM.Generate.Logger.onToolError' then reports @\"Aborted\"@.
 executeToolInterruptible :: Maybe AbortSignal -> Hooks -> ToolContext -> [Tool Text] -> ToolCall -> IO (Maybe ToolResult)
 executeToolInterruptible mSig hooks ctx tools tc = case lookup tc.tcName toolMap of
   Nothing -> do
@@ -172,7 +172,7 @@ windowOffset :: Maybe Int -> [Turn] -> Int
 windowOffset Nothing _ = 0
 windowOffset (Just n) conv = findNthUserFromEnd n conv
 
--- | Find the index of the Nth 'UserTurn' from the end of a conversation.
+-- | Find the index of the Nth v'LLM.Core.Types.UserTurn' from the end of a conversation.
 -- Returns 0 if there are fewer than @n@ user messages, or if @n <= 0@.
 findNthUserFromEnd :: Int -> [Turn] -> Int
 findNthUserFromEnd n conv
@@ -183,7 +183,7 @@ findNthUserFromEnd n conv
 --
 -- Applies context windowing ('windowOffset'), resolves tools from the
 -- 'ToolMap' (including auto-injected @get_history@ when windowed), and
--- respects 'RuntimeArgs.rtReadonly' when selecting tool definitions.
+-- respects 'LLM.Agent.Types.rtReadonly' when selecting tool definitions.
 createGenRequest :: (Text -> result) -> Agent -> ToolMap result -> RuntimeArgs -> [Turn] -> GenRequest
 createGenRequest embed agent toolMap rt messages =
   let offset = windowOffset agent.agContextWindow messages
@@ -199,8 +199,8 @@ createGenRequest embed agent toolMap rt messages =
 
 -- | Like 'createGenRequest', but never attaches tool definitions.
 --
--- Still applies 'agContextWindow' truncation to 'grMessages'. Use this for
--- structured-output paths ('generateObject' / 'generateObjectUntyped'), which
+-- Still applies 'LLM.Agent.Types.agContextWindow' truncation to 'LLM.Generate.Types.grMessages'. Use this for
+-- structured-output paths ('LLM.Agent.GenerateObject.generateObject' / 'LLM.Agent.GenerateObject.generateObjectUntyped'), which
 -- cannot execute tools and must not advertise @get_history@.
 createGenRequestNoTools :: Agent -> RuntimeArgs -> [Turn] -> GenRequest
 createGenRequestNoTools agent rt messages =
@@ -214,9 +214,9 @@ createGenRequestNoTools agent rt messages =
           grHooks = rt.rtHooks
         }
 
--- | The tools sent to the model: the 'Agent.agTools' names found in the
+-- | The tools sent to the model: the 'LLM.Agent.Types.agTools' names found in the
 -- 'ToolMap', each once (the first occurrence counts), read-only ones only
--- when 'rtReadonly' is set, followed by the built-in @get_history@ when
+-- when 'LLM.Agent.Types.rtReadonly' is set, followed by the built-in @get_history@ when
 -- windowing is on. A caller tool named @get_history@ is dropped while
 -- windowing is on. Names missing from the map are skipped;
 -- 'validateAgent' reports them.
@@ -252,14 +252,14 @@ historyToolName = "get_history"
 
 -- | Warnings about an agent configuration that the agent loop works around:
 --
--- * a name listed more than once in 'agTools' (only the first counts);
--- * a name in 'agTools' that the 'ToolMap' lacks (it is not sent);
+-- * a name listed more than once in 'LLM.Agent.Types.agTools' (only the first counts);
+-- * a name in 'LLM.Agent.Types.agTools' that the 'ToolMap' lacks (it is not sent);
 -- * a caller tool named @get_history@ while windowing is on (the built-in
 --   one is sent instead);
--- * @'agContextWindow' = 'Just' n@ with @n <= 0@ (no windowing).
+-- * @'LLM.Agent.Types.agContextWindow' = 'Just' n@ with @n <= 0@ (no windowing).
 --
 -- 'LLM.Agent.generateText' and 'LLM.Agent.streamText' send each warning
--- to 'onLog' at 'LLM.Generate.Logger.Warn' once at the start of a run.
+-- to 'LLM.Generate.Logger.onLog' at 'LLM.Generate.Logger.Warn' once at the start of a run.
 -- An empty list means none apply.
 validateAgent :: Agent -> ToolMap result -> [Text]
 validateAgent agent toolMap =
@@ -320,7 +320,7 @@ safeRuntimeArgs rt =
 -- | The runtime arguments the agent entry points ('LLM.Agent.generateText',
 -- 'LLM.Agent.streamText', 'LLM.Agent.generateObject',
 -- 'LLM.Agent.generateObjectUntyped') run with: 'safeRuntimeArgs', and every
--- 'onLog' message prefixed with @[\<agName\>] @. An empty 'agName' adds
+-- 'LLM.Generate.Logger.onLog' message prefixed with @[\<agName\>] @. An empty 'LLM.Agent.Types.agName' adds
 -- no prefix.
 agentRuntimeArgs :: Agent -> RuntimeArgs -> RuntimeArgs
 agentRuntimeArgs agent rt = safeRuntimeArgs rt {rtHooks = named rt.rtHooks}

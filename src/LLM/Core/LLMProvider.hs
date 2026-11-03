@@ -32,15 +32,15 @@ import Network.HTTP.Req (HttpException)
 data LLMProvider = LLMProvider
   { -- | Provider name for logging/hooks (e.g. "claude", "gemini", "openai")
     providerName :: Text,
-    -- | MIME types of inline images the provider accepts (see 'gwImageMediaTypes').
+    -- | MIME types of inline images the provider accepts (see 'LLM.Core.Types.gwImageMediaTypes').
     providerImageMediaTypes :: [Text],
-    -- | Whether the provider accepts URL images (see 'gwImageUrlSupport').
+    -- | Whether the provider accepts URL images (see 'LLM.Core.Types.gwImageUrlSupport').
     providerImageUrlSupport :: Bool,
     -- | Build the JSON request body. Bool indicates whether streaming is
     -- requested. A top-level @_model@ key is routing data for
-    -- 'sendRequest' and 'openStream' (the Gemini provider puts the model
+    -- 'LLM.Core.LLMProvider.sendRequest' and 'LLM.Core.LLMProvider.openStream' (the Gemini provider puts the model
     -- name there, since its URL contains it); they must remove it before
-    -- sending, and 'onLLMRequest' sees the body without it
+    -- sending, and 'LLM.Core.Types.onLLMRequest' sees the body without it
     -- ('withoutRoutingFields').
     buildBody :: Bool -> ChatRequest -> Value,
     -- | Make a non-streaming HTTP call, returning (status code, raw response
@@ -108,7 +108,7 @@ genericGenerateObject p hooks schema r = do
     Right resp -> handleResponse p hooks p.parseObjectResponse resp
 
 -- | The request body as it is sent: without the top-level @_model@ routing
--- key (see 'buildBody'). Other values are returned unchanged.
+-- key (see 'LLM.Core.LLMProvider.buildBody'). Other values are returned unchanged.
 withoutRoutingFields :: Value -> Value
 withoutRoutingFields (Object o) = Object (KM.delete "_model" o)
 withoutRoutingFields v = v
@@ -140,7 +140,7 @@ unwrapCallbackFailure act = do
 
 -- | Run a provider's HTTP call. An 'HttpException' becomes a 'NetworkError'
 -- and a response body over the size cap a 'ParseError'; both are reported
--- to 'onLLMResponseError'. Other exceptions propagate.
+-- to 'LLM.Core.Types.onLLMResponseError'. Other exceptions propagate.
 providerCall :: LLMProvider -> LLMHooks -> IO a -> IO (Either LLMError a)
 providerCall p hooks act = do
   r <-
@@ -160,7 +160,7 @@ providerCall p hooks act = do
 -- | Turn a non-streaming (status, raw body) into a result. A non-200 status
 -- is an 'HttpError' carrying the body as text, whether or not it is JSON
 -- (an HTML 502 from a proxy keeps its status). A 200 body that is not JSON
--- is a 'ParseError'. 'onLLMResponse' sees every body that decodes as JSON.
+-- is a 'ParseError'. 'LLM.Core.Types.onLLMResponse' sees every body that decodes as JSON.
 handleResponse :: LLMProvider -> LLMHooks -> (Value -> IO (LLMResult a)) -> (Int, ByteString) -> IO (LLMResult a)
 handleResponse p hooks parse (status, raw) = do
   let decoded = eitherDecodeStrict' raw

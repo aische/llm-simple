@@ -62,7 +62,7 @@ readdirExecTyped cfg args = do
   pure $ T.intercalate "\n" (shown ++ note)
 
 -- | Annotate a directory entry without following symlinks.
--- Symbolic links are tagged with '@' and never treated as directories,
+-- Symbolic links are tagged with @\@@ and never treated as directories,
 -- even if they happen to point at one (possibly outside the sandbox).
 annotateEntry :: FilePath -> FilePath -> IO Text
 annotateEntry parent name = do

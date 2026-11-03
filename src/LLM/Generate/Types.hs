@@ -25,11 +25,11 @@ import LLM.Core.Types
 import LLM.Core.Usage (Usage)
 import LLM.Generate.Logger (Hooks)
 
--- | A single provider request. Built manually or via 'createGenRequest'.
+-- | A single provider request. Built manually or via 'LLM.Agent.ToolUtils.createGenRequest'.
 --
--- For structured output ('genObject', 'genObjectUntyped'), leave 'grTools' empty.
+-- For structured output ('LLM.Generate.GenerateObject.genObject', 'LLM.Generate.GenerateObject.genObjectUntyped'), leave 'LLM.Generate.Types.grTools' empty.
 data GenRequest = GenRequest
-  { -- | System prompt override (also available on 'Agent.agSystemPrompt').
+  { -- | System prompt override (also available on 'LLM.Agent.Types.agSystemPrompt').
     grSystemPrompt :: Maybe Text,
     -- | Conversation turns sent to the provider (may already be windowed).
     grMessages :: [Turn],
@@ -51,7 +51,7 @@ type GenerateResult a = Either GenerateError a
 
 -- | Successful result from the agent loop or a single-shot text generation.
 data GenerateTextResult = GenerateTextResult
-  { -- | Matches 'RuntimeArgs.rtGenerationId' for this run.
+  { -- | Matches 'LLM.Agent.Types.rtGenerationId' for this run.
     gtrGenerationId :: UUID,
     -- | New turns produced during this call (assistant and tool turns only).
     gtrNewMessages :: [Turn],
@@ -79,9 +79,9 @@ data GenerateErrorResult = GenerateErrorResult
 data GenerateError
   = -- | Provider-level failure (HTTP, network, parse, etc.).
     GErrLLM LLMError
-  | -- | 'Agent.agMaxToolRounds' exhausted, and the model still called tools
+  | -- | 'LLM.Agent.Types.agMaxToolRounds' exhausted, and the model still called tools
     -- in the final call that followed. Those calls were not run;
-    -- 'gerPartialNewMessages' ends with that assistant turn and a tool turn
+    -- 'LLM.Generate.Types.gerPartialNewMessages' ends with that assistant turn and a tool turn
     -- answering each call with a placeholder, so it can be sent again as is.
     GErrToolExceeded
   | -- | Every model in the fallback chain failed.

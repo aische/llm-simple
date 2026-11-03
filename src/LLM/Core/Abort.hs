@@ -11,7 +11,7 @@ where
 import Control.Concurrent.STM (TVar, atomically, check, newTVarIO, readTVar, readTVarIO, writeTVar)
 
 -- | A cancellation signal.
--- Create one with 'newAbortSignal', pass it into 'RuntimeArgs' or 'GenRequest', and call
+-- Create one with 'newAbortSignal', pass it into t'LLM.Agent.Types.RuntimeArgs' or t'LLM.Generate.Types.GenRequest', and call
 -- 'abort' from any thread. A model call or tool that is running when the signal
 -- fires is interrupted.
 newtype AbortSignal = AbortSignal (TVar Bool)

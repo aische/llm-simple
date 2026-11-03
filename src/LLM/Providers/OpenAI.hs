@@ -342,7 +342,7 @@ truncationReason r = if r == Just "length" then r else Nothing
 --
 -- No choice, or a missing or null content, is 'EmptyResponse'; so is
 -- content that is empty once code fences are stripped. Content that is not
--- valid JSON, and a body without the expected fields, are 'ParseError's
+-- valid JSON, and a body without the expected fields, are v'LLM.Core.Types.ParseError's
 -- that quote the decoder's message and the start of the text or body.
 parseOpenAIObjectResponse :: Value -> LLMResult (Value, Maybe Usage)
 parseOpenAIObjectResponse v = case parseEither content v of

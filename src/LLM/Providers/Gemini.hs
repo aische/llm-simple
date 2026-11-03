@@ -548,7 +548,7 @@ attachGeminiMeta mModel (Just sig) tc =
             }
     }
 
--- | Pull a thought signature out of 'tcProviderMeta' iff it was emitted by
+-- | Pull a thought signature out of 'LLM.Core.Types.tcProviderMeta' iff it was emitted by
 -- the model we're currently calling.
 signatureForModel :: Text -> Maybe ProviderOpaque -> Maybe Text
 signatureForModel currentModel (Just o)

@@ -82,7 +82,7 @@ import LLM.Core.Usage (Usage)
 -- | Provider adapter for one LLM backend.
 --
 -- Implement the three callbacks to add a custom provider, or use the
--- bundled constructors in 'LLM.Providers'.
+-- bundled constructors in "LLM.Providers".
 data LLMGateway = LLMGateway
   { -- | Short name used in logs and hooks (e.g. @openai@).
     gwName :: Text,
@@ -110,7 +110,7 @@ type LLMObjectResult = LLMResult (Value, Maybe Usage)
 -- | Hooks for observing raw provider request and response JSON on the wire.
 --
 -- Distinct from 'LLM.Generate.Logger.Hooks', which covers application-level
--- logging and tool tracing. Bridge to this type via 'llmHooks'.
+-- logging and tool tracing. Bridge to this type via 'LLM.Generate.GenerateUtils.llmHooks'.
 data LLMHooks = LLMHooks
   { onLLMRequest :: Text -> Value -> IO (),
     onLLMResponse :: Text -> Value -> IO (),
@@ -130,7 +130,7 @@ data MessageEncodeOptions = MessageEncodeOptions
     meoIncludeReasoning :: Bool,
     -- | Send @reasoning_content@ on every assistant message, @""@ when the
     -- turn has no thinking text (DeepSeek thinking mode rejects assistant
-    -- messages without it). Only takes effect with 'meoIncludeReasoning'.
+    -- messages without it). Only takes effect with 'LLM.Core.Types.meoIncludeReasoning'.
     meoRequireReasoning :: Bool
   }
   deriving (Show, Eq)
@@ -139,8 +139,8 @@ defaultMessageEncodeOptions :: MessageEncodeOptions
 defaultMessageEncodeOptions =
   MessageEncodeOptions {meoIncludeReasoning = False, meoRequireReasoning = False}
 
--- | DeepSeek encoding with thinking off. 'deepSeekBuildBodyPairs' sets
--- 'meoRequireReasoning' when the request enables thinking.
+-- | DeepSeek encoding with thinking off. @deepSeekBuildBodyPairs@ (in "LLM.Providers.DeepSeek") sets
+-- 'LLM.Core.Types.meoRequireReasoning' when the request enables thinking.
 deepSeekMessageEncodeOptions :: MessageEncodeOptions
 deepSeekMessageEncodeOptions =
   MessageEncodeOptions {meoIncludeReasoning = True, meoRequireReasoning = False}
@@ -148,7 +148,7 @@ deepSeekMessageEncodeOptions =
 -- | Opaque, provider-owned payload that must round-trip for replay.
 --
 -- Used for Claude thinking signatures, Gemini thought signatures, and any
--- similar provider-bound state. Consumers must treat 'poPayload' as opaque.
+-- similar provider-bound state. Consumers must treat 'LLM.Core.Types.poPayload' as opaque.
 data ProviderOpaque = ProviderOpaque
   { poProvider :: Text,
     poModel :: Maybe Text,
@@ -216,7 +216,7 @@ commonImageMediaTypes =
   ]
 
 -- | MIME types accepted by 'mkImageBase64' / 'imageBase64Part'. Not every
--- provider accepts all of them; see 'gwImageMediaTypes'.
+-- provider accepts all of them; see 'LLM.Core.Types.gwImageMediaTypes'.
 supportedImageMediaTypes :: [Text]
 supportedImageMediaTypes =
   commonImageMediaTypes ++ ["image/heic", "image/heif"]
@@ -395,7 +395,7 @@ pattern UserTurn text = UserMessage [ContentPart (TextPart text) Nothing]
 -- | Migration helper: emit thinking (if any), then text, then tool calls.
 --
 -- Does not recover arbitrary provider block order; use 'AssistantMessage'
--- with 'respContent' when replaying authoritative ordered parts.
+-- with 'LLM.Core.Types.respContent' when replaying authoritative ordered parts.
 assistantTurn :: Text -> Maybe Text -> [ToolCall] -> Turn
 assistantTurn text mReasoning calls =
   AssistantMessage $
@@ -581,15 +581,15 @@ data ToolDef = ToolDef
     toolDescription :: Text,
     toolParameters :: Value, -- JSON Schema object
     -- | When 'True', the tool is advertised as read-only and remains available
-    -- when 'RuntimeArgs.rtReadonly' is set. Mutating tools should use 'False'.
+    -- when 'LLM.Agent.Types.rtReadonly' is set. Mutating tools should use 'False'.
     toolReadonly :: Bool
   }
   deriving (Show, Eq)
 
--- | Typed tool definition before conversion to 'Tool' via 'toTool'.
+-- | Typed tool definition before conversion to t'LLM.Agent.Types.Tool' via 'LLM.Agent.ToolUtils.toTool'.
 --
--- Define one with an Autodocodec argument type; 'toTool' derives the JSON
--- Schema for 'ToolDef.toolParameters' automatically.
+-- Define one with an Autodocodec argument type; 'LLM.Agent.ToolUtils.toTool' derives the JSON
+-- Schema for 'LLM.Core.Types.toolParameters' automatically.
 data TypedTool c a = TypedTool
   { ttoolName :: Text,
     ttoolDescription :: Text,
@@ -599,7 +599,7 @@ data TypedTool c a = TypedTool
 
 -- | A tool invocation returned by the model.
 --
--- 'tcProviderMeta' is opaque, provider-owned state that must round-trip back
+-- 'LLM.Core.Types.tcProviderMeta' is opaque, provider-owned state that must round-trip back
 -- to the same provider (and usually the same model) when this tool call is
 -- replayed. Gemini thought signatures are the current example.
 data ToolCall = ToolCall
@@ -669,8 +669,8 @@ data ChatRequest = ChatRequest
 
 -- | A response from an LLM provider.
 --
--- 'respContent' is authoritative ordered content. 'respText' and
--- 'respReasoning' are convenience projections and may be lossy.
+-- 'LLM.Core.Types.respContent' is authoritative ordered content. 'LLM.Core.Types.respText' and
+-- 'LLM.Core.Types.respReasoning' are convenience projections and may be lossy.
 data ChatResponse = ChatResponse
   { respText :: Text,
     respContent :: [ContentPart],

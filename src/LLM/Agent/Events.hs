@@ -13,7 +13,7 @@ import LLM.Agent.Types
   )
 import LLM.Core.Utils (trySync)
 
--- | Emit a lifecycle event, attaching 'rtGenerationId' from runtime.
+-- | Emit a lifecycle event, attaching 'LLM.Agent.Types.rtGenerationId' from runtime.
 -- Synchronous observer exceptions are swallowed so observers cannot abort
 -- the loop; asynchronous ones (timeout, cancellation) propagate.
 emitEvent :: RuntimeArgs -> GenerateEventDetail -> IO ()

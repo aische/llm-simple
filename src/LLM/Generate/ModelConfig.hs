@@ -58,7 +58,7 @@ data ModelConfig = ModelConfig
     mcGateway :: LLMGateway,
     -- | Provider-specific model identifier (e.g. @gpt-4.1-2025-04-14@).
     mcModel :: Text,
-    -- | Per-million-token pricing used to populate 'Usage.usageTotalCost'.
+    -- | Per-million-token pricing used to populate 'LLM.Core.Usage.usageTotalCost'.
     mcPricing :: PricingInfo,
     -- | Maximum tokens requested from the provider.
     mcMaxTokens :: Int,
@@ -75,7 +75,7 @@ data ModelConfig = ModelConfig
     -- | Delay in milliseconds before each API call attempt, retries
     -- included (rate limiting). Before a retry it is added to the backoff.
     mcThrottleDelay :: Maybe Int,
-    -- | Number of retries on retryable 'LLMError's before giving up on this model.
+    -- | Number of retries on retryable t'LLM.Core.Types.LLMError's before giving up on this model.
     mcRetryCount :: Int,
     -- | Base backoff in milliseconds between retries (jittered). The
     -- server's @Retry-After@ header is not honoured, so for a provider that
@@ -85,8 +85,8 @@ data ModelConfig = ModelConfig
 
 -- | Primary model plus an ordered fallback chain.
 --
--- On failure the library tries 'mwfModel' first, then each entry in
--- 'mwfFallbacks' in order. Aborts ('GErrAborted') do not fall through.
+-- On failure the library tries 'LLM.Generate.ModelConfig.mwfModel' first, then each entry in
+-- 'LLM.Generate.ModelConfig.mwfFallbacks' in order. Aborts (v'LLM.Generate.Types.GErrAborted') do not fall through.
 data ModelWithFallbacks = ModelWithFallbacks
   { mwfModel :: ModelConfig,
     mwfFallbacks :: [ModelConfig]
@@ -95,8 +95,8 @@ data ModelWithFallbacks = ModelWithFallbacks
 mfwToModelConfigs :: ModelWithFallbacks -> [ModelConfig]
 mfwToModelConfigs mwf = mwf.mwfModel : mwf.mwfFallbacks
 
--- | 'mcRetryCount' retries with full-jitter exponential backoff from
--- 'mcJitterBackoff', each delay capped at 30 s. @Retry-After@ is ignored.
+-- | 'LLM.Generate.ModelConfig.mcRetryCount' retries with full-jitter exponential backoff from
+-- 'LLM.Generate.ModelConfig.mcJitterBackoff', each delay capped at 30 s. @Retry-After@ is ignored.
 modelRetryPolicy :: ModelConfig -> RetryPolicyM IO
 modelRetryPolicy mc =
   capDelay 30_000_000 $

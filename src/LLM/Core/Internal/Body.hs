@@ -4,7 +4,7 @@
 -- in total, or a stream event larger than 'maxStreamEventBytes') is
 -- signalled with 'ResponseTooLarge', which
 -- is not exported from any public module. The @generic*@ functions in
--- 'LLM.Core.LLMProvider' catch it and return a 'ParseError'; the type of
+-- 'LLM.Core.LLMProvider' catch it and return a v'LLM.Core.Types.ParseError'; the type of
 -- 'LLM.Core.LLMProvider.sendRequest' stays unchanged.
 module LLM.Core.Internal.Body
   ( ResponseTooLarge (..),
@@ -29,12 +29,12 @@ newtype ResponseTooLarge = ResponseTooLarge Int
 
 instance Exception ResponseTooLarge
 
--- | The 'ParseError' text for 'ResponseTooLarge'.
+-- | The v'LLM.Core.Types.ParseError' text for 'ResponseTooLarge'.
 responseTooLargeMessage :: ResponseTooLarge -> Text
 responseTooLargeMessage (ResponseTooLarge n) =
   "response body exceeds " <> T.pack (show n) <> " bytes"
 
--- | Bytes of a non-200 body kept for the 'HttpError' message.
+-- | Bytes of a non-200 body kept for the v'LLM.Core.Types.HttpError' message.
 maxErrorBodyBytes :: Int
 maxErrorBodyBytes = 64 * 1024
 

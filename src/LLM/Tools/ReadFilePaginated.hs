@@ -23,7 +23,7 @@ import System.IO
     withBinaryFile,
   )
 
--- | Default number of lines returned per page when the caller omits 'limit'.
+-- | Default number of lines returned per page when the caller omits @limit@.
 defaultLimit :: Int
 defaultLimit = 200
 

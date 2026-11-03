@@ -173,7 +173,7 @@ normalizeExtensions :: [Text] -> [Text]
 normalizeExtensions = map (T.toLower . T.dropWhile (== '.'))
 
 -- | Matches so far (newest first), their count, files searched, whether
--- the walk stopped because 'maxResults' was reached, the file bytes read,
+-- the walk stopped because @maxResults@ was reached, the file bytes read,
 -- and whether the walk stopped because 'maxSearchBytes' ran out.
 data GrepState = GrepState [Match] Int Int Bool Int Bool
 
@@ -187,7 +187,7 @@ bytesNote n = "stopped after reading " <> T.pack (show n) <> " bytes; narrow the
 
 -- | Walk a directory and search each candidate file as it is found,
 -- respecting depth, hidden-file, extension and size limits and the entry
--- budget. Stops once 'maxResults' is reached or 'maxSearchBytes' runs
+-- budget. Stops once @maxResults@ is reached or 'maxSearchBytes' runs
 -- out. Order is stable (entries
 -- sorted) so output is deterministic. Each file is shown by its path
 -- relative to the search root, built from the names walked, so no host
@@ -307,7 +307,7 @@ truncateLine t
   | otherwise = T.take maxLineLength t <> "…"
 
 -- | Render the results. @partial@: the walk stopped early, so the file
--- count is a lower bound. @capHit@: 'maxResults' was reached.
+-- count is a lower bound. @capHit@: @maxResults@ was reached.
 renderResults :: Text -> Text -> [Match] -> Int -> Bool -> Bool -> Maybe Text -> Text
 renderResults rootDisplay pat allMatches scanned partial capHit note =
   let (body, cut) = capLines maxOutputBytes (map fmtMatch allMatches)

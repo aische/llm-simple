@@ -436,7 +436,7 @@ parseClaudeUsageObject uo = do
 
 -- | The JSON text of the first text block. No text block is
 -- 'EmptyResponse'; invalid JSON text or a body without @content@ is a
--- 'ParseError' (see 'decodeObjectText' and 'unexpectedResponse').
+-- v'LLM.Core.Types.ParseError' (see 'decodeObjectText' and 'unexpectedResponse').
 parseClaudeObjectResponse :: Value -> IO (LLMResult (Value, Maybe Usage))
 parseClaudeObjectResponse v = pure $ case parseEither go v of
   Left err -> Left (unexpectedResponse err v)

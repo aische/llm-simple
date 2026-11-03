@@ -33,10 +33,15 @@ data Agent = Agent
     -- | Tool names from the 'ToolMap' that may be sent to the model.
     -- Only these names are exposed; the map may contain additional tools.
     agTools :: [Text],
-    -- | Maximum number of model→tool rounds before returning 'GErrToolExceeded'.
-    -- The tools of the last round run, and their results are in
-    -- 'gerPartialNewMessages', but no further model call is made, so the
-    -- model never sees them.
+    -- | Maximum number of model→tool rounds. Once that many rounds have
+    -- run, the agent makes one final model call with the tools still
+    -- declared and a line appended to the system prompt asking for a text
+    -- answer ('LLM.Agent.Generate.toolBudgetUsedUpPrompt'). A text reply
+    -- ends the run successfully. Tool calls in that reply are not run: each
+    -- gets the result @\"Not run: tool round limit reached\"@ and the run
+    -- returns 'GErrToolExceeded'. So every tool that runs has its result
+    -- seen by the model, and a run makes at most @agMaxToolRounds + 1@
+    -- model calls. A value @<= 0@ makes only the final call.
     agMaxToolRounds :: Int,
     -- | When 'Just', only the last @n@ user messages (and their follow-on
     -- turns) are sent to the provider. Older turns remain in 'ToolContext' and

@@ -19,9 +19,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LLM.Generate.Logger.safeLLMHooks` (also in `LLM.Generate`): `safeHooks`
   for `LLMHooks`. `LLM.Generate.GenerateUtils.safeGenRequest` and
   `LLM.Agent.ToolUtils.safeRuntimeArgs` apply both to a request.
+- `LLM.Agent.Generate.toolBudgetUsedUpPrompt` (also in `LLM.Agent`): the
+  system-prompt line of the agent's final call after the last tool round.
 
 ### Fixed
 
+- After the last allowed tool round, the agent makes one more model call
+  instead of returning `GErrToolExceeded` with tool results the model never
+  saw. **Behaviour change:** runs that ended in `GErrToolExceeded` mostly
+  return an answer now, and a run makes up to `agMaxToolRounds + 1` model
+  calls.
+  - The final call is a normal request (the tools are still declared) with
+    `toolBudgetUsedUpPrompt` appended to the system prompt.
+  - A text reply is returned as a success. Tool calls in the reply are not
+    run: each gets the result "Not run: tool round limit reached", and the
+    run returns `GErrToolExceeded` with that assistant turn and tool turn
+    in `gerPartialNewMessages`, so the history stays valid.
+  - `agMaxToolRounds <= 0` makes only the final call.
 - Invalid tool arguments are reported instead of silently replaced.
   **Behaviour change** for invalid arguments only: `find_files` returns an
   error for an unknown `type` (it searched for any kind) and for

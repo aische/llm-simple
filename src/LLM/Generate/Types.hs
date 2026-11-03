@@ -79,9 +79,10 @@ data GenerateErrorResult = GenerateErrorResult
 data GenerateError
   = -- | Provider-level failure (HTTP, network, parse, etc.).
     GErrLLM LLMError
-  | -- | 'Agent.agMaxToolRounds' exhausted without a final text reply. The
-    -- last round's tool results are in 'gerPartialNewMessages' but were not
-    -- sent to the model.
+  | -- | 'Agent.agMaxToolRounds' exhausted, and the model still called tools
+    -- in the final call that followed. Those calls were not run;
+    -- 'gerPartialNewMessages' ends with that assistant turn and a tool turn
+    -- answering each call with a placeholder, so it can be sent again as is.
     GErrToolExceeded
   | -- | Every model in the fallback chain failed.
     GErrAllModelsFailed

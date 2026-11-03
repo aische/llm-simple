@@ -173,7 +173,7 @@ main = do
 
 ### Agent with tools
 
-An agent runs a loop: the model may call tools, results are fed back, and the loop continues until the model finishes or `agMaxToolRounds` is reached.
+An agent runs a loop: the model may call tools, results are fed back, and the loop continues until the model finishes or `agMaxToolRounds` is reached. After the last allowed round, the agent makes one more model call that asks for a text answer; if the model still calls tools, they are not run and the result is `GErrToolExceeded`.
 
 ```haskell
 import Configuration.Dotenv (defaultConfig, loadFile)

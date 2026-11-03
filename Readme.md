@@ -10,7 +10,7 @@ The API stays small on purpose: JSON model and provider catalogs, bundled filesy
 
 - **Providers:** OpenAI, Claude, Gemini, Ollama, DeepSeek
 - **Generate:** single-request text, streaming, and structured object generation with model fallbacks, timeouts, retries, and throttling
-- **Agent:** multi-round tool loops (`generateText`, `streamText`, `generateObject`)
+- **Agent:** multi-round tool loops (`generateText`, `streamText`), plus `generateObject` / `generateObjectUntyped` for a single structured-output call with the agent's system prompt and context window (no tools are sent or run)
 - **Tools:** filesystem tool suite with workspace path sandboxing
 - **Load:** JSON model and provider catalogs, API-key gateway initialization
 - **Observability:** hooks, logging, and generation lifecycle events
@@ -299,7 +299,7 @@ The sandbox does **not** protect against *other processes* that write to the wor
 | `LLM.Core`      | Types, gateways, provider interface, usage tracking                                                            |
 | `LLM.Providers` | Provider implementations (OpenAI, Claude, Gemini, Ollama, DeepSeek)                                            |
 | `LLM.Generate`  | Single-request generation with fallbacks (`generateTextWithFallbacks`, `streamTextWithFallbacks`, `genObject`) |
-| `LLM.Agent`     | Agent loops with tool execution (`generateText`, `streamText`)                                                 |
+| `LLM.Agent`     | Agent loops with tool execution (`generateText`, `streamText`); structured output without tools (`generateObject`) |
 | `LLM.Tools`     | Built-in filesystem tool definitions                                                                           |
 | `LLM.Load`      | Model and provider catalog loading, gateway init, `fsTools`                                                    |
 

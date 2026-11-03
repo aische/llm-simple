@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `imageBase64Part` and `mkImageBase64` reject `=` anywhere but in the
+  last one or two characters (`====`, `A===` and `ab=c` were accepted).
+  **Behaviour change** for malformed input only.
 - `validateTurn` is now applied: every generation entry point checks the
   request's messages once, before trying the first model, and logs each
   invalid turn (a user turn with a thinking or tool-call part, an

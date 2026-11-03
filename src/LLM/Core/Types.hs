@@ -237,20 +237,22 @@ mkImageBase64 mediaType rawData
   where
     cleaned = T.filter (not . isSpace) rawData
 
+-- | Standard base64: a non-empty multiple of four characters from
+-- @A-Z a-z 0-9 + /@, where @=@ may appear only as the last one or two.
 isBase64Text :: Text -> Bool
 isBase64Text t =
-  let n = T.length t
-   in n > 0
-        && n `mod` 4 == 0
-        && T.all isBase64Char t
+  T.length t `mod` 4 == 0
+    && not (T.null body)
+    && T.length t - T.length body <= 2
+    && T.all isBase64Char body
   where
+    body = T.dropWhileEnd (== '=') t
     isBase64Char c =
       isAsciiUpper c
         || isAsciiLower c
         || isDigit c
         || c == '+'
         || c == '/'
-        || c == '='
 
 -- | Body of one ordered content part.
 data PartBody

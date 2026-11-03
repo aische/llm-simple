@@ -5,8 +5,6 @@ module LLM.Load.FsTools
 where
 
 import Data.Map qualified as Map
--- import LLM.Tools.Readfile (readfileToolTyped)
-
 import Data.Text (Text)
 import LLM.Agent.ToolUtils (embedTextTool, toTool)
 import LLM.Agent.Types (ToolMap)
@@ -46,7 +44,6 @@ fsTools filePath = do
         ("move_file", toTool $ moveFileToolTyped cfg),
         ("multi_replace_in_file", toTool $ multiReplaceInFileToolTyped cfg),
         ("readdir", toTool $ readdirToolTyped cfg),
-        -- ("readfile", toTool $ readfileToolTyped cfg),
         ("read_file_paginated", toTool $ readFilePaginatedToolTyped cfg),
         ("remove_directory", toTool $ removeDirectoryToolTyped cfg),
         ("remove_file", toTool $ removeFileToolTyped cfg),

@@ -10,6 +10,7 @@ module LLM.Tools
     moveFileToolTyped,
     multiReplaceInFileToolTyped,
     readdirToolTyped,
+    readFilePaginatedToolTyped,
     readfileToolTyped,
     removeDirectoryToolTyped,
     removeFileToolTyped,
@@ -31,6 +32,7 @@ import LLM.Tools.FsConfig (FsConfig (..), mkFsConfig)
 import LLM.Tools.Grep (grepToolTyped)
 import LLM.Tools.MoveFile (moveFileToolTyped)
 import LLM.Tools.MultiReplaceInFile (multiReplaceInFileToolTyped)
+import LLM.Tools.ReadFilePaginated (readFilePaginatedToolTyped)
 import LLM.Tools.Readdir (readdirToolTyped)
 import LLM.Tools.Readfile (readfileToolTyped)
 import LLM.Tools.RemoveDirectory (removeDirectoryToolTyped)

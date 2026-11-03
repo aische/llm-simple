@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `LLM.Tools` exports `readFilePaginatedToolTyped`, the file reader that
+  `fsTools` registers (`read_file_paginated`).
 - `LLM.Tools.FsLimits.atomicWriteWith` replaces a file by writing a
   temporary file in the same directory and renaming it over the target.
 - `LLM.Tools.FsLimits.maxVisitedEntries` (20,000) and `maxOutputBytes`
@@ -35,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exported (the type and `fsBasePath` stay). GHC 9.10 and later warn about
   uses of the constructor; GHC 9.6 and 9.8 cannot deprecate a constructor
   without also deprecating the type of the same name, so they do not.
+- `readfileToolTyped` (`LLM.Tools`, `LLM.Tools.Readfile`): `fsTools` does
+  not register it. Use `readFilePaginatedToolTyped`. It is removed in 0.5.
 
 ### Changed
 

@@ -284,7 +284,7 @@ Errors that reach the model name paths relative to the workspace, so the model d
 
 The sandbox does **not** protect against *other processes* that write to the workspace while the agent runs. A path is checked and then opened. A process that swaps a directory for a symlink between those two steps (a time-of-check/time-of-use race) can make a tool read or write outside the workspace. Hard links to files outside the workspace are not detected either. Such a process usually runs as the same user and can reach those files directly, so this only matters if it has less access than the agent. If a less-trusted process can write to the workspace, isolate the agent at the OS level (a container, or a separate user).
 
-**Limitations (0.1.x):**
+**Limitations (pre-1.0):**
 
 - The sandbox is **path-scoped**, not kernel-level isolation. Use a dedicated, disposable workspace directory — not your home directory or a production tree.
 - There is no denylist for sensitive in-workspace files (`.env`, `.git/config`, etc.). Anything inside the workspace is accessible to tools the model can call.
@@ -305,7 +305,7 @@ The sandbox does **not** protect against *other processes* that write to the wor
 | `LLM.Tools`     | Built-in filesystem tool definitions                                                                           |
 | `LLM.Load`      | Model and provider catalog loading, gateway init, `fsTools`                                                    |
 
-Import `LLM` for the common surface, or import sub-modules directly for agent loops, providers, and advanced configuration. Sub-module APIs are exposed but considered experimental in 0.1.x.
+Import `LLM` for the common surface, or import sub-modules directly for agent loops, providers, and advanced configuration. Sub-module APIs are exposed but considered experimental before 1.0.
 
 **Note:** Workflow support was removed from this repo and moved elsewhere.
 

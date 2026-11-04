@@ -9,6 +9,7 @@ module LLM.Tools.Internal.TextFile
     readCapped,
     readCappedWith,
     readBoundedBytesWith,
+    readBoundedBytesWithSize,
     readBoundedTextWith,
     readBoundedUtf8With,
     readLenient,
@@ -92,37 +93,41 @@ readCappedWith sizeOf cap h = do
 
 -- | Read a file up to @cap@ bytes. Refuses binary files, checks the size
 -- before reading, and reads at most @cap + 1@ bytes so a file that grows
--- during the read is caught.
+-- during the read is caught ('readCapped').
 readBoundedBytesWith :: Opener -> Text -> Int -> IO (Either Text BS.ByteString)
-readBoundedBytesWith open display cap = do
+readBoundedBytesWith = readBoundedBytesWithSize hFileSize
+
+-- | 'readBoundedBytesWith' with the size check given, so a test can stand
+-- in for a file that grows between the check and the read. An
+-- 'IOException' from the size check or the read becomes an error naming
+-- that step.
+readBoundedBytesWithSize :: (Handle -> IO Integer) -> Opener -> Text -> Int -> IO (Either Text BS.ByteString)
+readBoundedBytesWithSize sizeOf open display cap = do
   r <- withTextHandle open $ \h -> do
-    sizeRes <- try (hFileSize h)
+    sizeRes <- try (sizeOf h)
     case sizeRes of
       Left (e :: IOException) ->
         pure $ Left $ "could not stat " <> display <> ": " <> describeIOError e
-      Right sz
-        | sz > fromIntegral cap ->
-            pure $
-              Left $
-                display
-                  <> " is "
-                  <> T.pack (show sz)
-                  <> " bytes, which exceeds the "
-                  <> T.pack (show cap)
-                  <> "-byte cap."
-        | otherwise -> do
-            bsRes <- try (BS.hGet h (cap + 1))
-            pure $ case bsRes of
-              Left (e :: IOException) ->
-                Left $ "could not read " <> display <> ": " <> describeIOError e
-              Right bs
-                | BS.length bs > cap ->
-                    Left $
-                      display
-                        <> " grew past the "
-                        <> T.pack (show cap)
-                        <> "-byte cap during the read."
-                | otherwise -> Right bs
+      Right sz -> do
+        readRes <- try (readCappedWith (const (pure sz)) (fromIntegral cap) h)
+        pure $ case readRes of
+          Left (e :: IOException) ->
+            Left $ "could not read " <> display <> ": " <> describeIOError e
+          Right (CappedTooLarge _) ->
+            Left $
+              display
+                <> " is "
+                <> T.pack (show sz)
+                <> " bytes, which exceeds the "
+                <> T.pack (show cap)
+                <> "-byte cap."
+          Right CappedGrew ->
+            Left $
+              display
+                <> " grew past the "
+                <> T.pack (show cap)
+                <> "-byte cap during the read."
+          Right (CappedBytes _ bs) -> Right bs
   pure $
     fromMaybe
       (Left (display <> " appears to be a binary file; only text files are supported."))

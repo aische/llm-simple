@@ -84,6 +84,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   meaning is the same. It also changes only schema keywords now: before,
   it added `required` and `additionalProperties` to objects inside
   literal values such as `default` or `enum`.
+- Structured output with OpenAI or Ollama failed with 400 ("reference to
+  component '#/$defs/<Name>' which was not found in the schema") for any
+  type using a `named` codec below the root: autodocodec puts the
+  `$defs` next to the first use, but `#/$defs/<Name>` points from the
+  root. `normalizeSchemaOpenAI` now moves every `$defs` entry to the
+  root.
 
 ## [0.4.2.0] - 2026-11-03
 

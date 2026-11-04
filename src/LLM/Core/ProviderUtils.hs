@@ -31,7 +31,7 @@ import LLM.Core.Internal.Body
     readBodyPrefix,
     readErrorBody,
   )
-import LLM.Core.Internal.Schema (isNullableSchema, mapSubschemas, optionalProperties, schemaDefs)
+import LLM.Core.Internal.Schema (hoistDefs, isNullableSchema, mapSubschemas, optionalProperties, schemaDefs)
 import LLM.Core.Types (LLMError (EmptyResponse, HttpError, ParseError), LLMResult, LLMTextResult)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Client.TLS (tlsManagerSettings)
@@ -140,10 +140,15 @@ handleStreamResponse resp handler = do
 -- as 'Either', whose branches cannot both match, so the meaning is the
 -- same.
 --
+-- Every @$defs@ entry moves to the root ('LLM.Core.Internal.Schema.hoistDefs'):
+-- autodocodec puts the @$defs@ of a named codec next to its first use, but
+-- @#/$defs/<name>@ points from the root, and strict mode refuses a
+-- reference it cannot find there.
+--
 -- Only schema keywords are changed: the walk follows sub-schema positions,
 -- so a property called @oneOf@ or a literal value is kept.
 normalizeSchemaOpenAI :: Value -> Value
-normalizeSchemaOpenAI schema = go schema
+normalizeSchemaOpenAI schema = hoistDefs (go schema)
   where
     defs = schemaDefs schema
     go (Object o) =

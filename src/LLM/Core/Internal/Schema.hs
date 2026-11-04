@@ -13,6 +13,7 @@ module LLM.Core.Internal.Schema
     optionalProperties,
     dropOptionalNulls,
     mapSubschemas,
+    hoistDefs,
   )
 where
 
@@ -34,14 +35,35 @@ data SchemaDefs = SchemaDefs
 -- named codec next to its first use, not at the root, so the whole schema
 -- is searched. On a name clash the first one found wins.
 schemaDefs :: Value -> SchemaDefs
-schemaDefs root = SchemaDefs root (collect root)
+schemaDefs root = SchemaDefs root (collectDefs "$defs" root `KM.union` collectDefs "definitions" root)
+
+-- | The entries of one definitions keyword (@$defs@ or @definitions@)
+-- anywhere in a schema, following sub-schema positions only; the node's
+-- own entries first, then those below it in order.
+collectDefs :: K.Key -> Value -> KM.KeyMap Value
+collectDefs k (Object o) =
+  foldr KM.union KM.empty $
+    [d | Just (Object d) <- [KM.lookup k o]] <> map (collectDefs k) (subschemas o)
+collectDefs _ _ = KM.empty
+
+-- | Move every @$defs@ and @definitions@ entry to the root of the schema.
+-- References like @#/$defs/<name>@ are pointers from the root, but
+-- autodocodec puts the @$defs@ of a named codec next to its first use,
+-- where OpenAI and Ollama do not find them. On a name clash the first one
+-- found wins, as in 'schemaDefs'.
+hoistDefs :: Value -> Value
+hoistDefs root@(Object o) =
+  Object (put "$defs" (put "definitions" (mapSubschemas strip o)))
   where
-    collect (Object o) =
-      foldr KM.union KM.empty $
-        [d | k <- ["$defs", "definitions"], Just (Object d) <- [KM.lookup k o]]
-          <> map collect (KM.elems o)
-    collect (Array a) = foldr (KM.union . collect) KM.empty (toList a)
-    collect _ = KM.empty
+    put k obj
+      | KM.null defs = KM.delete k obj
+      | otherwise = KM.insert k (Object defs) obj
+      where
+        defs = fmap strip (collectDefs k root)
+    -- A sub-schema without its definitions, at every depth.
+    strip (Object x) = Object (mapSubschemas strip (KM.delete "$defs" (KM.delete "definitions" x)))
+    strip v = v
+hoistDefs v = v
 
 -- | The schema a @$ref@ points to, for @#@, @#/$defs/<name>@ and
 -- @#/definitions/<name>@. Other references are not resolved.
@@ -178,6 +200,17 @@ mapSubschemas f = KM.mapWithKey sub
     mapObject v = v
     schemaOrList (Array a) = Array (fmap f a)
     schemaOrList v = f v
+
+-- | The direct sub-schemas of a schema node, in the positions
+-- 'mapSubschemas' visits.
+subschemas :: KM.KeyMap Value -> [Value]
+subschemas o = concat [sub k v | (k, v) <- KM.toList o]
+  where
+    sub k v
+      | k `elem` schemaMapKeywords, Object m <- v = KM.elems m
+      | k `elem` schemaKeywords, Array a <- v = toList a
+      | k `elem` schemaKeywords = [v]
+      | otherwise = []
 
 -- | Keywords whose value maps names to sub-schemas.
 schemaMapKeywords :: [KM.Key]

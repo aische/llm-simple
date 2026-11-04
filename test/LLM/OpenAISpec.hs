@@ -240,7 +240,7 @@ spec = describe "OpenAI" $ do
       inner ["properties", "nested", "anyOf", "0"]
       inner ["properties", "list", "items"]
       inner ["properties", "union", "anyOf", "0", "properties", "Left"]
-      inner ["properties", "named", "anyOf", "0", "$defs", "NamedInner"]
+      inner ["$defs", "NamedInner"]
 
     it "turns the oneOf of an Either into anyOf" $ do
       schemaAt ["properties", "union", "oneOf"] schema `shouldBe` Nothing
@@ -263,6 +263,29 @@ spec = describe "OpenAI" $ do
             "properties" .= object ["oneOf" .= object ["anyOf" .= [typed "string", typed "integer"]]],
             "required" .= (["oneOf"] :: [Text]),
             "default" .= object ["oneOf" .= literal],
+            "additionalProperties" .= False
+          ]
+
+    it "moves the $defs of a named codec to the root" $ do
+      schemaAt ["properties", "named", "anyOf", "0"] schema
+        `shouldBe` Just (object ["$ref" .= ("#/$defs/NamedInner" :: Text)])
+      fmap (const ()) (schemaAt ["$defs", "NamedInner", "properties"] schema) `shouldBe` Just ()
+
+    it "keeps $defs that are at the root already, and a property called $defs" $ do
+      let node = strictSchema (AC.codec :: AC.JSONCodec Node)
+      schemaAt ["$ref"] node `shouldBe` Just "#/$defs/Node"
+      fmap (const ()) (schemaAt ["$defs", "Node", "properties"] node) `shouldBe` Just ()
+      let input =
+            object
+              [ "type" .= ("object" :: Text),
+                "properties" .= object ["$defs" .= typed "string"],
+                "required" .= (["$defs"] :: [Text])
+              ]
+      normalizeSchemaOpenAI input
+        `shouldBe` object
+          [ "type" .= ("object" :: Text),
+            "properties" .= object ["$defs" .= typed "string"],
+            "required" .= (["$defs"] :: [Text]),
             "additionalProperties" .= False
           ]
 

@@ -12,6 +12,7 @@ module LLM.Core.Internal.Schema
     isNullableSchema,
     optionalProperties,
     dropOptionalNulls,
+    mapSubschemas,
   )
 where
 
@@ -161,3 +162,43 @@ dropOptionalNulls schema = walk [] schema
            )
     fits _ (Array _) (Object b) = hasType "array" b || KM.member "items" b
     fits _ _ _ = False
+
+-- | Apply a function to every direct sub-schema of a schema node: the
+-- values of the keywords that hold a sub-schema, a list of them, or a map
+-- of them. Everything else (property names, @enum@, @const@, @default@
+-- and other literal values) is kept as it is.
+mapSubschemas :: (Value -> Value) -> KM.KeyMap Value -> KM.KeyMap Value
+mapSubschemas f = KM.mapWithKey sub
+  where
+    sub k v
+      | k `elem` schemaMapKeywords = mapObject v
+      | k `elem` schemaKeywords = schemaOrList v
+      | otherwise = v
+    mapObject (Object o) = Object (fmap f o)
+    mapObject v = v
+    schemaOrList (Array a) = Array (fmap f a)
+    schemaOrList v = f v
+
+-- | Keywords whose value maps names to sub-schemas.
+schemaMapKeywords :: [KM.Key]
+schemaMapKeywords = ["properties", "patternProperties", "$defs", "definitions", "dependentSchemas"]
+
+-- | Keywords whose value is a sub-schema or a list of sub-schemas.
+schemaKeywords :: [KM.Key]
+schemaKeywords =
+  [ "items",
+    "prefixItems",
+    "additionalItems",
+    "additionalProperties",
+    "unevaluatedProperties",
+    "unevaluatedItems",
+    "propertyNames",
+    "contains",
+    "anyOf",
+    "oneOf",
+    "allOf",
+    "not",
+    "if",
+    "then",
+    "else"
+  ]

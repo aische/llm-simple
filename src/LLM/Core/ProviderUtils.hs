@@ -31,7 +31,7 @@ import LLM.Core.Internal.Body
     readBodyPrefix,
     readErrorBody,
   )
-import LLM.Core.Internal.Schema (isNullableSchema, optionalProperties, schemaDefs)
+import LLM.Core.Internal.Schema (isNullableSchema, mapSubschemas, optionalProperties, schemaDefs)
 import LLM.Core.Types (LLMError (EmptyResponse, HttpError, ParseError), LLMResult, LLMTextResult)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Client.TLS (tlsManagerSettings)
@@ -134,12 +134,20 @@ handleStreamResponse resp handler = do
 -- (@anyOf: [<schema>, {"type": "null"}]@); the model answers @null@ to
 -- leave it out, and 'LLM.Core.Internal.Schema.dropOptionalNulls' removes
 -- that @null@ before decoding.
+--
+-- Strict mode refuses @oneOf@, so it becomes @anyOf@ (unless the node has
+-- an @anyOf@ already). autodocodec emits @oneOf@ for disjoint unions such
+-- as 'Either', whose branches cannot both match, so the meaning is the
+-- same.
+--
+-- Only schema keywords are changed: the walk follows sub-schema positions,
+-- so a property called @oneOf@ or a literal value is kept.
 normalizeSchemaOpenAI :: Value -> Value
 normalizeSchemaOpenAI schema = go schema
   where
     defs = schemaDefs schema
     go (Object o) =
-      let o' = fmap go o
+      let o' = oneOfToAnyOf (mapSubschemas go o)
           fixed = case KM.lookup "type" o' of
             Just (String "object") ->
               let propKeys = case KM.lookup "properties" o' of
@@ -158,8 +166,10 @@ normalizeSchemaOpenAI schema = go schema
                in withReq
             _ -> o'
        in Object fixed
-    go (Array a) = Array (fmap go a)
     go v = v
+    oneOfToAnyOf o = case KM.lookup "oneOf" o of
+      Just bs | not (KM.member "anyOf" o) -> KM.insert "anyOf" bs (KM.delete "oneOf" o)
+      _ -> o
 
 stripJsonFences :: Text -> Text
 stripJsonFences t =
@@ -212,42 +222,6 @@ excerpt t
 stripBoundsAndComments :: Value -> Value
 stripBoundsAndComments (Object obj) =
   Object $
-    KM.fromList
-      [ (k, stripKeyword k v)
-        | (k, v) <- KM.toList obj,
-          k `notElem` ["minimum", "maximum", "$comment"]
-      ]
-  where
-    stripKeyword k v
-      | k `elem` schemaMapKeywords = mapObject stripBoundsAndComments v
-      | k `elem` schemaKeywords = stripSchemaOrList v
-      | otherwise = v
-    mapObject f (Object o) = Object (fmap f o)
-    mapObject _ v = v
-    stripSchemaOrList (Array a) = Array (fmap stripBoundsAndComments a)
-    stripSchemaOrList v = stripBoundsAndComments v
+    mapSubschemas stripBoundsAndComments $
+      KM.filterWithKey (\k _ -> k `notElem` ["minimum", "maximum", "$comment"]) obj
 stripBoundsAndComments other = other
-
--- | Keywords whose value maps names to sub-schemas.
-schemaMapKeywords :: [KM.Key]
-schemaMapKeywords = ["properties", "patternProperties", "$defs", "definitions", "dependentSchemas"]
-
--- | Keywords whose value is a sub-schema or a list of sub-schemas.
-schemaKeywords :: [KM.Key]
-schemaKeywords =
-  [ "items",
-    "prefixItems",
-    "additionalItems",
-    "additionalProperties",
-    "unevaluatedProperties",
-    "unevaluatedItems",
-    "propertyNames",
-    "contains",
-    "anyOf",
-    "oneOf",
-    "allOf",
-    "not",
-    "if",
-    "then",
-    "else"
-  ]

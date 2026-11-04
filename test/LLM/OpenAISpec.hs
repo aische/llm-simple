@@ -231,7 +231,6 @@ spec = describe "OpenAI" $ do
       prop "or_null" `shouldBe` Just nullOrString
       prop "plain" `shouldBe` Just (typed "string")
       schemaAt ["properties", "list", "type"] schema `shouldBe` Just "array"
-      fmap (const ()) (schemaAt ["properties", "union", "oneOf"] schema) `shouldBe` Just ()
 
     it "does the same inside nested objects, array items, union branches and definitions" $ do
       let inner path = do
@@ -240,8 +239,32 @@ spec = describe "OpenAI" $ do
             schemaAt (path <> ["required"]) schema `shouldBe` Just (toJSON (["a", "b"] :: [Text]))
       inner ["properties", "nested", "anyOf", "0"]
       inner ["properties", "list", "items"]
-      inner ["properties", "union", "oneOf", "0", "properties", "Left"]
+      inner ["properties", "union", "anyOf", "0", "properties", "Left"]
       inner ["properties", "named", "anyOf", "0", "$defs", "NamedInner"]
+
+    it "turns the oneOf of an Either into anyOf" $ do
+      schemaAt ["properties", "union", "oneOf"] schema `shouldBe` Nothing
+      schemaAt ["properties", "union", "anyOf", "0", "required"] schema `shouldBe` Just (toJSON (["Left"] :: [Text]))
+      schemaAt ["properties", "union", "anyOf", "1", "required"] schema `shouldBe` Just (toJSON (["Right"] :: [Text]))
+
+    it "changes only schema keywords, not property names or literal values" $ do
+      let oneOfSchema = object ["oneOf" .= [typed "string", typed "integer"]]
+          literal = object ["type" .= ("object" :: Text), "oneOf" .= [typed "string"]]
+          input =
+            object
+              [ "type" .= ("object" :: Text),
+                "properties" .= object ["oneOf" .= oneOfSchema],
+                "required" .= (["oneOf"] :: [Text]),
+                "default" .= object ["oneOf" .= literal]
+              ]
+      normalizeSchemaOpenAI input
+        `shouldBe` object
+          [ "type" .= ("object" :: Text),
+            "properties" .= object ["oneOf" .= object ["anyOf" .= [typed "string", typed "integer"]]],
+            "required" .= (["oneOf"] :: [Text]),
+            "default" .= object ["oneOf" .= literal],
+            "additionalProperties" .= False
+          ]
 
     it "makes a recursive optional property nullable" $
       schemaAt ["$defs", "Node", "properties", "next"] (strictSchema (AC.codec :: AC.JSONCodec Node))

@@ -77,6 +77,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are unchanged. `genObjectUntyped` and `generateObjectUntyped` return
   the provider's JSON as before, `null`s included. **Behaviour change**
   for structured-output types with optional fields.
+- Structured output with OpenAI failed with 400 ("'oneOf' is not
+  permitted") for any type with an `Either` field or another disjoint
+  union, since strict mode refuses `oneOf`. `normalizeSchemaOpenAI` now
+  turns `oneOf` into `anyOf`; the branches cannot both match, so the
+  meaning is the same. It also changes only schema keywords now: before,
+  it added `required` and `additionalProperties` to objects inside
+  literal values such as `default` or `enum`.
 
 ## [0.4.2.0] - 2026-11-03
 

@@ -41,10 +41,10 @@ import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
 import Data.Text.Encoding.Error (lenientDecode)
 import LLM.Tools.Internal.TextFile
-  ( binarySniffBytes,
-    readBoundedTextWith,
+  ( readBoundedTextWith,
     readBoundedUtf8With,
   )
+import LLM.Tools.Internal.TextFile qualified as TextFile
 import System.Directory (copyPermissions, doesFileExist, removeFile, renameFile)
 import System.FilePath (splitFileName)
 import System.IO
@@ -104,6 +104,12 @@ maxOutputBytes = 100 * 1024 -- 100 KiB
 -- @since 0.4.3.0
 maxSearchBytes :: Int
 maxSearchBytes = 64 * 1024 * 1024 -- 64 MiB
+
+-- | Number of leading bytes inspected when sniffing for binary content.
+-- Matches the heuristic used by @git diff@ and @grep@: any NUL byte in
+-- the prefix means binary.
+binarySniffBytes :: Int
+binarySniffBytes = TextFile.binarySniffBytes
 
 -- | A NUL byte in the first 'binarySniffBytes' is a robust, cheap binary
 -- heuristic. On I/O failure the file is treated as binary (the caller

@@ -88,6 +88,16 @@ spec = describe "Load" $ do
               )
         Left err -> expectationFailure err
 
+    -- gpt-5.6-terra refuses any temperature but the default (1): with
+    -- 0.5 every call failed with 400.
+    it "sends no temperature for the bundled gpt_5_6_terra" $ do
+      result <- eitherDecodeFileStrict' "./model-catalog.json"
+      case result of
+        Right (items :: [ModelCatalogItem]) ->
+          fmap (.temperature) (find (\i -> i.modelConfigName == "gpt_5_6_terra") items)
+            `shouldBe` Just Nothing
+        Left err -> expectationFailure err
+
     it "loads catalogs without capabilities (defaults false)" $ do
       cfg <- loadModelOrThrow ollamaCatalog "mistral"
       cfg.mcCapabilities `shouldBe` defaultModelCapabilities

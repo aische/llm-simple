@@ -90,6 +90,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `$defs` next to the first use, but `#/$defs/<Name>` points from the
   root. `normalizeSchemaOpenAI` now moves every `$defs` entry to the
   root.
+- The bundled `model-catalog.json` set `temperature: 0.5` for
+  `gpt_5_6_terra`, which the model refuses ("Only the default (1) value
+  is supported"), so every call with it failed with 400. The entry now
+  leaves the temperature unset.
 
 ## [0.4.2.0] - 2026-11-03
 

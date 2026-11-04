@@ -2,10 +2,13 @@
 
 module LLM.OpenAISpec (spec) where
 
+import Autodocodec qualified as AC
+import Autodocodec.Schema (jsonSchemaVia)
 import Data.Aeson
   ( Value (Array, Object, String),
     eitherDecodeFileStrict',
     object,
+    toJSON,
     (.=),
   )
 import Data.Aeson.Key qualified as K
@@ -32,8 +35,10 @@ import LLM.Core.Types
     thinkingPart,
     toolCallPart,
   )
+import LLM.Core.ProviderUtils (normalizeSchemaOpenAI, stripBoundsAndComments)
 import LLM.Core.Usage (Usage (..), mkUsage)
 import LLM.Core.Utils (getToolCalls, hasToolCalls, isRetryable)
+import LLM.OptionalFields (Node, Optionals)
 import LLM.Providers.OpenAI (encodeTurn, parseOpenAIResponse, parseOpenAIStream, parseOpenAIUsage)
 import Test.Hspec
   ( Spec,
@@ -200,6 +205,94 @@ spec = describe "OpenAI" $ do
           contentTypes parts `shouldBe` ["text", "image_url", "image_url"]
           mapM_ (\p -> lookupKey "cache_control" p `shouldBe` Nothing) parts
 
+  describe "normalizeSchemaOpenAI optional properties (strict mode)" $ do
+    let schema = strictSchema (AC.codec :: AC.JSONCodec Optionals)
+        prop k = schemaAt ["properties", k] schema
+
+    it "lists every property as required" $
+      schemaAt ["required"] schema
+        `shouldBe` Just
+          (toJSON (["def", "list", "named", "nested", "omit", "opt", "or_null", "plain", "req_maybe", "union"] :: [Text]))
+
+    it "makes optionalField, optionalFieldWithDefault and optionalFieldWithOmittedDefault nullable" $ do
+      prop "opt" `shouldBe` Just (nullable (typed "string"))
+      prop "def" `shouldBe` Just (nullable (typed "integer"))
+      prop "omit" `shouldBe` Just (nullable (typed "integer"))
+
+    it "makes an optional nested object nullable, inline or by $ref" $ do
+      fmap (const ()) (schemaAt ["properties", "nested", "anyOf", "0", "properties"] schema) `shouldBe` Just ()
+      schemaAt ["properties", "nested", "anyOf", "1"] schema `shouldBe` Just (typed "null")
+      schemaAt ["properties", "named", "anyOf", "0", "$ref"] schema `shouldBe` Just "#/$defs/NamedInner"
+      schemaAt ["properties", "named", "anyOf", "1"] schema `shouldBe` Just (typed "null")
+
+    it "leaves nullable and required properties as they are" $ do
+      let nullOrString = object ["anyOf" .= [typed "null", typed "string"]]
+      prop "req_maybe" `shouldBe` Just nullOrString
+      prop "or_null" `shouldBe` Just nullOrString
+      prop "plain" `shouldBe` Just (typed "string")
+      schemaAt ["properties", "list", "type"] schema `shouldBe` Just "array"
+
+    it "does the same inside nested objects, array items, union branches and definitions" $ do
+      let inner path = do
+            schemaAt (path <> ["properties", "a"]) schema `shouldBe` Just (nullable (typed "string"))
+            schemaAt (path <> ["properties", "b"]) schema `shouldBe` Just (nullable (typed "integer"))
+            schemaAt (path <> ["required"]) schema `shouldBe` Just (toJSON (["a", "b"] :: [Text]))
+      inner ["properties", "nested", "anyOf", "0"]
+      inner ["properties", "list", "items"]
+      inner ["properties", "union", "anyOf", "0", "properties", "Left"]
+      inner ["$defs", "NamedInner"]
+
+    it "turns the oneOf of an Either into anyOf" $ do
+      schemaAt ["properties", "union", "oneOf"] schema `shouldBe` Nothing
+      schemaAt ["properties", "union", "anyOf", "0", "required"] schema `shouldBe` Just (toJSON (["Left"] :: [Text]))
+      schemaAt ["properties", "union", "anyOf", "1", "required"] schema `shouldBe` Just (toJSON (["Right"] :: [Text]))
+
+    it "changes only schema keywords, not property names or literal values" $ do
+      let oneOfSchema = object ["oneOf" .= [typed "string", typed "integer"]]
+          literal = object ["type" .= ("object" :: Text), "oneOf" .= [typed "string"]]
+          input =
+            object
+              [ "type" .= ("object" :: Text),
+                "properties" .= object ["oneOf" .= oneOfSchema],
+                "required" .= (["oneOf"] :: [Text]),
+                "default" .= object ["oneOf" .= literal]
+              ]
+      normalizeSchemaOpenAI input
+        `shouldBe` object
+          [ "type" .= ("object" :: Text),
+            "properties" .= object ["oneOf" .= object ["anyOf" .= [typed "string", typed "integer"]]],
+            "required" .= (["oneOf"] :: [Text]),
+            "default" .= object ["oneOf" .= literal],
+            "additionalProperties" .= False
+          ]
+
+    it "moves the $defs of a named codec to the root" $ do
+      schemaAt ["properties", "named", "anyOf", "0"] schema
+        `shouldBe` Just (object ["$ref" .= ("#/$defs/NamedInner" :: Text)])
+      fmap (const ()) (schemaAt ["$defs", "NamedInner", "properties"] schema) `shouldBe` Just ()
+
+    it "keeps $defs that are at the root already, and a property called $defs" $ do
+      let node = strictSchema (AC.codec :: AC.JSONCodec Node)
+      schemaAt ["$ref"] node `shouldBe` Just "#/$defs/Node"
+      fmap (const ()) (schemaAt ["$defs", "Node", "properties"] node) `shouldBe` Just ()
+      let input =
+            object
+              [ "type" .= ("object" :: Text),
+                "properties" .= object ["$defs" .= typed "string"],
+                "required" .= (["$defs"] :: [Text])
+              ]
+      normalizeSchemaOpenAI input
+        `shouldBe` object
+          [ "type" .= ("object" :: Text),
+            "properties" .= object ["$defs" .= typed "string"],
+            "required" .= (["$defs"] :: [Text]),
+            "additionalProperties" .= False
+          ]
+
+    it "makes a recursive optional property nullable" $
+      schemaAt ["$defs", "Node", "properties", "next"] (strictSchema (AC.codec :: AC.JSONCodec Node))
+        `shouldBe` Just (nullable (object ["$ref" .= ("#/$defs/Node" :: Text)]))
+
   describe "parseOpenAIUsage" $ do
     it "extracts token counts" $ do
       Right val <- eitherDecodeFileStrict' "test/fixtures/openai-text.json"
@@ -245,6 +338,25 @@ spec = describe "OpenAI" $ do
                 _ -> expectationFailure "missing response"
             _ -> expectationFailure "empty conversation array"
         _ -> expectationFailure "expected conversation array"
+
+-- | The schema 'genObject' sends for a codec, as OpenAI receives it.
+strictSchema :: AC.JSONCodec a -> Value
+strictSchema c = normalizeSchemaOpenAI (stripBoundsAndComments (toJSON (jsonSchemaVia c)))
+
+-- | The sub-schema at a path of keys; a number indexes an array.
+schemaAt :: [Text] -> Value -> Maybe Value
+schemaAt [] v = Just v
+schemaAt (k : rest) (Object o) = KM.lookup (K.fromText k) o >>= schemaAt rest
+schemaAt (k : rest) (Array a) = case reads (T.unpack k) of
+  [(i, "")] -> a V.!? i >>= schemaAt rest
+  _ -> Nothing
+schemaAt _ _ = Nothing
+
+nullable :: Value -> Value
+nullable s = object ["anyOf" .= [s, object ["type" .= ("null" :: Text)]]]
+
+typed :: Text -> Value
+typed t = object ["type" .= t]
 
 userContent :: Value -> [Value]
 userContent (Object o) =

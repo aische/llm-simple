@@ -69,5 +69,18 @@ jobs:
       - name: Test
         run: cabal test all --test-show-details=direct
 
+      # The Hackage tarball must carry everything the tests read (fixtures,
+      # catalogs). Unpacked outside the checkout; cabal.project.local from
+      # "Configure" keeps the same build plan, so the cached store is reused.
+      - name: Test from the source distribution
+        shell: bash
+        run: |
+          cabal sdist --output-directory="$RUNNER_TEMP/sdist"
+          mkdir -p "$RUNNER_TEMP/sdist-check"
+          tar xzf "$RUNNER_TEMP"/sdist/llm-simple-*.tar.gz -C "$RUNNER_TEMP/sdist-check"
+          cp cabal.project.local "$RUNNER_TEMP"/sdist-check/llm-simple-*/
+          cd "$RUNNER_TEMP"/sdist-check/llm-simple-*/
+          cabal test all --test-show-details=direct
+
       - name: Haddock
         run: cabal haddock all

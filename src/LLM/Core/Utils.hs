@@ -187,7 +187,7 @@ withRetry policy logRetryableError action =
     (const action)
 
 -- | Build a synthetic JSON summary from a streamed ChatResponse,
--- used by providers to fire 'onResponse' after streaming completes.
+-- used by providers to fire 'LLM.Generate.Logger.onResponse' after streaming completes.
 streamResponseJson :: ChatResponse -> Value
 streamResponseJson r =
   object

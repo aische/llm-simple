@@ -15,14 +15,14 @@ import GHC.Generics (Generic)
 import LLM.Core.Types (TypedTool (..))
 import LLM.Tools.FsConfig (FsConfig, sandboxPath, withWorkspacePaths)
 import LLM.Tools.FsLimits (maxOutputBytes, maxPaginatedFileBytes)
-import LLM.Tools.Internal.TextFile (withTextHandle)
+import LLM.Tools.Internal.TextFile (CappedRead (..), readCapped, withTextHandle)
+import LLM.Tools.Internal.WalkBudget (utf8Prefix)
 import System.IO
   ( IOMode (ReadMode),
-    hFileSize,
     withBinaryFile,
   )
 
--- | Default number of lines returned per page when the caller omits 'limit'.
+-- | Default number of lines returned per page when the caller omits @limit@.
 defaultLimit :: Int
 defaultLimit = 200
 
@@ -89,31 +89,25 @@ execute cfg args
           capText = T.pack (show maxPaginatedFileBytes)
       resolved <- sandboxPath cfg rel
       result <- withTextHandle (withBinaryFile resolved ReadMode) $ \h -> do
-        size <- hFileSize h
-        if size > maxPaginatedFileBytes
-          then
-            pure . Left $
+        capped <- readCapped maxPaginatedFileBytes h
+        pure $ case capped of
+          CappedTooLarge size ->
+            Left $
               path
                 <> " is "
                 <> T.pack (show size)
                 <> " bytes, which exceeds the "
                 <> capText
                 <> "-byte cap for read_file_paginated."
-          else do
-            -- Read one byte past the cap, so a file that grew past it since
-            -- the size check is reported instead of looking like it ended.
-            bytes <- BS.hGet h (fromIntegral maxPaginatedFileBytes + 1)
-            pure $
-              if fromIntegral (BS.length bytes) > maxPaginatedFileBytes
-                then
-                  Left $
-                    path
-                      <> " grew past the "
-                      <> capText
-                      <> "-byte cap for read_file_paginated during the read."
-                else
-                  let (lns, hasMore) = takePage offset limit bytes
-                   in Right (size, lns, hasMore)
+          CappedGrew ->
+            Left $
+              path
+                <> " grew past the "
+                <> capText
+                <> "-byte cap for read_file_paginated during the read."
+          CappedBytes size bytes ->
+            let (lns, hasMore) = takePage offset limit bytes
+             in Right (size, lns, hasMore)
       pure $ case result of
         Nothing ->
           "Error: "
@@ -168,18 +162,6 @@ takePage offset limit = go 0 0 [] . dropLines (offset - 1)
 
     decode = decodeUtf8With lenientDecode
     newline = 10
-
--- | At most @n@ bytes from the start, without splitting a UTF-8 sequence.
-utf8Prefix :: Int -> BS.ByteString -> BS.ByteString
-utf8Prefix n bs
-  | BS.length bs <= n = bs
-  | otherwise = BS.take (boundary n) bs
-  where
-    -- Back up while the byte at the cut is a continuation byte (10xxxxxx),
-    -- so the cut falls before the lead byte of its sequence.
-    boundary i
-      | i > 0 && BS.index bs i >= 0x80 && BS.index bs i < 0xC0 = boundary (i - 1)
-      | otherwise = i
 
 renderPage :: Text -> Integer -> Int -> [Text] -> Bool -> Text
 renderPage path size offset lns hasMore =

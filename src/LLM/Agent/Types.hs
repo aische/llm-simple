@@ -26,7 +26,7 @@ import LLM.Generate.Types (GenerateError, GenerateErrorResult, GenerateTextResul
 
 -- | Static agent configuration shared across requests.
 data Agent = Agent
-  { -- | Name of the agent. The agent entry points prefix every 'onLog'
+  { -- | Name of the agent. The agent entry points prefix every 'LLM.Generate.Logger.onLog'
     -- message of a run with @[\<agName\>] @; an empty name adds no prefix.
     -- It is not sent to the model.
     agName :: Text,
@@ -43,7 +43,7 @@ data Agent = Agent
     -- answer ('LLM.Agent.Generate.toolBudgetUsedUpPrompt'). A text reply
     -- ends the run successfully. Tool calls in that reply are not run: each
     -- gets the result @\"Not run: tool round limit reached\"@ and the run
-    -- returns 'GErrToolExceeded'. So every tool that runs has its result
+    -- returns v'LLM.Generate.Types.GErrToolExceeded'. So every tool that runs has its result
     -- seen by the model, and a run makes at most @agMaxToolRounds + 1@
     -- model calls. A value @<= 0@ makes only the final call.
     agMaxToolRounds :: Int,
@@ -69,20 +69,20 @@ data RuntimeArgs = RuntimeArgs
     -- | Observer for 'GenerateEvent' lifecycle notifications (UI, telemetry).
     rtOnEvent :: EventObserver,
     -- | When 'True', mutating tools are rejected at execution time even if
-    -- they appear in 'Agent.agTools'. Read-only tools still run.
+    -- they appear in 'LLM.Agent.Types.agTools'. Read-only tools still run.
     rtReadonly :: Bool
   }
 
 -- | A tool: its definition (sent to the model) paired with its implementation.
 --
--- 'toolExecute' receives a 'ToolContext' (full conversation + usage) and
+-- 'LLM.Agent.Types.toolExecute' receives a 'ToolContext' (full conversation + usage) and
 -- the JSON arguments from the model.
 data Tool result = Tool
   { toolDef :: ToolDef,
     toolExecute :: ToolContext -> Value -> IO result
   }
 
--- | Map from tool name to implementation. Built manually or via 'fsTools'.
+-- | Map from tool name to implementation. Built manually or via 'LLM.Load.FsTools.fsTools'.
 type ToolMap result = Map Text (Tool result)
 
 -- | Context passed to tool implementations during execution.
@@ -91,14 +91,14 @@ data ToolContext = ToolContext
     tcConversation :: [Turn],
     -- | Accumulated token usage so far
     tcUsage :: Usage,
-    -- | Index into 'tcConversation' where the visible window starts.
+    -- | Index into 'LLM.Agent.Types.tcConversation' where the visible window starts.
     -- Everything before this index is hidden from the model.
     -- The @get_history@ tool uses this to serve paginated history.
     tcWindowOffset :: Int,
     tcRuntimeArgs :: RuntimeArgs
   }
 
--- | Generation lifecycle event tagged with the run's 'rtGenerationId'.
+-- | Generation lifecycle event tagged with the run's 'LLM.Agent.Types.rtGenerationId'.
 data GenerateEvent = GenerateEvent
   { geGenerationId :: UUID,
     geDetail :: GenerateEventDetail

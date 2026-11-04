@@ -26,7 +26,6 @@
             "pricePerMillionOutput": 12.0
         },
         "maxTokens": 4096,
-        "temperature": 0.5,
         "requestTimeout": 10000,
         "throttleDelay": 1000,
         "retryCount": 3,

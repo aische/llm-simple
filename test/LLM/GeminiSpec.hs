@@ -102,7 +102,8 @@ spec = describe "Gemini" $ do
       let schema =
             object
               [ "type" .= ("object" :: Text),
-                "properties" .= object ["type" .= object ["type" .= ("string" :: Text)]]
+                "properties" .= object ["type" .= object ["type" .= ("string" :: Text)]],
+                "required" .= (["type"] :: [Text])
               ]
       normalizeSchemaOpenAI schema
         `shouldBe` object

@@ -22,7 +22,7 @@ import LLM.Generate.Types (GeneratableObject, GenerateErrorResult)
 
 -- | Generate a typed Haskell value from the model via Autodocodec.
 --
--- Tools are never sent: @grTools@ is always empty. 'agContextWindow' still
+-- Tools are never sent: @grTools@ is always empty. 'LLM.Agent.Types.agContextWindow' still
 -- truncates messages, but does not inject @get_history@.
 generateObject ::
   (GeneratableObject t) =>

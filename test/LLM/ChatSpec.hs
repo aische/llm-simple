@@ -791,6 +791,24 @@ spec = describe "Chat" $ do
       filter ("no_such_tool" `T.isInfixOf`) ws
         `shouldBe` ["[test] agTools lists no_such_tool, which is not in the tool map; it is not sent to the model"]
 
+    it "logs an invalid caller turn once per run, not once per round" $ do
+      reqs <- newIORef []
+      (rt, logs, _) <- recordingRuntime
+      let -- Two tool rounds, then text: three model calls.
+          twoRounds req =
+            let toolTurns = length [() | ToolTurn _ <- req.reqConversation]
+                tc = mkToolCall ("call_" <> T.pack (show toolTurns)) "get_weather" (object ["location" .= ("London" :: Text)])
+             in pure . Right $
+                  if toolTurns >= 2
+                    then ChatResponse "done" [textPart "done"] Nothing Nothing
+                    else ChatResponse "" [toolCallPart tc] Nothing Nothing
+          history = [UserMessage [textPart "go", toolCallPart (mkToolCall "c1" "get_weather" (object []))]]
+      result <- generateText defaultAgent {agTools = ["get_weather"]} (ModelWithFallbacks (mockModel (recordingGateway reqs twoRounds)) []) toolMap rt history
+      fmap (.gtrText) result `shouldBe` Right "done"
+      length <$> readIORef reqs `shouldReturn` 3
+      ws <- warnings <$> readIORef logs
+      filter ("turn " `T.isInfixOf`) ws `shouldBe` ["[test] turn 0: user messages may not contain tool-call parts"]
+
     it "uses the built-in get_history over a caller tool of that name when windowing is on" $ do
       reqs <- newIORef []
       (rt, logs, _) <- recordingRuntime
@@ -880,6 +898,22 @@ spec = describe "Chat" $ do
       readIORef calls `shouldReturn` ["a", "b"]
       ws <- (\ls -> [m | (Warn, m) <- ls, "turn " `T.isPrefixOf` m]) <$> readIORef logs
       ws `shouldBe` ["turn 2: user messages may not contain tool-call parts"]
+
+    it "logs problems in the tool-call structure in turn order" $ do
+      logs <- newIORef []
+      calls <- newIORef []
+      let history =
+            invalidHistory
+              ++ [ ToolTurn [ToolResult "c9" "get_weather" "sunny"],
+                   AssistantMessage [textPart "done"]
+                 ]
+      _ <- generateTextWithFallbacks (request logs history) (ModelWithFallbacks (mockModel (loggingGateway calls "m" answer)) [])
+      readIORef calls `shouldReturn` ["m"]
+      ws <- (\ls -> [m | (Warn, m) <- ls]) <$> readIORef logs
+      ws
+        `shouldBe` [ "turn 2: user messages may not contain tool-call parts",
+                     "turn 3: tool results do not follow an assistant turn with tool calls"
+                   ]
 
     it "logs nothing for a valid history" $ do
       logs <- newIORef []

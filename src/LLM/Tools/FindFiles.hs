@@ -229,8 +229,8 @@ matchGlob _ [] = False
 matchGlob (p : ps) (s : ss) = matchSegment (T.unpack p) (T.unpack s) && matchGlob ps ss
 
 -- | Match a single glob segment (no '/' allowed in either side).
--- Supports '*' (any run of chars, possibly empty) and '?' (one char).
--- On a mismatch only the most recent '*' takes one more char, which is
+-- Supports @*@ (any run of chars, possibly empty) and @?@ (one char).
+-- On a mismatch only the most recent @*@ takes one more char, which is
 -- enough for this glob syntax and keeps matching O(pattern * name) instead
 -- of exponential in the number of stars.
 matchSegment :: String -> String -> Bool

@@ -11,6 +11,7 @@ import Data.Aeson qualified as AE
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import LLM.Core.Abort (isAbortedMaybe)
+import LLM.Core.Internal.Schema (dropOptionalNulls)
 import LLM.Core.ProviderUtils (stripBoundsAndComments)
 import LLM.Core.Types (LLMGateway (..), LLMObjectResult)
 import LLM.Core.Usage (Usage (..), emptyUsage)
@@ -52,7 +53,10 @@ genObjectInternal codec gr0 models = do
   case res of
     Left e -> pure (Left e)
     Right (v, u) -> do
-      case AE.fromJSON v of
+      -- A provider in strict mode answers null for an optional field
+      -- (see normalizeSchemaOpenAI); the codec reads it as absent only
+      -- without the null.
+      case AE.fromJSON (dropOptionalNulls jsonschema v) of
         AE.Error e ->
           pure $
             Left $

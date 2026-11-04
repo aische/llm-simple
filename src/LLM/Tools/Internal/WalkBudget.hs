@@ -9,6 +9,8 @@ module LLM.Tools.Internal.WalkBudget
     budgetNote,
     capLines,
     utf8Length,
+    utf8Prefix,
+    textPrefixBytes,
   )
 where
 
@@ -16,7 +18,7 @@ import Data.ByteString qualified as BS
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Encoding (encodeUtf8)
+import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 
 -- | How many more directory entries a walk may look at, and whether it was
 -- denied any.
@@ -60,3 +62,20 @@ capLines cap = go 0 []
 -- | Size of a text in UTF-8 bytes.
 utf8Length :: Text -> Int
 utf8Length = BS.length . encodeUtf8
+
+-- | At most @n@ bytes from the start, without splitting a UTF-8 sequence.
+utf8Prefix :: Int -> BS.ByteString -> BS.ByteString
+utf8Prefix n bs
+  | BS.length bs <= n = bs
+  | otherwise = BS.take (boundary n) bs
+  where
+    -- Back up while the byte at the cut is a continuation byte (10xxxxxx),
+    -- so the cut falls before the lead byte of its sequence.
+    boundary i
+      | i > 0 && BS.index bs i >= 0x80 && BS.index bs i < 0xC0 = boundary (i - 1)
+      | otherwise = i
+
+-- | At most @n@ UTF-8 bytes from the start of a text, ending on a whole
+-- character.
+textPrefixBytes :: Int -> Text -> Text
+textPrefixBytes n = decodeUtf8 . utf8Prefix n . encodeUtf8

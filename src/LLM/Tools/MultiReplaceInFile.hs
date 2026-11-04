@@ -1,4 +1,4 @@
-module LLM.Tools.MultiReplaceInFile (multiReplaceInFileToolTyped, MultiReplaceInFileToolArgs (..)) where
+module LLM.Tools.MultiReplaceInFile (multiReplaceInFileToolTyped, MultiReplaceInFileToolArgs (..), Replacement) where
 
 import Autodocodec qualified as AC
 import Data.Aeson (FromJSON)
@@ -11,6 +11,9 @@ import LLM.Tools.FsLimits (maxReadBytes, readBoundedUtf8File, writeUtf8File)
 import LLM.Tools.Internal.PathLock (withPathLock)
 import LLM.Tools.Internal.TextEdit (countOccurrences, replaceFirst)
 
+-- | One edit of @multi_replace_in_file@: the @old@ text, which must occur
+-- exactly once, and the @new@ text that replaces it. Decoded from the
+-- tool's JSON arguments.
 data Replacement = Replacement
   { _repOld :: Text,
     _repNew :: Text

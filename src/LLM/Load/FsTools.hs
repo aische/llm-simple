@@ -29,7 +29,7 @@ import LLM.Tools.Writefile (writefileToolTyped)
 -- All paths are resolved inside a canonical sandbox ('LLM.Tools.FsConfig').
 -- Mutating tools refuse paths that escape the workspace; reads are bounded
 -- (1 MiB for edits, 10 MiB for paginated reads). Include desired names in
--- 'Agent.agTools' to expose them to the model.
+-- 'LLM.Agent.Types.agTools' to expose them to the model.
 fsTools :: FilePath -> IO (ToolMap Text)
 fsTools filePath = do
   cfg <- mkFsConfig filePath

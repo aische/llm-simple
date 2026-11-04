@@ -28,7 +28,7 @@ import GHC.IO.Exception (IOErrorType (InvalidArgument))
 import System.FilePath (addTrailingPathSeparator, dropTrailingPathSeparator, equalFilePath, isAbsolute, isRelative, joinPath, normalise, splitDirectories, splitFileName, takeDirectory, (</>))
 
 -- | Configuration for file-system tools.
--- 'fsBasePath' must be a canonical absolute path (use 'mkFsConfig').
+-- 'LLM.Tools.FsConfig.fsBasePath' must be a canonical absolute path (use 'mkFsConfig').
 --
 -- The @FsConfig@ data constructor is deprecated: build the configuration
 -- with 'mkFsConfig', which canonicalizes the path. From 0.5 the constructor
@@ -99,7 +99,7 @@ mkFsConfig dir =
 -- dangling link is resolved to that target and judged by where it
 -- points rather than appended as if it were an ordinary new file.
 -- Throws 'SandboxViolation' on escape attempts, and an 'IOException' for a
--- @..@ that would step back out of a symbolic link (see 'collapseDots').
+-- @..@ that would step back out of a symbolic link (see @collapseDots@).
 sandboxPath :: FsConfig -> FilePath -> IO FilePath
 sandboxPath cfg relPath = do
   let base = cfg.fsBasePath

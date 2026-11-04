@@ -227,7 +227,7 @@ main = do
 
 Set `rtReadonly = True` to omit mutating tools from the schema sent to the model and to block them at execution time.
 
-Every request's messages are checked with `validateTurn` (for example, no tool-call parts in a user turn); an invalid turn is logged as a warning and the request is still sent. From 0.5 it will be an error.
+Every request's messages are checked with `validateTurn` (for example, no tool-call parts in a user turn) and `validateConversation` (tool results follow the assistant turn whose calls they answer, each call answered exactly once); each problem is logged as a warning and the request is still sent. From 0.5 it will be an error.
 
 Log messages of an agent run (`onLog`) start with `[<agName>] `; leave `agName` empty for no prefix.
 
@@ -289,7 +289,7 @@ The sandbox does **not** protect against *other processes* that write to the wor
 - The sandbox is **path-scoped**, not kernel-level isolation. Use a dedicated, disposable workspace directory — not your home directory or a production tree.
 - There is no denylist for sensitive in-workspace files (`.env`, `.git/config`, etc.). Anything inside the workspace is accessible to tools the model can call.
 - Read tools enforce byte caps: whole-file and edit tools use a 1 MiB limit; `read_file_paginated` accepts source files up to 10 MiB and returns at most 100 KiB per page.
-- Search and listing tools bound their work: `find_files`, `grep` and `directory_tree` look at no more than 20,000 entries per call and say so when they stop; tool output is capped at 100 KiB.
+- Search and listing tools bound their work: `find_files`, `grep` and `directory_tree` look at no more than 20,000 entries per call, `grep` reads no more than 64 MiB of files per call, and each says so when it stops; tool output is capped at 100 KiB.
 - `rtReadonly` omits mutating tools from the model schema and blocks them at execution time if they are invoked anyway.
 - `writefile` and the replace tools replace the file as a whole (a temporary file renamed over it), so a failed write leaves the old content. The file keeps its mode bits but gets a new inode, so hard links to it keep the old content. Concurrent edits of one file from the same process are serialized; edits from other processes are not.
 

@@ -12,8 +12,9 @@ import Data.Aeson
   )
 import Data.Aeson.Types (Pair)
 import Data.Text (Text)
+import LLM.Core.Internal.Transport (postJson, postJsonStream)
 import LLM.Core.LLMProvider (LLMProvider (..), toGateway)
-import LLM.Core.ProviderUtils (handleStreamResponse, lenientConfig, readResponseBody, normalizeSchemaOpenAI)
+import LLM.Core.ProviderUtils (normalizeSchemaOpenAI)
 import LLM.Core.Types
   ( commonImageMediaTypes,
     ChatRequest
@@ -28,13 +29,9 @@ import LLM.Core.Types
 import LLM.Providers.OpenAI (buildMessages, encodeToolDef, parseOpenAIObjectResponse, parseOpenAIResponse, parseOpenAIStream)
 import Network.HTTP.Req
   ( Option,
-    POST (POST),
-    ReqBodyJson (ReqBodyJson),
     Url,
     http,
     port,
-    reqBr,
-    runReq,
     (/:),
   )
 
@@ -60,11 +57,7 @@ ollamaProviderWith baseUrl baseOpts =
       providerImageUrlSupport = False,
       buildBody = \stream r -> object (ollamaBuildBodyPairs stream r),
       sendRequest = sendRequest,
-      openStream = \body k ->
-        runReq lenientConfig $ do
-          let url = baseUrl /: "v1" /: "chat" /: "completions"
-          reqBr POST url (ReqBodyJson body) baseOpts $ \resp ->
-            handleStreamResponse resp k,
+      openStream = postJsonStream url baseOpts,
       parseStream = const parseOpenAIStream,
       parseResponse = pure . parseOpenAIResponse,
       buildObjectBody = \r schema ->
@@ -85,10 +78,8 @@ ollamaProviderWith baseUrl baseOpts =
       parseObjectResponse = pure . parseOpenAIObjectResponse
     }
   where
-    sendRequest body =
-      runReq lenientConfig $ do
-        let url = baseUrl /: "v1" /: "chat" /: "completions"
-        reqBr POST url (ReqBodyJson body) baseOpts readResponseBody
+    sendRequest = postJson url baseOpts
+    url = baseUrl /: "v1" /: "chat" /: "completions"
 
 -- | Request body for Ollama's OpenAI-compatible endpoint. Like OpenAI's, but
 -- the token limit is @max_tokens@: Ollama ignores @max_completion_tokens@

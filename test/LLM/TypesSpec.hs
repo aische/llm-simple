@@ -19,6 +19,8 @@ import LLM.Core.Types
     textPart,
     thinkingPart,
     toolCallPart,
+    ToolResult (..),
+    validateConversation,
     validateTurn,
   )
 import LLM.Core.Usage
@@ -196,6 +198,47 @@ spec = describe "Types" $ do
       validateTurn
         (AssistantMessage [imageUrlPart "https://example.com/a.png"])
         `shouldBe` Left "assistant messages may not contain image parts"
+
+  describe "validateConversation" $ do
+    let call i = toolCallPart (mkToolCall i "get_weather" (object []))
+        result i = ToolResult i "get_weather" "sunny"
+    it "accepts a valid multi-round history" $
+      validateConversation
+        [ UserTurn "weather?",
+          AssistantMessage [textPart "checking", call "c1", call "c2"],
+          ToolTurn [result "c2", result "c1"],
+          AssistantMessage [call "c3"],
+          ToolTurn [result "c3"],
+          AssistantMessage [textPart "sunny"],
+          UserTurn "thanks"
+        ]
+        `shouldBe` []
+
+    it "reports tool results that do not follow tool calls" $ do
+      validateConversation [UserTurn "hi", ToolTurn [result "c1"]]
+        `shouldBe` [(1, "tool results do not follow an assistant turn with tool calls")]
+      validateConversation [UserTurn "hi", AssistantMessage [textPart "no calls"], ToolTurn [result "c1"]]
+        `shouldBe` [(2, "tool results do not follow an assistant turn with tool calls")]
+
+    it "reports tool calls without a following tool turn" $
+      validateConversation [UserTurn "hi", AssistantMessage [call "c1"], UserTurn "again"]
+        `shouldBe` [(1, "tool calls are not followed by tool results")]
+
+    it "reports a call without a result" $
+      validateConversation [UserTurn "hi", AssistantMessage [call "c1", call "c2"], ToolTurn [result "c1"]]
+        `shouldBe` [(2, "no result for tool call \"c2\"")]
+
+    it "reports a call answered twice" $
+      validateConversation [UserTurn "hi", AssistantMessage [call "c1"], ToolTurn [result "c1", result "c1"]]
+        `shouldBe` [(2, "tool call \"c1\" is answered more than once")]
+
+    it "reports a result for an unknown call id" $
+      validateConversation [UserTurn "hi", AssistantMessage [call "c1"], ToolTurn [result "c1", result "zz"]]
+        `shouldBe` [(2, "tool result for unknown call id \"zz\"")]
+
+    it "reports duplicate call ids in one assistant turn" $
+      validateConversation [UserTurn "hi", AssistantMessage [call "c1", call "c1"], ToolTurn [result "c1"]]
+        `shouldBe` [(1, "duplicate tool call id \"c1\"")]
 
   describe "imageBase64Part" $ do
     it "accepts valid png base64" $ do

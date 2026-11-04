@@ -5,6 +5,96 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3.0] - 2026-11-04
+
+### Added
+
+- `LLM.Core.Types.validateConversation` (also in `LLM.Core`): problems in
+  the tool-call structure of a conversation, by turn index.
+- `LLM.Tools.FsLimits.maxSearchBytes` (64 MiB): the file bytes one `grep`
+  call may read.
+- `LLM.Tools.MultiReplaceInFile.Replacement`, the type of one edit in
+  `MultiReplaceInFileToolArgs`, exported without its constructor. Before,
+  the exported field `_mrifReplacements :: [Replacement]` named a type
+  that could not be imported.
+
+### Fixed
+
+- `grep` reads at most `maxSearchBytes` (64 MiB) of files per call. Only
+  the text files it searches count; binary files and files over the 1 MiB
+  per-file cap are not read and do not count. A search that runs out
+  stops before the next file and says so in the header ("stopped after
+  reading N bytes; narrow the path or pattern"), with the file count shown
+  as `N+`. Before, a search with few matches could read 20,000 files of
+  1 MiB, about 20 GiB, in one call. Each file is now read only up to the
+  size charged for it, so a file that grows during the search is not read
+  past the cap. **Behaviour change** for searches over more than 64 MiB.
+- A `get_history` page is at most `maxOutputBytes` (100 KiB). Before,
+  user and assistant text was rendered in full, so one page could be
+  larger than the context window that `agContextWindow` protects. A page
+  over the cap keeps its newest turns and ends with a line saying how many
+  older turns were left out; a newest turn that is over the cap on its own
+  is cut and marked (`[turn cut: N bytes, first M shown]`). The paging is
+  unchanged: the turns left out are not moved to the next chunk.
+  **Behaviour change** for pages over 100 KiB.
+- A streamed response is at most 32 MiB in total, the same cap as a
+  non-streaming body. Before, only one event (8 MiB) was bounded, so an
+  endpoint sending small events forever kept the call reading, and the
+  parsers keeping every delta, without end. Past the cap the stream ends
+  with `ParseError "response body exceeds 33554432 bytes"`, as for an
+  oversized event. **Behaviour change** for streams over 32 MiB.
+- Every generation entry point also checks the tool-call structure of the
+  request's messages (`validateConversation`): a tool turn that does not
+  directly follow an assistant turn with tool calls, tool calls not
+  followed by a tool turn, a call without a result, a call answered twice,
+  a result for an unknown call ID, or a call ID used twice in one turn.
+  Each problem is logged like an invalid turn
+  (`onLog Warn "turn <n>: <reason>"`, in turn order) and the request is
+  still sent. Providers rejected such histories or dropped parts of them,
+  each differently. **0.5 will reject them** with an error.
+- An agent run (`LLM.Agent.generateText`, `streamText`) checks the input
+  conversation once, at the start of the run, instead of on every model
+  call, so an invalid turn is logged once per run instead of once per
+  round. `n` in `turn <n>: <reason>` now counts in the input conversation,
+  also when `agContextWindow` sends only part of it. The turns the agent
+  adds come from providers and are not checked.
+
+- The source distribution (the Hackage tarball) includes the test
+  fixtures (`test/fixtures/*.json`, `test/fixtures/*.sse`). Before, the
+  test suite run from it failed 41 tests on missing files. CI now also
+  runs the tests from the unpacked tarball.
+- Structured output with OpenAI (and Ollama, which shares the schema):
+  strict mode lists every property as required, so a field from
+  `optionalField`, `optionalFieldWithDefault` or
+  `optionalFieldWithOmittedDefault` had to be filled in by the model.
+  `normalizeSchemaOpenAI` now makes such a property nullable
+  (`anyOf: [<schema>, {"type": "null"}]`), in nested objects, array
+  items, union branches and `$defs` too. `genObject` and
+  `LLM.Agent.generateObject` drop a `null` for a property the codec has
+  optional and not nullable before decoding, for every provider, so the
+  field gets its default; before, that `null` was a decode error.
+  Nullable fields (`Maybe` with `requiredField`, `optionalFieldOrNull`)
+  are unchanged. `genObjectUntyped` and `generateObjectUntyped` return
+  the provider's JSON as before, `null`s included. **Behaviour change**
+  for structured-output types with optional fields.
+- Structured output with OpenAI failed with 400 ("'oneOf' is not
+  permitted") for any type with an `Either` field or another disjoint
+  union, since strict mode refuses `oneOf`. `normalizeSchemaOpenAI` now
+  turns `oneOf` into `anyOf`; the branches cannot both match, so the
+  meaning is the same. It also changes only schema keywords now: before,
+  it added `required` and `additionalProperties` to objects inside
+  literal values such as `default` or `enum`.
+- Structured output with OpenAI or Ollama failed with 400 ("reference to
+  component '#/$defs/<Name>' which was not found in the schema") for any
+  type using a `named` codec below the root: autodocodec puts the
+  `$defs` next to the first use, but `#/$defs/<Name>` points from the
+  root. `normalizeSchemaOpenAI` now moves every `$defs` entry to the
+  root.
+- The bundled `model-catalog.json` set `temperature: 0.5` for
+  `gpt_5_6_terra`, which the model refuses ("Only the default (1) value
+  is supported"), so every call with it failed with 400. The entry now
+  leaves the temperature unset.
+
 ## [0.4.2.0] - 2026-11-03
 
 ### Added
@@ -740,6 +830,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   DeepSeek), single-shot generation with fallbacks, agent tool loops, structured
   output, JSON model catalog loading, and workspace-scoped filesystem tools.
 
+[0.4.3.0]: https://github.com/aische/llm-simple/compare/v0.4.2.0...v0.4.3.0
 [0.4.2.0]: https://github.com/aische/llm-simple/compare/v0.4.1.0...v0.4.2.0
 [0.4.1.0]: https://github.com/aische/llm-simple/compare/v0.4.0.1...v0.4.1.0
 [0.4.0.1]: https://github.com/aische/llm-simple/compare/v0.4.0.0...v0.4.0.1

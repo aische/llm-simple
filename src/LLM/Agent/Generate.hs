@@ -31,10 +31,11 @@ import LLM.Core.Types
   )
 import LLM.Core.Usage (Usage (..), emptyUsage)
 import LLM.Core.Utils (getToolCalls, toolResult)
-import LLM.Generate.Generate
-  ( generateTextWithFallbacksRotated,
-    streamTextWithFallbacksRotated,
+import LLM.Generate.Internal.Generate
+  ( generateTextWithFallbacksRotatedWith,
+    streamTextWithFallbacksRotatedWith,
   )
+import LLM.Generate.Internal.GenerateUtils (TurnCheck (SkipTurnCheck), logInvalidTurns)
 import LLM.Generate.Logger (Hooks (..), LogLevel (Warn))
 import LLM.Generate.ModelConfig
   ( ModelWithFallbacks (..),
@@ -49,15 +50,18 @@ import LLM.Generate.Types
 
 -- | Run the agent loop until the model returns final text or the run fails.
 --
--- On success, 'gtrNewMessages' contains only the turns produced during this
+-- On success, 'LLM.Generate.Types.gtrNewMessages' contains only the turns produced during this
 -- call (assistant and tool turns), not the input conversation.
 -- Tool rounds continue until the model responds without tool calls or
--- 'Agent.agMaxToolRounds' rounds have run. Then one final model call asks
+-- 'LLM.Agent.Types.agMaxToolRounds' rounds have run. Then one final model call asks
 -- for a text answer ('toolBudgetUsedUpPrompt'); tool calls in that reply
 -- are not run, and the run ends with 'GErrToolExceeded'.
 --
--- The warnings of 'LLM.Agent.ToolUtils.validateAgent' go to 'onLog' at
--- the start of the run.
+-- The warnings of 'LLM.Agent.ToolUtils.validateAgent' go to 'LLM.Generate.Logger.onLog' at
+-- the start of the run, and so do the problems of the input conversation
+-- ('LLM.Core.Types.validateTurns', 'LLM.Core.Types.validateConversation'),
+-- once per run, as @turn <n>: <reason>@ with @n@ counting from 0 in the
+-- input conversation.
 generateText ::
   Agent ->
   ModelWithFallbacks ->
@@ -67,7 +71,7 @@ generateText ::
   IO (Either GenerateErrorResult GenerateTextResult)
 generateText agent models toolMap rt initialTurns =
   agentLoop
-    (\a m r t -> generateTextWithFallbacksRotated (createGenRequest id a toolMap r t) m)
+    (\a m r t -> generateTextWithFallbacksRotatedWith SkipTurnCheck (createGenRequest id a toolMap r t) m)
     agent
     models
     toolMap
@@ -89,7 +93,7 @@ streamText ::
   IO (Either GenerateErrorResult GenerateTextResult)
 streamText onChunk agent models toolMap rt initialTurns =
   agentLoop
-    (\a m r t -> streamTextWithFallbacksRotated onChunk (createGenRequest id a toolMap r t) m)
+    (\a m r t -> streamTextWithFallbacksRotatedWith SkipTurnCheck onChunk (createGenRequest id a toolMap r t) m)
     agent
     models
     toolMap
@@ -97,7 +101,7 @@ streamText onChunk agent models toolMap rt initialTurns =
     initialTurns
 
 -- | The line appended to the system prompt for the final model call, made
--- once 'Agent.agMaxToolRounds' tool rounds have run.
+-- once 'LLM.Agent.Types.agMaxToolRounds' tool rounds have run.
 toolBudgetUsedUpPrompt :: Text
 toolBudgetUsedUpPrompt =
   "The tool budget for this run is used up. Answer in text; do not call tools."
@@ -106,7 +110,9 @@ toolBudgetUsedUpPrompt =
 toolNotRunText :: Text
 toolNotRunText = "Not run: tool round limit reached"
 
--- | The tool loop. @call@ returns the model chain rotated so the model that
+-- | The tool loop. The caller's turns are checked once, here; @call@ must
+-- not check them again (the turns the loop adds come from providers).
+-- @call@ returns the model chain rotated so the model that
 -- answered comes first; the next round starts with that chain, so a run that
 -- fell back stays on the fallback instead of retrying a failing primary every
 -- round. The next 'generateText' / 'streamText' call starts from the caller's
@@ -121,6 +127,7 @@ agentLoop ::
   IO (Either GenerateErrorResult GenerateTextResult)
 agentLoop call agent models toolMap rt0 initialTurns = do
   mapM_ (rt.rtHooks.onLog Warn) (validateAgent agent toolMap)
+  logInvalidTurns rt.rtHooks initialTurns
   emitEvent rt GenerationStarted
   go models initialTurns [] emptyUsage 0
   where

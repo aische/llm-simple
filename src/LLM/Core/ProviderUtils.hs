@@ -16,7 +16,7 @@ where
 
 import Control.Exception (throwIO)
 import Control.Retry (limitRetries)
-import Data.Aeson (ToJSON (toJSON), Value (..), decodeStrict', eitherDecodeStrict', encode, object)
+import Data.Aeson (ToJSON (toJSON), Value (..), decodeStrict', eitherDecodeStrict', encode, object, (.=))
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString qualified as BS
 import Data.Text (Text)
@@ -31,6 +31,7 @@ import LLM.Core.Internal.Body
     readBodyPrefix,
     readErrorBody,
   )
+import LLM.Core.Internal.Schema (hoistDefs, isNullableSchema, mapSubschemas, optionalProperties, schemaDefs)
 import LLM.Core.Types (LLMError (EmptyResponse, HttpError, ParseError), LLMResult, LLMTextResult)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Client.TLS (tlsManagerSettings)
@@ -59,7 +60,7 @@ mkLenientConfig mgr =
 -- | Manager shared by all provider requests. A non-streaming call receives
 -- its response headers only after generation finishes, so http-client's
 -- default 30 s response timeout would cut off long calls. The only response
--- deadline is the one the application configures ('mcRequestTimeout').
+-- deadline is the one the application configures ('LLM.Generate.ModelConfig.mcRequestTimeout').
 sharedManager :: HC.Manager
 sharedManager =
   unsafePerformIO $
@@ -126,23 +127,53 @@ handleStreamResponse resp handler = do
       pure $ Left $ HttpError status (decodeUtf8With lenientDecode (BS.concat chunks))
     else handler (HC.responseBody resp)
 
--- | Recursively enforce OpenAI structured output constraints:
---   every object node gets additionalProperties:false and all keys in required.
+-- | Recursively enforce OpenAI structured output constraints: every object
+-- node gets @additionalProperties: false@ and all its properties in
+-- @required@. Strict mode allows no optional properties, so a property
+-- that was optional and does not accept @null@ becomes nullable
+-- (@anyOf: [<schema>, {"type": "null"}]@); the model answers @null@ to
+-- leave it out, and 'LLM.Generate.genObject' removes that @null@ before
+-- decoding.
+--
+-- Strict mode refuses @oneOf@, so it becomes @anyOf@ (unless the node has
+-- an @anyOf@ already). autodocodec emits @oneOf@ for disjoint unions such
+-- as 'Either', whose branches cannot both match, so the meaning is the
+-- same.
+--
+-- Every @$defs@ entry moves to the root: autodocodec puts the @$defs@ of a
+-- named codec next to its first use, but @#/$defs/<name>@ points from the
+-- root, and strict mode refuses a reference it cannot find there.
+--
+-- Only schema keywords are changed: the walk follows sub-schema positions,
+-- so a property called @oneOf@ or a literal value is kept.
 normalizeSchemaOpenAI :: Value -> Value
-normalizeSchemaOpenAI (Object o) =
-  let o' = fmap normalizeSchemaOpenAI o
-      fixed = case KM.lookup "type" o' of
-        Just (String "object") ->
-          let propKeys = case KM.lookup "properties" o' of
-                Just (Object p) -> KM.keys p
-                _ -> []
-              withAP = KM.insert "additionalProperties" (Bool False) o'
-              withReq = KM.insert "required" (toJSON propKeys) withAP
-           in withReq
-        _ -> o'
-   in Object fixed
-normalizeSchemaOpenAI (Array a) = Array (fmap normalizeSchemaOpenAI a)
-normalizeSchemaOpenAI v = v
+normalizeSchemaOpenAI schema = hoistDefs (go schema)
+  where
+    defs = schemaDefs schema
+    go (Object o) =
+      let o' = oneOfToAnyOf (mapSubschemas go o)
+          fixed = case KM.lookup "type" o' of
+            Just (String "object") ->
+              let propKeys = case KM.lookup "properties" o' of
+                    Just (Object p) -> KM.keys p
+                    _ -> []
+                  optional = optionalProperties o
+                  withNull k p
+                    | k `elem` optional && not (isNullableSchema defs p) =
+                        object ["anyOf" .= [p, object ["type" .= ("null" :: Text)]]]
+                    | otherwise = p
+                  withNullable = case KM.lookup "properties" o' of
+                    Just (Object p) -> KM.insert "properties" (Object (KM.mapWithKey withNull p)) o'
+                    _ -> o'
+                  withAP = KM.insert "additionalProperties" (Bool False) withNullable
+                  withReq = KM.insert "required" (toJSON propKeys) withAP
+               in withReq
+            _ -> o'
+       in Object fixed
+    go v = v
+    oneOfToAnyOf o = case KM.lookup "oneOf" o of
+      Just bs | not (KM.member "anyOf" o) -> KM.insert "anyOf" bs (KM.delete "oneOf" o)
+      _ -> o
 
 stripJsonFences :: Text -> Text
 stripJsonFences t =
@@ -195,42 +226,6 @@ excerpt t
 stripBoundsAndComments :: Value -> Value
 stripBoundsAndComments (Object obj) =
   Object $
-    KM.fromList
-      [ (k, stripKeyword k v)
-        | (k, v) <- KM.toList obj,
-          k `notElem` ["minimum", "maximum", "$comment"]
-      ]
-  where
-    stripKeyword k v
-      | k `elem` schemaMapKeywords = mapObject stripBoundsAndComments v
-      | k `elem` schemaKeywords = stripSchemaOrList v
-      | otherwise = v
-    mapObject f (Object o) = Object (fmap f o)
-    mapObject _ v = v
-    stripSchemaOrList (Array a) = Array (fmap stripBoundsAndComments a)
-    stripSchemaOrList v = stripBoundsAndComments v
+    mapSubschemas stripBoundsAndComments $
+      KM.filterWithKey (\k _ -> k `notElem` ["minimum", "maximum", "$comment"]) obj
 stripBoundsAndComments other = other
-
--- | Keywords whose value maps names to sub-schemas.
-schemaMapKeywords :: [KM.Key]
-schemaMapKeywords = ["properties", "patternProperties", "$defs", "definitions", "dependentSchemas"]
-
--- | Keywords whose value is a sub-schema or a list of sub-schemas.
-schemaKeywords :: [KM.Key]
-schemaKeywords =
-  [ "items",
-    "prefixItems",
-    "additionalItems",
-    "additionalProperties",
-    "unevaluatedProperties",
-    "unevaluatedItems",
-    "propertyNames",
-    "contains",
-    "anyOf",
-    "oneOf",
-    "allOf",
-    "not",
-    "if",
-    "then",
-    "else"
-  ]

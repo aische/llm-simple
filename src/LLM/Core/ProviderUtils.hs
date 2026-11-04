@@ -132,18 +132,17 @@ handleStreamResponse resp handler = do
 -- @required@. Strict mode allows no optional properties, so a property
 -- that was optional and does not accept @null@ becomes nullable
 -- (@anyOf: [<schema>, {"type": "null"}]@); the model answers @null@ to
--- leave it out, and 'LLM.Core.Internal.Schema.dropOptionalNulls' removes
--- that @null@ before decoding.
+-- leave it out, and 'LLM.Generate.genObject' removes that @null@ before
+-- decoding.
 --
 -- Strict mode refuses @oneOf@, so it becomes @anyOf@ (unless the node has
 -- an @anyOf@ already). autodocodec emits @oneOf@ for disjoint unions such
 -- as 'Either', whose branches cannot both match, so the meaning is the
 -- same.
 --
--- Every @$defs@ entry moves to the root ('LLM.Core.Internal.Schema.hoistDefs'):
--- autodocodec puts the @$defs@ of a named codec next to its first use, but
--- @#/$defs/<name>@ points from the root, and strict mode refuses a
--- reference it cannot find there.
+-- Every @$defs@ entry moves to the root: autodocodec puts the @$defs@ of a
+-- named codec next to its first use, but @#/$defs/<name>@ points from the
+-- root, and strict mode refuses a reference it cannot find there.
 --
 -- Only schema keywords are changed: the walk follows sub-schema positions,
 -- so a property called @oneOf@ or a literal value is kept.

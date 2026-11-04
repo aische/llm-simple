@@ -16,7 +16,7 @@ where
 
 import Control.Exception (throwIO)
 import Control.Retry (limitRetries)
-import Data.Aeson (ToJSON (toJSON), Value (..), decodeStrict', eitherDecodeStrict', encode, object)
+import Data.Aeson (ToJSON (toJSON), Value (..), decodeStrict', eitherDecodeStrict', encode, object, (.=))
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString qualified as BS
 import Data.Text (Text)
@@ -31,6 +31,7 @@ import LLM.Core.Internal.Body
     readBodyPrefix,
     readErrorBody,
   )
+import LLM.Core.Internal.Schema (isNullableSchema, optionalProperties, schemaDefs)
 import LLM.Core.Types (LLMError (EmptyResponse, HttpError, ParseError), LLMResult, LLMTextResult)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Client.TLS (tlsManagerSettings)
@@ -126,23 +127,39 @@ handleStreamResponse resp handler = do
       pure $ Left $ HttpError status (decodeUtf8With lenientDecode (BS.concat chunks))
     else handler (HC.responseBody resp)
 
--- | Recursively enforce OpenAI structured output constraints:
---   every object node gets additionalProperties:false and all keys in required.
+-- | Recursively enforce OpenAI structured output constraints: every object
+-- node gets @additionalProperties: false@ and all its properties in
+-- @required@. Strict mode allows no optional properties, so a property
+-- that was optional and does not accept @null@ becomes nullable
+-- (@anyOf: [<schema>, {"type": "null"}]@); the model answers @null@ to
+-- leave it out, and 'LLM.Core.Internal.Schema.dropOptionalNulls' removes
+-- that @null@ before decoding.
 normalizeSchemaOpenAI :: Value -> Value
-normalizeSchemaOpenAI (Object o) =
-  let o' = fmap normalizeSchemaOpenAI o
-      fixed = case KM.lookup "type" o' of
-        Just (String "object") ->
-          let propKeys = case KM.lookup "properties" o' of
-                Just (Object p) -> KM.keys p
-                _ -> []
-              withAP = KM.insert "additionalProperties" (Bool False) o'
-              withReq = KM.insert "required" (toJSON propKeys) withAP
-           in withReq
-        _ -> o'
-   in Object fixed
-normalizeSchemaOpenAI (Array a) = Array (fmap normalizeSchemaOpenAI a)
-normalizeSchemaOpenAI v = v
+normalizeSchemaOpenAI schema = go schema
+  where
+    defs = schemaDefs schema
+    go (Object o) =
+      let o' = fmap go o
+          fixed = case KM.lookup "type" o' of
+            Just (String "object") ->
+              let propKeys = case KM.lookup "properties" o' of
+                    Just (Object p) -> KM.keys p
+                    _ -> []
+                  optional = optionalProperties o
+                  withNull k p
+                    | k `elem` optional && not (isNullableSchema defs p) =
+                        object ["anyOf" .= [p, object ["type" .= ("null" :: Text)]]]
+                    | otherwise = p
+                  withNullable = case KM.lookup "properties" o' of
+                    Just (Object p) -> KM.insert "properties" (Object (KM.mapWithKey withNull p)) o'
+                    _ -> o'
+                  withAP = KM.insert "additionalProperties" (Bool False) withNullable
+                  withReq = KM.insert "required" (toJSON propKeys) withAP
+               in withReq
+            _ -> o'
+       in Object fixed
+    go (Array a) = Array (fmap go a)
+    go v = v
 
 stripJsonFences :: Text -> Text
 stripJsonFences t =

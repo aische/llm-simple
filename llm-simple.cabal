@@ -154,6 +154,7 @@ library
 
     other-modules:
         LLM.Core.Internal.Body
+        LLM.Core.Internal.Schema
         LLM.Core.Internal.Transport
         LLM.Core.SSE
         LLM.Generate.Internal.Generate
@@ -258,6 +259,7 @@ test-suite llm-simple-test
                         LLM.HttpConfigSpec
                         LLM.LLMProviderSpec
                         LLM.GenerateObjectSpec
+                        LLM.OptionalFields
                         LLM.TextFileSpec
                         LLM.ToolUtilsSpec
                         LLM.CrossProviderSpec
@@ -276,6 +278,7 @@ test-suite llm-simple-test
         aeson          >=2.0   && <2.3,
         aeson-pretty   >=0.8   && <0.9,
         autodocodec    >=0.5 && < 0.6,
+        autodocodec-schema >=0.2 && <0.3,
         bytestring     >=0.11  && <0.13,
         hspec          >=2.10  && <2.12,
         heptapod       >=1.1   && <1.2,

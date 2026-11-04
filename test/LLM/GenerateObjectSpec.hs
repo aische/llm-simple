@@ -1,8 +1,9 @@
+{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-missing-fields #-}
 
 module LLM.GenerateObjectSpec (spec) where
 
-import Data.Aeson (Value, object, (.=))
+import Data.Aeson (Value (Null), object, (.=))
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -18,7 +19,8 @@ import LLM.Generate.ModelConfig
     ModelWithFallbacks (..),
     defaultModelCapabilities,
   )
-import LLM.Generate.Types (GenerateError (..), GenerateErrorResult (..))
+import LLM.Generate.Types (GenerateError (..), GenerateErrorResult (..), GeneratableObject)
+import LLM.OptionalFields (Inner (..), Node (..), Optionals (..), innerDefaults)
 import LLM.WeatherTool (WeatherToolArgs (..))
 import Test.Hspec
   ( Spec,
@@ -110,6 +112,62 @@ spec = describe "GenerateObject" $ do
             Just req -> req.reqTools `shouldBe` []
         Left err -> expectationFailure $ show err
 
+  describe "generateObject with optional fields answered null (strict mode)" $ do
+    let nullInner = object ["a" .= Null, "b" .= Null]
+        answer =
+          object
+            [ "req_maybe" .= Null,
+              "or_null" .= Null,
+              "opt" .= Null,
+              "def" .= Null,
+              "omit" .= Null,
+              "nested" .= nullInner,
+              "named" .= nullInner,
+              "list" .= [nullInner, object ["a" .= ("x" :: Text), "b" .= (7 :: Int)]],
+              "union" .= object ["Left" .= nullInner],
+              "plain" .= ("p" :: Text)
+            ]
+
+    it "reads null as absent for every optional field, in nested objects, arrays, unions and $refs" $ do
+      result <- runTypedWith (objectGateway answer (mkUsage 1 1))
+      case result of
+        Right (v, _) ->
+          v
+            `shouldBe` Optionals
+              { reqMaybe = Nothing,
+                orNull = Nothing,
+                opt = Nothing,
+                withDefault = 5,
+                omitted = 5,
+                nested = Just innerDefaults,
+                named = Just innerDefaults,
+                list = [innerDefaults, Inner (Just "x") 7],
+                union = Left innerDefaults,
+                plain = "p"
+              }
+        Left err -> expectationFailure $ show err
+
+    it "reads a null optional object as absent" $ do
+      let answer' = object ["req_maybe" .= Null, "nested" .= Null, "named" .= Null, "list" .= ([] :: [Value]), "union" .= object ["Right" .= (1 :: Int)], "plain" .= ("p" :: Text)]
+      result <- runTypedWith @Optionals (objectGateway answer' (mkUsage 1 1))
+      case result of
+        Right (v, _) -> (v.nested, v.named, v.union) `shouldBe` (Nothing, Nothing, Right 1)
+        Left err -> expectationFailure $ show err
+
+    it "still reports null for a required field that is not nullable" $ do
+      let answer' = object ["req_maybe" .= Null, "list" .= ([] :: [Value]), "union" .= object ["Right" .= (1 :: Int)], "plain" .= Null]
+      result <- runTypedWith @Optionals (objectGateway answer' (mkUsage 1 1))
+      case result of
+        Left GenerateErrorResult {gerError = GErrParseObjectError _} -> pure ()
+        other -> expectationFailure $ "expected GErrParseObjectError, got: " <> show (fmap fst other)
+
+    it "reads null as absent in a recursive type" $ do
+      let answer' = object ["label" .= ("a" :: Text), "next" .= object ["label" .= ("b" :: Text), "next" .= Null]]
+      result <- runTypedWith (objectGateway answer' (mkUsage 1 1))
+      case result of
+        Right (v, _) -> v `shouldBe` Node "a" (Just (Node "b" Nothing))
+        Left err -> expectationFailure $ show err
+
 objectGateway :: Value -> Usage -> LLMGateway
 objectGateway value usage =
   LLMGateway
@@ -197,3 +255,8 @@ runTyped :: ModelWithFallbacks -> IO (Either GenerateErrorResult (WeatherToolArg
 runTyped models = do
   rt <- mkRuntime Nothing
   generateObject defaultAgent models rt [UserTurn "weather?"]
+
+runTypedWith :: (GeneratableObject t) => LLMGateway -> IO (Either GenerateErrorResult (t, Usage))
+runTypedWith gw = do
+  rt <- mkRuntime Nothing
+  generateObject defaultAgent (ModelWithFallbacks (mockModel gw) []) rt [UserTurn "extract"]

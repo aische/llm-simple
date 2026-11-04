@@ -63,6 +63,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fixtures (`test/fixtures/*.json`, `test/fixtures/*.sse`). Before, the
   test suite run from it failed 41 tests on missing files. CI now also
   runs the tests from the unpacked tarball.
+- Structured output with OpenAI (and Ollama, which shares the schema):
+  strict mode lists every property as required, so a field from
+  `optionalField`, `optionalFieldWithDefault` or
+  `optionalFieldWithOmittedDefault` had to be filled in by the model.
+  `normalizeSchemaOpenAI` now makes such a property nullable
+  (`anyOf: [<schema>, {"type": "null"}]`), in nested objects, array
+  items, union branches and `$defs` too. `genObject` and
+  `LLM.Agent.generateObject` drop a `null` for a property the codec has
+  optional and not nullable before decoding, for every provider, so the
+  field gets its default; before, that `null` was a decode error.
+  Nullable fields (`Maybe` with `requiredField`, `optionalFieldOrNull`)
+  are unchanged. `genObjectUntyped` and `generateObjectUntyped` return
+  the provider's JSON as before, `null`s included. **Behaviour change**
+  for structured-output types with optional fields.
 
 ## [0.4.2.0] - 2026-11-03
 
